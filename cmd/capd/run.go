@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -145,7 +146,9 @@ func runTask(cmd *cobra.Command, agentID, cwd, permission, sessionID, prompt str
 		return err
 	}
 
-	// Stream events until the turn ends.
+	// Stream events until the turn ends. Approvals are answered
+	// interactively from stdin.
+	stdin := bufio.NewReader(os.Stdin)
 	for {
 		_, data, err := conn.Read(ctx)
 		if err != nil {
@@ -156,6 +159,32 @@ func runTask(cmd *cobra.Command, agentID, cwd, permission, sessionID, prompt str
 			Params json.RawMessage `json:"params"`
 		}
 		if json.Unmarshal(data, &msg) != nil || msg.Method != protocol.MethodEvent {
+			continue
+		}
+		var ev protocol.Event
+		json.Unmarshal(msg.Params, &ev)
+		if ev.Type == protocol.EventApprovalNeeded && !showJSON {
+			aid, _ := ev.Data["approvalId"].(string)
+			detail, _ := ev.Data["command"].(string)
+			if detail == "" {
+				detail, _ = ev.Data["kind"].(string)
+			}
+			fmt.Fprintf(out, "⚠ codex 请求批准: %s\n  允许? [y]es / [a]lways / [N]o: ", detail)
+			line, _ := stdin.ReadString('\n')
+			decision := protocol.DecisionDeny
+			switch strings.ToLower(strings.TrimSpace(line)) {
+			case "y", "yes":
+				decision = protocol.DecisionApprove
+			case "a", "always":
+				decision = protocol.DecisionApproveAlways
+			}
+			nextID++
+			p, _ := json.Marshal(protocol.ApprovalReplyParams{SessionID: sessionID, ApprovalID: aid, Decision: decision})
+			req, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": nextID, "method": protocol.MethodApprovalReply, "params": json.RawMessage(p)})
+			if err := conn.Write(ctx, websocket.MessageText, req); err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "  → %s\n", decision)
 			continue
 		}
 		if done := printEvent(out, msg.Params, showJSON); done {
