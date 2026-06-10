@@ -9,8 +9,16 @@ const (
 	MethodSessionAttach = "session/attach" // re-attach to a live or persisted session
 	MethodSessionClose  = "session/close"
 	MethodTaskSend      = "task/send"      // send a prompt/task into a session
+	MethodTaskSteer     = "task/steer"     // inject guidance into the RUNNING turn
 	MethodTaskCancel    = "task/cancel"    // interrupt the running task
 	MethodApprovalReply = "approval/reply" // answer a pending tool-use approval
+)
+
+// Approval decisions, translated by each adapter to its agent's vocabulary.
+const (
+	DecisionApprove       = "approve"
+	DecisionApproveAlways = "approveAlways" // approve and stop asking for this kind in this session
+	DecisionDeny          = "deny"
 )
 
 // Daemon → client notifications.
@@ -102,6 +110,20 @@ type TaskSendParams struct {
 
 type TaskCancelParams struct {
 	SessionID string `json:"sessionId"`
+}
+
+// TaskSteerParams adds guidance to the turn that is currently running,
+// without interrupting it. Errors if the agent does not support steering.
+type TaskSteerParams struct {
+	SessionID string `json:"sessionId"`
+	Prompt    string `json:"prompt"`
+}
+
+// ApprovalReplyParams answers a pending approval.needed event.
+type ApprovalReplyParams struct {
+	SessionID  string `json:"sessionId"`
+	ApprovalID string `json:"approvalId"` // from the approval.needed event data
+	Decision   string `json:"decision"`   // one of the Decision* constants
 }
 
 // OKResult is the generic acknowledgement for methods with no richer result.

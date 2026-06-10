@@ -12,7 +12,9 @@ import (
 
 const ID = "codex"
 
-type Adapter struct{}
+type Adapter struct {
+	appServer appServer
+}
 
 func New() *Adapter { return &Adapter{} }
 
@@ -22,9 +24,16 @@ func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
 	return adapter.ProbeCLI(ctx, ID, "Codex CLI", "codex", "--version")
 }
 
-func (a *Adapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
+// StartSession prefers app-server mode — codex's own desktop-app engine,
+// which unlocks streaming deltas, interactive approvals, and turn steering.
+// If the app-server cannot start (older codex builds), it degrades to the
+// spawn-per-turn exec mode.
+func (a *Adapter) StartSession(ctx context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
+	s, err := a.appServer.startAppSession(ctx, opts)
+	if err == nil {
+		return s, nil
+	}
 	if opts.Resume != "" {
-		// A CAP resume maps directly onto codex's native thread id.
 		return adapter.NewTurnSessionResumed(turnConfig, opts, opts.Resume), nil
 	}
 	return adapter.NewTurnSession(turnConfig, opts), nil

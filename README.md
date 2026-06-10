@@ -41,13 +41,16 @@ run) and speak JSON-RPC 2.0 over the WebSocket. First call must be
 
 ## Status
 
-🚧 **v0.3 — codex-first.** Verified live against codex: multi-turn sessions
-with native resume, **sessions that survive daemon restarts** (SQLite-backed
-identity + event log; a revived session keeps its conversation), permission
-modes (default / acceptEdits / full), and `agents/usage` — account rate
-limits straight from the agent (plan, 5h/weekly window used %, reset times).
-claude-code streaming also verified; gemini pending a live login.
-Next: interactive approval flow, inspector web console, distribution.
+🚧 **v0.4 — codex app-server mode.** The codex adapter now drives
+`codex app-server` (the desktop app's engine) instead of spawn-per-turn
+exec, all verified live: **interactive approvals** (read-only sandbox →
+approval.needed → approval/reply → command runs), **streaming deltas**,
+**turn steering** (task/steer), token-usage and rate-limit push events,
+explicit sandbox mapping per permission mode, with exec mode as fallback.
+Plus everything from v0.3: restart-surviving sessions (SQLite), native
+resume, `agents/usage`. claude-code verified in exec mode; gemini pending
+a live login. Next: inspector web console, claude-code approval parity,
+distribution.
 The protocol spec lives in
 [coding-agent-protocol](https://github.com/codingagentprotocol/coding-agent-protocol).
 

@@ -242,6 +242,22 @@ func (s *Session) Send(ctx context.Context, prompt string) error {
 // Cancel interrupts the running turn.
 func (s *Session) Cancel() { s.inner.Cancel() }
 
+// Steer injects guidance into the running turn, when the agent supports it.
+func (s *Session) Steer(ctx context.Context, prompt string) error {
+	if st, ok := s.inner.(adapter.Steerer); ok {
+		return st.Steer(ctx, prompt)
+	}
+	return protocol.NewError(protocol.CodeMethodNotFound, "agent %q does not support steering", s.AgentID)
+}
+
+// Approve answers a pending approval, when the agent supports it.
+func (s *Session) Approve(ctx context.Context, approvalID, decision string) error {
+	if ap, ok := s.inner.(adapter.Approver); ok {
+		return ap.Approve(ctx, approvalID, decision)
+	}
+	return protocol.NewError(protocol.CodeMethodNotFound, "agent %q does not support approvals", s.AgentID)
+}
+
 func newID() string {
 	b := make([]byte, 8)
 	rand.Read(b)

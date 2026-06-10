@@ -115,6 +115,34 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		}
 		return protocol.OKResult{OK: true}, nil
 
+	case protocol.MethodTaskSteer:
+		var params protocol.TaskSteerParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		sess, err := s.opts.Sessions.Resolve(ctx, params.SessionID)
+		if err != nil {
+			return nil, asProtocolError(err)
+		}
+		if err := sess.Steer(ctx, params.Prompt); err != nil {
+			return nil, asProtocolError(err)
+		}
+		return protocol.OKResult{OK: true}, nil
+
+	case protocol.MethodApprovalReply:
+		var params protocol.ApprovalReplyParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		sess, err := s.opts.Sessions.Resolve(ctx, params.SessionID)
+		if err != nil {
+			return nil, asProtocolError(err)
+		}
+		if err := sess.Approve(ctx, params.ApprovalID, params.Decision); err != nil {
+			return nil, asProtocolError(err)
+		}
+		return protocol.OKResult{OK: true}, nil
+
 	case protocol.MethodTaskCancel:
 		var params protocol.TaskCancelParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {

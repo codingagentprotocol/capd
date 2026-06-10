@@ -32,6 +32,18 @@ type SessionOpts struct {
 	PermissionMode string
 }
 
+// Steerer is an optional session capability: inject guidance into the
+// running turn without interrupting it.
+type Steerer interface {
+	Steer(ctx context.Context, prompt string) error
+}
+
+// Approver is an optional session capability: answer a pending
+// approval.needed event. decision is a protocol.Decision* constant.
+type Approver interface {
+	Approve(ctx context.Context, approvalID, decision string) error
+}
+
 // UsageProvider is an optional adapter capability: account-level usage and
 // rate-limit data (plan, used percent, window reset times). Exposed over the
 // protocol as agents/usage; adapters without it answer "not supported".
