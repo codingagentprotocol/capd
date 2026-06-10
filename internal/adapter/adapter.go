@@ -27,6 +27,16 @@ type Adapter interface {
 type SessionOpts struct {
 	Cwd    string
 	Resume string // agent-native session id to resume, if supported
+	// PermissionMode is one of the protocol.Permission* constants; each
+	// adapter maps it onto its CLI's native flags, never onto config files.
+	PermissionMode string
+}
+
+// UsageProvider is an optional adapter capability: account-level usage and
+// rate-limit data (plan, used percent, window reset times). Exposed over the
+// protocol as agents/usage; adapters without it answer "not supported".
+type UsageProvider interface {
+	Usage(ctx context.Context) (map[string]any, error)
 }
 
 // Session is one running conversation with an agent.

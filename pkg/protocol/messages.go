@@ -4,6 +4,7 @@ package protocol
 const (
 	MethodInitialize    = "initialize"     // version negotiation, must be the first call
 	MethodAgentsList    = "agents/list"    // list discovered agent CLIs
+	MethodAgentsUsage   = "agents/usage"   // account usage / rate-limit data for one agent
 	MethodSessionCreate = "session/create" // start an agent session
 	MethodSessionAttach = "session/attach" // re-attach to a live or persisted session
 	MethodSessionClose  = "session/close"
@@ -48,10 +49,32 @@ type AgentsListResult struct {
 	Agents []AgentInfo `json:"agents"`
 }
 
+type AgentsUsageParams struct {
+	AgentID string `json:"agentId"`
+}
+
+// AgentsUsageResult carries the agent's account usage snapshot. The shape is
+// agent-specific (codex: rateLimits with usedPercent / resetsAt / planType);
+// capd passes it through rather than flattening dialects prematurely.
+type AgentsUsageResult struct {
+	AgentID string         `json:"agentId"`
+	Usage   map[string]any `json:"usage"`
+}
+
+// Permission modes, mapped by each adapter onto the agent's native flags.
+const (
+	PermissionDefault     = ""            // agent's own default (usually safest)
+	PermissionAcceptEdits = "acceptEdits" // auto-approve file edits, ask for the rest
+	PermissionFull        = "full"        // auto-approve everything the agent allows
+)
+
 type SessionCreateParams struct {
 	AgentID string `json:"agentId"`
-	Cwd     string `json:"cwd,omitempty"`     // working directory for the agent
-	Resume  string `json:"resume,omitempty"`  // agent-native session id to resume
+	Cwd     string `json:"cwd,omitempty"`    // working directory for the agent
+	Resume  string `json:"resume,omitempty"` // agent-native session id to resume
+	// PermissionMode is one of the Permission* constants. Interactive
+	// per-action approval (approval.needed events) is a future milestone.
+	PermissionMode string `json:"permissionMode,omitempty"`
 }
 
 type SessionCreateResult struct {

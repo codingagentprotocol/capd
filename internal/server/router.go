@@ -44,14 +44,34 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		agents := discovery.Discover(ctx, s.opts.Registry)
 		return protocol.AgentsListResult{Agents: agents}, nil
 
+	case protocol.MethodAgentsUsage:
+		var params protocol.AgentsUsageParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		a, ok := s.opts.Registry.Get(params.AgentID)
+		if !ok {
+			return nil, protocol.NewError(protocol.CodeAgentNotFound, "unknown agent %q", params.AgentID)
+		}
+		up, ok := a.(adapter.UsageProvider)
+		if !ok {
+			return nil, protocol.NewError(protocol.CodeMethodNotFound, "agent %q does not report usage", params.AgentID)
+		}
+		usage, err := up.Usage(ctx)
+		if err != nil {
+			return nil, protocol.NewError(protocol.CodeAgentUnavailable, "usage: %v", err)
+		}
+		return protocol.AgentsUsageResult{AgentID: params.AgentID, Usage: usage}, nil
+
 	case protocol.MethodSessionCreate:
 		var params protocol.SessionCreateParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
 		}
 		sess, err := s.opts.Sessions.Create(ctx, params.AgentID, adapter.SessionOpts{
-			Cwd:    params.Cwd,
-			Resume: params.Resume,
+			Cwd:            params.Cwd,
+			Resume:         params.Resume,
+			PermissionMode: params.PermissionMode,
 		})
 		if err != nil {
 			return nil, asProtocolError(err)
@@ -64,9 +84,9 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
 		}
-		sess, ok := s.opts.Sessions.Get(params.SessionID)
-		if !ok {
-			return nil, protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", params.SessionID)
+		sess, err := s.opts.Sessions.Resolve(ctx, params.SessionID)
+		if err != nil {
+			return nil, asProtocolError(err)
 		}
 		nextSeq := s.subscribe(ctx, client, sess, params.FromSeq)
 		return protocol.SessionAttachResult{SessionID: sess.ID, NextSeq: nextSeq}, nil
@@ -86,9 +106,9 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
 		}
-		sess, ok := s.opts.Sessions.Get(params.SessionID)
-		if !ok {
-			return nil, protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", params.SessionID)
+		sess, err := s.opts.Sessions.Resolve(ctx, params.SessionID)
+		if err != nil {
+			return nil, asProtocolError(err)
 		}
 		if err := sess.Send(ctx, params.Prompt); err != nil {
 			return nil, protocol.NewError(protocol.CodeInternalError, "%v", err)
@@ -100,9 +120,9 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
 		}
-		sess, ok := s.opts.Sessions.Get(params.SessionID)
-		if !ok {
-			return nil, protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", params.SessionID)
+		sess, err := s.opts.Sessions.Resolve(ctx, params.SessionID)
+		if err != nil {
+			return nil, asProtocolError(err)
 		}
 		sess.Cancel()
 		return protocol.OKResult{OK: true}, nil

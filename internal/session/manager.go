@@ -4,7 +4,9 @@
 // client connection never kills a session — clients re-attach with
 // session/attach and the seq they last saw.
 //
-// Persistence across daemon restarts (SQLite) lands in a later milestone.
+// Sessions survive daemon restarts: identity (agent + native conversation id)
+// and the event log are persisted, and Resolve revives a stored session on
+// first touch, resuming the agent-native conversation.
 package session
 
 import (
@@ -17,7 +19,8 @@ import (
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
-// maxBuffer bounds the per-session replay buffer; older events are dropped.
+// maxBuffer bounds the per-session in-memory replay buffer; deeper history
+// stays in the store.
 const maxBuffer = 4096
 
 // subBuffer is each subscriber's channel capacity. A subscriber that stalls
@@ -27,13 +30,14 @@ const subBuffer = 256
 // Manager tracks live sessions.
 type Manager struct {
 	registry *adapter.Registry
+	store    *Store // nil means in-memory only (tests)
 
-	mu       sync.RWMutex
+	mu       sync.Mutex
 	sessions map[string]*Session
 }
 
-func NewManager(reg *adapter.Registry) *Manager {
-	return &Manager{registry: reg, sessions: make(map[string]*Session)}
+func NewManager(reg *adapter.Registry, store *Store) *Manager {
+	return &Manager{registry: reg, store: store, sessions: make(map[string]*Session)}
 }
 
 // Session pairs an adapter session with the daemon-side event log.
@@ -42,6 +46,7 @@ type Session struct {
 	AgentID string
 
 	inner adapter.Session
+	store *Store
 
 	mu      sync.Mutex
 	buf     []protocol.Event // ring of the last maxBuffer events
@@ -65,7 +70,11 @@ func (m *Manager) Create(ctx context.Context, agentID string, opts adapter.Sessi
 		ID:      newID(),
 		AgentID: agentID,
 		inner:   inner,
+		store:   m.store,
 		subs:    make(map[int]chan protocol.Event),
+	}
+	if m.store != nil {
+		m.store.SaveSession(SessionRecord{ID: s.ID, AgentID: agentID, Cwd: opts.Cwd, NativeID: opts.Resume})
 	}
 	m.mu.Lock()
 	m.sessions[s.ID] = s
@@ -75,11 +84,49 @@ func (m *Manager) Create(ctx context.Context, agentID string, opts adapter.Sessi
 	return s, nil
 }
 
-func (m *Manager) Get(id string) (*Session, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	s, ok := m.sessions[id]
-	return s, ok
+// Resolve returns a live session, reviving it from the store if this daemon
+// process has not touched it yet. Reviving resumes the agent-native
+// conversation and reloads recent history into the replay buffer.
+func (m *Manager) Resolve(ctx context.Context, id string) (*Session, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if s, ok := m.sessions[id]; ok {
+		return s, nil
+	}
+	if m.store == nil {
+		return nil, protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
+	}
+
+	rec, err := m.store.LoadSession(id)
+	if err != nil {
+		return nil, protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
+	}
+	if rec.Ended {
+		return nil, protocol.NewError(protocol.CodeSessionClosed, "session %q has ended", id)
+	}
+	a, ok := m.registry.Get(rec.AgentID)
+	if !ok {
+		return nil, protocol.NewError(protocol.CodeAgentNotFound, "agent %q of stored session is not registered", rec.AgentID)
+	}
+	inner, err := a.StartSession(ctx, adapter.SessionOpts{Cwd: rec.Cwd, Resume: rec.NativeID})
+	if err != nil {
+		return nil, protocol.NewError(protocol.CodeAgentUnavailable, "revive %s: %v", rec.AgentID, err)
+	}
+
+	s := &Session{
+		ID:      rec.ID,
+		AgentID: rec.AgentID,
+		inner:   inner,
+		store:   m.store,
+		subs:    make(map[int]chan protocol.Event),
+	}
+	if history, err := m.store.LoadEvents(id, 0, maxBuffer); err == nil && len(history) > 0 {
+		s.buf = history
+		s.nextSeq = history[len(history)-1].Seq + 1
+	}
+	m.sessions[s.ID] = s
+	go s.pump()
+	return s, nil
 }
 
 // Close terminates a session and removes it from the registry.
@@ -91,10 +138,13 @@ func (m *Manager) Close(id string) error {
 	if !ok {
 		return protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
 	}
+	if m.store != nil {
+		m.store.MarkEnded(id)
+	}
 	return s.inner.Close()
 }
 
-// pump stamps and stores every adapter event, then broadcasts it.
+// pump stamps, persists, and stores every adapter event, then broadcasts it.
 func (s *Session) pump() {
 	for ev := range s.inner.Events() {
 		s.mu.Lock()
@@ -105,6 +155,7 @@ func (s *Session) pump() {
 		if len(s.buf) > maxBuffer {
 			s.buf = s.buf[len(s.buf)-maxBuffer:]
 		}
+		s.persist(ev)
 		for _, ch := range s.subs {
 			select {
 			case ch <- ev:
@@ -121,6 +172,7 @@ func (s *Session) pump() {
 	end := protocol.Event{SessionID: s.ID, Seq: s.nextSeq, Type: protocol.EventSessionEnded}
 	s.nextSeq++
 	s.buf = append(s.buf, end)
+	s.persist(end)
 	for id, ch := range s.subs {
 		select {
 		case ch <- end:
@@ -128,6 +180,20 @@ func (s *Session) pump() {
 		}
 		close(ch)
 		delete(s.subs, id)
+	}
+}
+
+// persist writes one event through to the store and keeps the stored
+// native conversation id current. Called with s.mu held.
+func (s *Session) persist(ev protocol.Event) {
+	if s.store == nil {
+		return
+	}
+	s.store.AppendEvent(ev)
+	if ev.Type == protocol.EventSessionStarted {
+		if nid, ok := ev.Data["nativeSessionId"].(string); ok && nid != "" {
+			s.store.SetNativeID(s.ID, nid)
+		}
 	}
 }
 

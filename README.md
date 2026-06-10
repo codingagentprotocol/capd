@@ -41,11 +41,13 @@ run) and speak JSON-RPC 2.0 over the WebSocket. First call must be
 
 ## Status
 
-🚧 **v0.2.** End-to-end session streaming works: discovery, transport, auth,
-handshake, and multi-turn sessions with native resume — verified live against
-codex (two-turn memory test) and claude-code. Gemini's translator targets its
-documented stream-json format, pending verification against a live login.
-Next: approval flow, SQLite persistence, distribution.
+🚧 **v0.3 — codex-first.** Verified live against codex: multi-turn sessions
+with native resume, **sessions that survive daemon restarts** (SQLite-backed
+identity + event log; a revived session keeps its conversation), permission
+modes (default / acceptEdits / full), and `agents/usage` — account rate
+limits straight from the agent (plan, 5h/weekly window used %, reset times).
+claude-code streaming also verified; gemini pending a live login.
+Next: interactive approval flow, inspector web console, distribution.
 The protocol spec lives in
 [coding-agent-protocol](https://github.com/codingagentprotocol/coding-agent-protocol).
 

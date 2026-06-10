@@ -24,7 +24,7 @@ func newTestServer(t *testing.T) (*Server, *httptest.Server) {
 		Token:    "test-token",
 		Version:  "test",
 		Registry: reg,
-		Sessions: session.NewManager(reg),
+		Sessions: session.NewManager(reg, nil),
 		Log:      slog.New(slog.NewTextHandler(testWriter{t}, nil)),
 	})
 	ts := httptest.NewServer(http.HandlerFunc(s.handleWS))

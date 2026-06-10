@@ -14,6 +14,12 @@ import (
 // thread.started.
 func buildSpec(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
 	args := []string{"exec", "--json", "--skip-git-repo-check"}
+	switch opts.PermissionMode {
+	case protocol.PermissionAcceptEdits, protocol.PermissionFull:
+		// workspace-write sandbox with automatic execution; codex exec has
+		// no finer-grained interactive mode.
+		args = append(args, "--full-auto")
+	}
 	if nativeID != "" {
 		args = append(args, "resume", nativeID)
 	}
@@ -69,7 +75,8 @@ func translate(line string, emit adapter.EmitFunc) string {
 
 	switch ev.Type {
 	case "thread.started":
-		emit(protocol.EventSessionStarted, map[string]any{"threadId": ev.ThreadID})
+		// nativeSessionId is the cross-adapter key the session store watches.
+		emit(protocol.EventSessionStarted, map[string]any{"nativeSessionId": ev.ThreadID, "threadId": ev.ThreadID})
 		return ev.ThreadID
 
 	case "turn.started":

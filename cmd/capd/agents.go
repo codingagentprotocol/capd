@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
+	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/daemon"
 	"github.com/codingagentprotocol/capd/internal/discovery"
 )
@@ -30,6 +32,28 @@ func newAgentsCmd() *cobra.Command {
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", a.ID, status, a.Version, a.Bin)
 			}
 			return w.Flush()
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "usage <agent-id>",
+		Short: "Account usage and rate limits for one agent (plan, used %, reset times)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			a, ok := daemon.Registry().Get(args[0])
+			if !ok {
+				return fmt.Errorf("unknown agent %q", args[0])
+			}
+			up, ok := a.(adapter.UsageProvider)
+			if !ok {
+				return fmt.Errorf("agent %q does not report usage", args[0])
+			}
+			usage, err := up.Usage(cmd.Context())
+			if err != nil {
+				return err
+			}
+			out, _ := json.MarshalIndent(usage, "", "  ")
+			fmt.Fprintln(cmd.OutOrStdout(), string(out))
+			return nil
 		},
 	})
 	return cmd

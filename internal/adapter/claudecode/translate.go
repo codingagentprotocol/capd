@@ -13,6 +13,12 @@ import (
 // session_id captured from the init event.
 func buildSpec(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
 	args := []string{"-p", prompt, "--output-format", "stream-json", "--verbose"}
+	switch opts.PermissionMode {
+	case protocol.PermissionAcceptEdits:
+		args = append(args, "--permission-mode", "acceptEdits")
+	case protocol.PermissionFull:
+		args = append(args, "--permission-mode", "bypassPermissions")
+	}
 	if nativeID != "" {
 		args = append(args, "--resume", nativeID)
 	}

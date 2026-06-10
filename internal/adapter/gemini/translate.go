@@ -18,6 +18,12 @@ import (
 // falls back to plain text for anything it does not recognize.
 func buildSpec(opts adapter.SessionOpts, _ string, prompt string) proc.Spec {
 	args := []string{"-p", prompt, "--output-format", "stream-json"}
+	switch opts.PermissionMode {
+	case protocol.PermissionAcceptEdits:
+		args = append(args, "--approval-mode", "auto_edit")
+	case protocol.PermissionFull:
+		args = append(args, "--yolo")
+	}
 	return proc.Spec{Bin: "gemini", Args: args, Cwd: opts.Cwd}
 }
 

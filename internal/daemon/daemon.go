@@ -6,6 +6,7 @@ package daemon
 import (
 	"context"
 	"log/slog"
+	"path/filepath"
 
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/adapter/claudecode"
@@ -34,9 +35,18 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	home, err := Home()
+	if err != nil {
+		return err
+	}
+	store, err := session.OpenStore(filepath.Join(home, "capd.db"))
+	if err != nil {
+		return err
+	}
+	defer store.Close()
 
 	reg := Registry()
-	sessions := session.NewManager(reg)
+	sessions := session.NewManager(reg, store)
 
 	srv := server.New(server.Options{
 		Host:     cfg.Host,
