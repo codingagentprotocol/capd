@@ -31,8 +31,11 @@ type SessionOpts struct {
 
 // Session is one running conversation with an agent.
 type Session interface {
-	// Send delivers a prompt or control message into the session.
+	// Send starts a new turn with the given prompt. It returns an error if a
+	// turn is already running.
 	Send(ctx context.Context, prompt string) error
+	// Cancel interrupts the running turn, if any. The session stays usable.
+	Cancel()
 	// Events streams unified protocol events until the session ends.
 	Events() <-chan protocol.Event
 	Close() error

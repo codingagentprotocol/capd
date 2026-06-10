@@ -58,7 +58,30 @@ type SessionCreateResult struct {
 	SessionID string `json:"sessionId"`
 }
 
+type SessionAttachParams struct {
+	SessionID string `json:"sessionId"`
+	FromSeq   uint64 `json:"fromSeq"` // replay buffered events from this seq onward
+}
+
+type SessionAttachResult struct {
+	SessionID string `json:"sessionId"`
+	NextSeq   uint64 `json:"nextSeq"` // seq the live stream will continue from
+}
+
+type SessionCloseParams struct {
+	SessionID string `json:"sessionId"`
+}
+
 type TaskSendParams struct {
 	SessionID string `json:"sessionId"`
 	Prompt    string `json:"prompt"`
+}
+
+type TaskCancelParams struct {
+	SessionID string `json:"sessionId"`
+}
+
+// OKResult is the generic acknowledgement for methods with no richer result.
+type OKResult struct {
+	OK bool `json:"ok"`
 }

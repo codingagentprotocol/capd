@@ -23,6 +23,14 @@ func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
 	return adapter.ProbeCLI(ctx, ID, "Claude Code", "claude", "--version")
 }
 
-func (a *Adapter) StartSession(ctx context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
-	return nil, adapter.ErrNotImplemented
+func (a *Adapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
+	if opts.Resume != "" {
+		return adapter.NewTurnSessionResumed(turnConfig, opts, opts.Resume), nil
+	}
+	return adapter.NewTurnSession(turnConfig, opts), nil
+}
+
+var turnConfig = adapter.TurnConfig{
+	BuildSpec: buildSpec,
+	Translate: translate,
 }

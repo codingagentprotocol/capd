@@ -10,6 +10,34 @@ import (
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
+// wsClient is one connected client. All writes go through the out channel so
+// responses and streamed event notifications never interleave mid-frame.
+type wsClient struct {
+	conn *websocket.Conn
+	out  chan []byte
+}
+
+// enqueue never blocks: a client that stops reading loses messages rather
+// than stalling a session pump.
+func (c *wsClient) enqueue(data []byte) {
+	select {
+	case c.out <- data:
+	default:
+	}
+}
+
+func (c *wsClient) notify(method string, params any) {
+	n, err := protocol.NewNotification(method, params)
+	if err != nil {
+		return
+	}
+	data, err := json.Marshal(n)
+	if err != nil {
+		return
+	}
+	c.enqueue(data)
+}
+
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	if !s.authorized(r) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -28,42 +56,58 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.CloseNow()
 
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	client := &wsClient{conn: conn, out: make(chan []byte, 512)}
+	go func() { // writer loop
+		for {
+			select {
+			case data := <-client.out:
+				if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+					cancel()
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	s.log.Info("client connected", "remote", r.RemoteAddr)
-	if err := s.serveConn(r.Context(), conn); err != nil {
+	if err := s.serveConn(ctx, client); err != nil {
 		s.log.Info("client disconnected", "remote", r.RemoteAddr, "reason", err)
 	}
 }
 
 // serveConn reads JSON-RPC requests until the connection drops.
-func (s *Server) serveConn(ctx context.Context, conn *websocket.Conn) error {
+func (s *Server) serveConn(ctx context.Context, client *wsClient) error {
 	for {
-		_, data, err := conn.Read(ctx)
+		_, data, err := client.conn.Read(ctx)
 		if err != nil {
 			return err
 		}
 
 		var req protocol.Request
 		if err := json.Unmarshal(data, &req); err != nil {
-			s.reply(ctx, conn, protocol.NewErrorResponse(nil,
+			s.reply(client, protocol.NewErrorResponse(nil,
 				protocol.NewError(protocol.CodeParseError, "invalid JSON: %v", err)))
 			continue
 		}
 
-		resp := s.dispatch(ctx, &req)
+		resp := s.dispatch(ctx, client, &req)
 		if req.IsNotification() || resp == nil {
 			continue
 		}
-		s.reply(ctx, conn, resp)
+		s.reply(client, resp)
 	}
 }
 
-func (s *Server) reply(ctx context.Context, conn *websocket.Conn, resp *protocol.Response) {
+func (s *Server) reply(client *wsClient, resp *protocol.Response) {
 	data, err := json.Marshal(resp)
 	if err != nil {
 		s.log.Error("marshal response", "err", err)
 		return
 	}
-	if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
-		s.log.Warn("write response", "err", err)
-	}
+	client.enqueue(data)
 }

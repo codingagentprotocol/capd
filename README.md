@@ -41,8 +41,11 @@ run) and speak JSON-RPC 2.0 over the WebSocket. First call must be
 
 ## Status
 
-🚧 **v0 skeleton.** Discovery, transport, auth, and protocol handshake work.
-Session streaming (adapter `translate.go` per CLI) is the current milestone.
+🚧 **v0.2.** End-to-end session streaming works: discovery, transport, auth,
+handshake, and multi-turn sessions with native resume — verified live against
+codex (two-turn memory test) and claude-code. Gemini's translator targets its
+documented stream-json format, pending verification against a live login.
+Next: approval flow, SQLite persistence, distribution.
 The protocol spec lives in
 [coding-agent-protocol](https://github.com/codingagentprotocol/coding-agent-protocol).
 

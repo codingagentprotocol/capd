@@ -22,6 +22,11 @@ func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
 	return adapter.ProbeCLI(ctx, ID, "Gemini CLI", "gemini", "--version")
 }
 
-func (a *Adapter) StartSession(ctx context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
-	return nil, adapter.ErrNotImplemented
+func (a *Adapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
+	return adapter.NewTurnSession(turnConfig, opts), nil
+}
+
+var turnConfig = adapter.TurnConfig{
+	BuildSpec: buildSpec,
+	Translate: translate,
 }

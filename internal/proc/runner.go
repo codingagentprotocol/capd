@@ -69,5 +69,9 @@ func (p *Proc) Write(data []byte) error {
 	return err
 }
 
+// CloseStdin signals EOF to the subprocess. Turn-based CLIs that take the
+// prompt as an argument otherwise wait for piped input.
+func (p *Proc) CloseStdin() error { return p.stdin.Close() }
+
 // Wait blocks until the subprocess exits and releases its resources.
 func (p *Proc) Wait() error { return p.cmd.Wait() }
