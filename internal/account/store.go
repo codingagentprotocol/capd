@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	_ "modernc.org/sqlite" // CGO-free driver; same portability profile as session store.
@@ -12,7 +13,8 @@ import (
 var ErrUnknownAccount = errors.New("account: unknown account")
 
 type Store struct {
-	db *sql.DB
+	db   *sql.DB
+	path string
 }
 
 type Account struct {
@@ -86,7 +88,12 @@ func OpenStore(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("account: create schema: %w", err)
 	}
-	return &Store{db: db}, nil
+	st := &Store{db: db, path: path}
+	if err := st.tightenFilePermissions(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return st, nil
 }
 
 func (st *Store) Close() error { return st.db.Close() }
@@ -110,7 +117,7 @@ ON CONFLICT(id) DO UPDATE SET
 	secret_ref = excluded.secret_ref,
 	updated_at = strftime('%s','now')`,
 		acc.ID, acc.Provider, acc.AuthMode, acc.Email, acc.AccountID, acc.Plan, acc.SecretRef)
-	return err
+	return st.afterWrite(err)
 }
 
 func (st *Store) LoadAccount(id string) (Account, error) {
@@ -155,7 +162,7 @@ func (st *Store) SetCurrentAccount(provider, accountID string) error {
 INSERT INTO account_state (provider, current_account_id) VALUES (?, ?)
 ON CONFLICT(provider) DO UPDATE SET current_account_id = excluded.current_account_id`,
 		provider, accountID)
-	return err
+	return st.afterWrite(err)
 }
 
 func (st *Store) CurrentAccount(provider string) (string, error) {
@@ -190,7 +197,7 @@ ON CONFLICT(account_id) DO UPDATE SET
 	raw_json = excluded.raw_json`,
 		q.AccountID, q.Plan, q.PrimaryUsedPercent, q.PrimaryResetAt,
 		q.SecondaryUsedPercent, q.SecondaryResetAt, q.CodeReviewUsedPercent, q.CheckedAt, q.RawJSON)
-	return err
+	return st.afterWrite(err)
 }
 
 func (st *Store) LoadQuota(accountID string) (QuotaSnapshot, error) {
@@ -215,7 +222,7 @@ func (st *Store) BindSessionAccount(sessionID, accountID string) error {
 	_, err := st.db.Exec(`
 INSERT INTO session_accounts (session_id, account_id) VALUES (?, ?)
 ON CONFLICT(session_id) DO UPDATE SET account_id = excluded.account_id`, sessionID, accountID)
-	return err
+	return st.afterWrite(err)
 }
 
 func (st *Store) SessionAccount(sessionID string) (string, error) {
@@ -225,4 +232,23 @@ func (st *Store) SessionAccount(sessionID string) (string, error) {
 		return "", nil
 	}
 	return accountID, err
+}
+
+func (st *Store) afterWrite(err error) error {
+	if err != nil {
+		return err
+	}
+	return st.tightenFilePermissions()
+}
+
+func (st *Store) tightenFilePermissions() error {
+	if st.path == "" {
+		return nil
+	}
+	for _, path := range []string{st.path, st.path + "-wal", st.path + "-shm"} {
+		if err := os.Chmod(path, 0o600); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("account: chmod store file %q: %w", path, err)
+		}
+	}
+	return nil
 }

@@ -2,6 +2,8 @@ package account
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -59,6 +61,29 @@ func TestAccountStoreUpsertListAndCurrent(t *testing.T) {
 	}
 }
 
+func TestAccountStoreTightensFilePermissions(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "accounts.db")
+	if err := os.WriteFile(dbPath, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dbPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := OpenStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	assertAccountStoreFileMode(t, dbPath)
+	if err := st.UpsertAccount(Account{ID: "codex-local", Provider: "codex", AuthMode: "oauth"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		assertAccountStoreFileMode(t, path)
+	}
+}
+
 func TestAccountStoreQuotaAndSessionBinding(t *testing.T) {
 	st := newStore(t)
 	q := QuotaSnapshot{
@@ -91,6 +116,20 @@ func TestAccountStoreQuotaAndSessionBinding(t *testing.T) {
 	}
 	if accountID != q.AccountID {
 		t.Fatalf("session account = %q", accountID)
+	}
+}
+
+func assertAccountStoreFileMode(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("%s mode = %o", path, info.Mode().Perm())
 	}
 }
 
