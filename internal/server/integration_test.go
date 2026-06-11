@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -203,8 +204,8 @@ func dialClient(t *testing.T, ts *httptest.Server, token string) *testClient {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	t.Cleanup(cancel)
-	url := strings.Replace(ts.URL, "http://", "ws://", 1) + "?token=" + token
-	conn, _, err := websocket.Dial(ctx, url, nil)
+	wsURL := strings.Replace(ts.URL, "http://", "ws://", 1) + "?token=" + url.QueryEscape(token)
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,6 +299,11 @@ func (c *testClient) mustResult(resp *protocol.Response, into any) {
 
 func newIntegration(t *testing.T) (*httptest.Server, *scriptedAdapter) {
 	t.Helper()
+	return newIntegrationWithToken(t, "it-token")
+}
+
+func newIntegrationWithToken(t *testing.T, token string) (*httptest.Server, *scriptedAdapter) {
+	t.Helper()
 	fake := &scriptedAdapter{}
 	reg := adapter.NewRegistry(fake)
 	st, err := session.OpenStore(t.TempDir() + "/it.db")
@@ -306,7 +312,7 @@ func newIntegration(t *testing.T) (*httptest.Server, *scriptedAdapter) {
 	}
 	t.Cleanup(func() { st.Close() })
 	s := New(Options{
-		Token: "it-token", Version: "it",
+		Token: token, Version: "it",
 		Registry: reg, Sessions: session.NewManager(reg, st),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
@@ -392,6 +398,28 @@ func TestRejectsWrongToken(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("want 401, got %d", resp.StatusCode)
 	}
+}
+
+func TestWebSocketTokenAllowsURLSpecialChars(t *testing.T) {
+	token := "tok+with&chars?and space"
+	ts, _ := newIntegrationWithToken(t, token)
+	c := dialClient(t, ts, token)
+	resp := c.call(protocol.MethodInitialize, protocol.InitializeParams{ProtocolVersion: protocol.Version})
+	c.mustResult(resp, nil)
+}
+
+func TestAcceptsIPv6LoopbackOrigin(t *testing.T) {
+	ts, _ := newIntegration(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	wsURL := strings.Replace(ts.URL, "http://", "ws://", 1) + "?token=it-token"
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{"Origin": []string{"http://[::1]:3000"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseNow()
 }
 
 func TestVersionNegotiationRejected(t *testing.T) {

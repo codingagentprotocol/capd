@@ -56,7 +56,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		// Localhost pages are always allowed; anything else must be
 		// explicitly configured (CAPD_ORIGINS / --origins), never
 		// defaulted open.
-		OriginPatterns: append([]string{"localhost:*", "127.0.0.1:*"}, s.opts.Origins...),
+		OriginPatterns: append([]string{"localhost:*", "127.0.0.1:*", "[[]::1]:*"}, s.opts.Origins...),
 	})
 	if err != nil {
 		s.log.Warn("ws accept failed", "err", err)
