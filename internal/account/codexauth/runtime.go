@@ -69,15 +69,7 @@ func (rp RuntimeProjector) Project(ctx context.Context, acc account.Account) (Ru
 }
 
 func parseSecretRef(value string) (secret.Ref, error) {
-	if value == "" {
-		return secret.Ref{}, fmt.Errorf("secret ref is empty")
-	}
-	for i, r := range value {
-		if r == ':' {
-			return secret.Ref{Backend: value[:i], ID: value[i+1:]}, nil
-		}
-	}
-	return secret.Ref{ID: value}, nil
+	return secret.ParseRef(value)
 }
 
 func buildAuthJSON(bundle secret.Bundle) ([]byte, error) {

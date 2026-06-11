@@ -139,6 +139,7 @@ capd agents usage codex --account codex-acct
 capd accounts codex import   # import local ~/.codex/auth.json into capd
 capd accounts codex list     # imported Codex accounts, current account marked
 capd accounts codex project  # create a per-account CODEX_HOME projection
+capd accounts codex quota    # refresh ChatGPT backend quota for current account
 ```
 
 Every flag, protocol field, and event is documented in

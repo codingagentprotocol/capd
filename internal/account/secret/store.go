@@ -21,6 +21,19 @@ func (r Ref) String() string {
 	return r.Backend + ":" + r.ID
 }
 
+func ParseRef(value string) (Ref, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return Ref{}, fmt.Errorf("secret ref is empty")
+	}
+	for i, r := range value {
+		if r == ':' {
+			return Ref{Backend: value[:i], ID: value[i+1:]}, nil
+		}
+	}
+	return Ref{ID: value}, nil
+}
+
 type Bundle struct {
 	Provider     string          `json:"provider"`
 	AuthMode     string          `json:"authMode"`

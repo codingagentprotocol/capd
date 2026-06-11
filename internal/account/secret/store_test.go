@@ -38,3 +38,16 @@ func TestFileStoreRoundTripAndPermissions(t *testing.T) {
 		t.Fatalf("mode = %o", info.Mode().Perm())
 	}
 }
+
+func TestParseRef(t *testing.T) {
+	ref, err := ParseRef("file:codex-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref.Backend != "file" || ref.ID != "codex-a" {
+		t.Fatalf("ref = %+v", ref)
+	}
+	if _, err := ParseRef(""); err == nil {
+		t.Fatal("expected empty ref error")
+	}
+}

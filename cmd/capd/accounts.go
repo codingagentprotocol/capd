@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"text/tabwriter"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
+	"github.com/codingagentprotocol/capd/internal/account/codexquota"
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/daemon"
 )
@@ -161,7 +163,56 @@ func newCodexAccountsCmd() *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd)
+	quotaCmd := &cobra.Command{
+		Use:   "quota [account-id]",
+		Short: "Fetch ChatGPT backend quota for an imported Codex account",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			baseURL, _ := cmd.Flags().GetString("base-url")
+			accounts, secrets, err := openAccountDeps()
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			id := ""
+			if len(args) == 1 {
+				id = args[0]
+			} else {
+				id, err = accounts.CurrentAccount(codexauth.Provider)
+				if err != nil {
+					return err
+				}
+			}
+			if id == "" {
+				return fmt.Errorf("no Codex account selected")
+			}
+			acc, err := accounts.LoadAccount(id)
+			if err != nil {
+				return err
+			}
+			ref, err := secret.ParseRef(acc.SecretRef)
+			if err != nil {
+				return err
+			}
+			bundle, err := secrets.Get(cmd.Context(), ref)
+			if err != nil {
+				return err
+			}
+			result, err := codexquota.Client{BaseURL: baseURL}.Usage(cmd.Context(), acc.ID, bundle)
+			if err != nil {
+				return err
+			}
+			if err := accounts.SaveQuota(result.Quota); err != nil {
+				return err
+			}
+			out, _ := json.MarshalIndent(result.Usage, "", "  ")
+			fmt.Fprintln(cmd.OutOrStdout(), string(out))
+			return nil
+		},
+	}
+	quotaCmd.Flags().String("base-url", "", "override ChatGPT base URL for testing")
+
+	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, quotaCmd)
 	return cmd
 }
 
