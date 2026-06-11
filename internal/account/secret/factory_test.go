@@ -16,7 +16,14 @@ func TestOpenDefaultsToFileStore(t *testing.T) {
 }
 
 func TestOpenNativeUnavailableIsExplicit(t *testing.T) {
-	if _, err := Open(t.TempDir(), BackendNative); !errors.Is(err, ErrNativeUnavailable) {
+	st, err := Open(t.TempDir(), BackendNative)
+	if err == nil {
+		if st.Backend() != BackendNative {
+			t.Fatalf("backend = %q", st.Backend())
+		}
+		return
+	}
+	if !errors.Is(err, ErrNativeUnavailable) {
 		t.Fatalf("err = %v", err)
 	}
 }

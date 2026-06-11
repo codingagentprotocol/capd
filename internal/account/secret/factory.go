@@ -22,7 +22,7 @@ func Open(root, backend string) (Store, error) {
 	case "", BackendFile:
 		return NewFileStore(root), nil
 	case BackendNative:
-		return nil, ErrNativeUnavailable
+		return openNative(root)
 	default:
 		return nil, fmt.Errorf("unknown secret backend %q", backend)
 	}
