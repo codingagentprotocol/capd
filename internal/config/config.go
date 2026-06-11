@@ -5,6 +5,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -15,6 +16,10 @@ const (
 type Config struct {
 	Host string
 	Port int
+	// Origins are extra browser origins allowed to open WebSocket
+	// connections (localhost is always allowed). Comma-separated in
+	// CAPD_ORIGINS, e.g. "app.example.com,*.internal.corp".
+	Origins []string
 }
 
 // Load returns defaults overridden by CAPD_HOST / CAPD_PORT.
@@ -27,6 +32,13 @@ func Load() Config {
 	if v := os.Getenv("CAPD_PORT"); v != "" {
 		if p, err := strconv.Atoi(v); err == nil {
 			cfg.Port = p
+		}
+	}
+	if v := os.Getenv("CAPD_ORIGINS"); v != "" {
+		for _, o := range strings.Split(v, ",") {
+			if o = strings.TrimSpace(o); o != "" {
+				cfg.Origins = append(cfg.Origins, o)
+			}
 		}
 	}
 	return cfg

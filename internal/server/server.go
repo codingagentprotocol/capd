@@ -18,6 +18,7 @@ import (
 type Options struct {
 	Host     string
 	Port     int
+	Origins  []string // extra allowed browser origins (localhost always allowed)
 	Token    string
 	Version  string
 	Registry *adapter.Registry

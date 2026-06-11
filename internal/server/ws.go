@@ -46,10 +46,10 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// Local-only daemon: web clients are expected to run on localhost
-		// (e.g. the inspector). Remote web origins must be explicitly
-		// configured in a future config option, never defaulted open.
-		OriginPatterns: []string{"localhost:*", "127.0.0.1:*"},
+		// Localhost pages are always allowed; anything else must be
+		// explicitly configured (CAPD_ORIGINS / --origins), never
+		// defaulted open.
+		OriginPatterns: append([]string{"localhost:*", "127.0.0.1:*"}, s.opts.Origins...),
 	})
 	if err != nil {
 		s.log.Warn("ws accept failed", "err", err)

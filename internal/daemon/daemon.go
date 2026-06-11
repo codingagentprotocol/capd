@@ -65,6 +65,7 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	srv := server.New(server.Options{
 		Host:     cfg.Host,
 		Port:     cfg.Port,
+		Origins:  cfg.Origins,
 		Token:    token,
 		Version:  Version,
 		Registry: reg,
