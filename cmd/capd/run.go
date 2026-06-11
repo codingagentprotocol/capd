@@ -81,10 +81,10 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 	}
 	token := strings.TrimSpace(string(tokenBytes))
 
-	addr := daemonWSURL(cfg, token)
-	conn, _, err := websocket.Dial(ctx, addr, nil)
+	wsURL := daemonWSURL(cfg, token)
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
 	if err != nil {
-		return fmt.Errorf("connect to capd at %s (is 'capd start' running?): %w", addr, err)
+		return daemonConnectError(cfg, token, err)
 	}
 	defer conn.CloseNow()
 	// Agent turns stream for as long as they stream.

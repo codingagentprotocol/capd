@@ -1,8 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/codingagentprotocol/capd/internal/config"
 )
@@ -47,4 +53,49 @@ func TestConsoleURLEncodesToken(t *testing.T) {
 	if got := u.Query().Get("token"); got != "tok+with&chars" {
 		t.Fatalf("token = %q", got)
 	}
+}
+
+func TestDaemonAddrOmitsToken(t *testing.T) {
+	cfg := config.Config{Host: "127.0.0.1", Port: 7777}
+	if got := daemonAddr(cfg); got != "127.0.0.1:7777" {
+		t.Fatalf("addr = %q", got)
+	}
+	if strings.Contains(daemonAddr(cfg), "token") {
+		t.Fatalf("display address contains token material")
+	}
+}
+
+func TestRunTaskConnectErrorDoesNotLeakToken(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+	token := "tok &with?chars"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	cmd := newRunCmd()
+	cmd.SetContext(ctx)
+	cmd.SetOut(&bytes.Buffer{})
+	err := runTask(cmd, runOpts{agent: "codex", prompt: "hello"})
+	if err == nil {
+		t.Fatal("expected connect error")
+	}
+	text := err.Error()
+	if strings.Contains(text, token) || strings.Contains(text, url.QueryEscape(token)) {
+		t.Fatalf("connect error leaked token: %s", text)
+	}
+	if !strings.Contains(text, "127.0.0.1:1") {
+		t.Fatalf("connect error missing display address: %s", text)
+	}
+}
+
+func writeTokenForTest(home, token string) error {
+	dir := filepath.Join(home, ".capd")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "token"), []byte(token+"\n"), 0o600)
 }
