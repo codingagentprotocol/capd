@@ -16,6 +16,7 @@
   .acct { min-width:220px; border:1px solid #30363d; border-radius:6px; padding:8px; background:#010409; }
   .acct.active { border-color:#3fb950; }
   .acct .name { color:#e6edf3; word-break:break-all; }
+  .acct .provider { color:#58a6ff; font-size:12px; margin-top:2px; }
   .acct .quota { color:#8b949e; font-size:12px; margin:4px 0; }
   .acct button { padding:3px 8px; }
   #main { display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:12px; align-items:stretch; }
@@ -63,7 +64,7 @@
 // token 来自 ~/.capd/token，通过 ?token=... 传入（演示用；产品里应走配对流程）
 const params = new URLSearchParams(location.search);
 const TOKEN = params.get("token") || "";
-const CAPD = params.get("capd") || "127.0.0.1:7777";
+const CAPD = params.get("capd") || location.host || "127.0.0.1:7777";
 if (TOKEN) {
   const cleanURL = new URL(location.href);
   cleanURL.searchParams.delete("token");
@@ -149,8 +150,11 @@ async function loadSessions() {
 
 async function loadAccounts() {
   try {
-    const result = await call("accounts/list", { provider: "codex" });
-    renderAccounts(result.accounts || [], result.currentAccountId || "");
+    const [allResult, codexResult] = await Promise.all([
+      call("accounts/list", {}),
+      call("accounts/list", { provider: "codex" })
+    ]);
+    renderAccounts(allResult.accounts || [], codexResult.currentAccountId || "");
   } catch (e) {
     accountsEl.textContent = "";
     line("ev-sys", "· accounts/list 不可用");
@@ -167,29 +171,38 @@ function renderAccounts(accounts, currentAccountId) {
   if (selected === "auto") autoOption.selected = true;
   accountSel.appendChild(autoOption);
   for (const a of accounts) {
-    const option = new Option(accountLabel(a), a.id);
-    if ((selected && a.id === selected) || (!selected && a.id === currentAccountId)) option.selected = true;
-    accountSel.appendChild(option);
+    const isCodex = a.provider === "codex";
+    if (isCodex) {
+      const option = new Option(accountLabel(a), a.id);
+      if ((selected && a.id === selected) || (!selected && a.id === currentAccountId)) option.selected = true;
+      accountSel.appendChild(option);
+    }
 
     const card = document.createElement("div");
-    card.className = "acct" + (a.id === accountSel.value ? " active" : "");
+    card.className = "acct" + (isCodex && a.id === accountSel.value ? " active" : "");
     const name = document.createElement("div");
     name.className = "name";
     name.textContent = a.email || a.id;
+    const provider = document.createElement("div");
+    provider.className = "provider";
+    provider.textContent = a.provider || "unknown";
     const quota = document.createElement("div");
     quota.className = "quota";
     quota.textContent = quotaLabel(a);
-    const refresh = document.createElement("button");
-    refresh.textContent = "刷新 quota";
-    refresh.onclick = () => refreshQuota(a.id, refresh);
-    card.append(name, quota, refresh);
+    card.append(name, provider, quota);
+    if (isCodex) {
+      const refresh = document.createElement("button");
+      refresh.textContent = "刷新 quota";
+      refresh.onclick = () => refreshQuota(a.id, refresh);
+      card.appendChild(refresh);
+    }
     accountsEl.appendChild(card);
   }
 }
 
 function accountLabel(a) {
   const quota = hasNumber(a.quota && a.quota.primaryUsedPercent) ? ` · ${a.quota.primaryUsedPercent}%` : "";
-  return `${a.email || a.id}${a.plan ? " · " + a.plan : ""}${quota}`;
+  return `${a.provider || "unknown"} · ${a.email || a.id}${a.plan ? " · " + a.plan : ""}${quota}`;
 }
 
 function quotaLabel(a) {
