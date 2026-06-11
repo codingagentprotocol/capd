@@ -87,6 +87,9 @@ func TestAccountStoreTightensFilePermissions(t *testing.T) {
 
 func TestAccountStoreQuotaAndSessionBinding(t *testing.T) {
 	st := newStore(t)
+	if err := st.UpsertAccount(Account{ID: "codex-local", Provider: "codex", AuthMode: "oauth"}); err != nil {
+		t.Fatal(err)
+	}
 	q := QuotaSnapshot{
 		AccountID:             "codex-local",
 		Plan:                  "plus",
@@ -117,6 +120,20 @@ func TestAccountStoreQuotaAndSessionBinding(t *testing.T) {
 	}
 	if accountID != q.AccountID {
 		t.Fatalf("session account = %q", accountID)
+	}
+
+	if err := st.BindSessionAccount("s_1", "missing"); !errors.Is(err, ErrUnknownAccount) {
+		t.Fatalf("missing account err = %v", err)
+	}
+	if err := st.BindSessionAccount("", q.AccountID); err == nil || !strings.Contains(err.Error(), "session id and account id are required") {
+		t.Fatalf("empty session err = %v", err)
+	}
+	accountID, err = st.SessionAccount("s_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accountID != q.AccountID {
+		t.Fatalf("session account after failed bind = %q", accountID)
 	}
 }
 

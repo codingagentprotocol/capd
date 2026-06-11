@@ -229,6 +229,9 @@ func (st *Store) BindSessionAccount(sessionID, accountID string) error {
 	if sessionID == "" || accountID == "" {
 		return fmt.Errorf("session id and account id are required")
 	}
+	if _, err := st.LoadAccount(accountID); err != nil {
+		return err
+	}
 	_, err := st.db.Exec(`
 INSERT INTO session_accounts (session_id, account_id) VALUES (?, ?)
 ON CONFLICT(session_id) DO UPDATE SET account_id = excluded.account_id`, sessionID, accountID)
