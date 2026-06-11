@@ -13,11 +13,12 @@ const (
 	MethodSessionFork     = "session/fork"     // branch a session into an independent copy
 	MethodSessionRollback = "session/rollback" // drop the last N turns of the conversation
 	MethodSessionClose    = "session/close"
-	MethodTaskSend        = "task/send"      // send a prompt/task into a session
-	MethodTaskSteer       = "task/steer"     // inject guidance into the RUNNING turn
-	MethodTaskCancel      = "task/cancel"    // interrupt the running task
-	MethodTaskReview      = "task/review"    // start a code-review turn
-	MethodApprovalReply   = "approval/reply" // answer a pending tool-use approval
+	MethodTaskSend        = "task/send"        // send a prompt/task into a session
+	MethodTaskSteer       = "task/steer"       // inject guidance into the RUNNING turn
+	MethodTaskCancel      = "task/cancel"      // interrupt the running task
+	MethodTaskReview      = "task/review"      // start a code-review turn
+	MethodTaskReviewMulti = "task/reviewMulti" // start multiple reviewer sessions
+	MethodApprovalReply   = "approval/reply"   // answer a pending tool-use approval
 )
 
 // Approval decisions, translated by each adapter to its agent's vocabulary.
@@ -217,6 +218,24 @@ type ReviewTarget struct {
 type TaskReviewParams struct {
 	SessionID string       `json:"sessionId"`
 	Target    ReviewTarget `json:"target"`
+}
+
+type TaskReviewMultiParams struct {
+	Target         ReviewTarget `json:"target"`
+	AgentIDs       []string     `json:"agentIds,omitempty"` // empty = every available review-capable agent
+	Cwd            string       `json:"cwd,omitempty"`
+	PermissionMode string       `json:"permissionMode,omitempty"`
+	Model          string       `json:"model,omitempty"`
+	Effort         string       `json:"effort,omitempty"`
+}
+
+type TaskReviewMultiResult struct {
+	Reviews []ReviewSession `json:"reviews"`
+}
+
+type ReviewSession struct {
+	AgentID   string `json:"agentId"`
+	SessionID string `json:"sessionId"`
 }
 
 type TaskCancelParams struct {

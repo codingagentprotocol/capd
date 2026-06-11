@@ -206,6 +206,16 @@ interrupting it (agents with steer support).
 
 Starts a code-review turn; findings stream as ordinary events.
 
+### `task/reviewMulti`
+
+Starts one reviewer session per requested agent and subscribes the caller to
+all reviewer event streams. With no `agentIds`, capd selects every available
+agent whose capabilities include `review`; `agentIds:["auto"]` routes to one
+review-capable agent.
+
+`{"target": {"type": "branch", "branch": "main"}, "agentIds": ["auto"], "cwd": "/repo"}`
+→ `{"reviews": [{"agentId": "codex", "sessionId": "s_..."}]}`
+
 ### `approval/reply`
 
 `{"sessionId", "approvalId", "decision"}` with decision `approve` ·

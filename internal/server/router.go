@@ -198,6 +198,13 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		}
 		return protocol.OKResult{OK: true}, nil
 
+	case protocol.MethodTaskReviewMulti:
+		var params protocol.TaskReviewMultiParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		return s.reviewMulti(ctx, client, params)
+
 	case protocol.MethodSessionClose:
 		var params protocol.SessionCloseParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {

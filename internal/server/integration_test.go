@@ -472,6 +472,23 @@ func TestForkRollbackAndReview(t *testing.T) {
 	c.waitEvent(protocol.EventTaskDone)
 }
 
+func TestReviewMultiCreatesReviewerSessions(t *testing.T) {
+	ts, _ := newIntegration(t)
+	c := initialized(t, ts)
+
+	var result protocol.TaskReviewMultiResult
+	c.mustResult(c.call(protocol.MethodTaskReviewMulti, protocol.TaskReviewMultiParams{
+		Target: protocol.ReviewTarget{Type: "branch", Branch: "main"},
+	}), &result)
+	if len(result.Reviews) != 1 || result.Reviews[0].AgentID != "fake" || result.Reviews[0].SessionID == "" {
+		t.Fatalf("review multi result = %+v", result)
+	}
+	if ev := c.waitEvent(protocol.EventOutputText); ev.SessionID != result.Reviews[0].SessionID || ev.Data["text"] != "review:branch" {
+		t.Fatalf("review event = %+v", ev)
+	}
+	c.waitEvent(protocol.EventTaskDone)
+}
+
 func TestSteerAndCancel(t *testing.T) {
 	ts, fake := newIntegration(t)
 	c := initialized(t, ts)
