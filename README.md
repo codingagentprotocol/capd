@@ -24,8 +24,17 @@ go build -o capd ./cmd/capd
 
 Clients authenticate with the token in `~/.capd/token` (generated on first
 run) and speak JSON-RPC 2.0 over the WebSocket. First call must be
-`initialize`; then `agents/list`, `session/create`, `task/send`, and streamed
-`event` notifications.
+`initialize`. Methods:
+
+| Group | Methods |
+|-------|---------|
+| agents | `agents/list`, `agents/usage` |
+| session | `session/create`, `session/list`, `session/attach`, `session/fork`, `session/rollback`, `session/close` |
+| task | `task/send` (text + image attachments), `task/steer`, `task/cancel`, `task/review` |
+| approval | `approval/reply` |
+
+Session events stream back as `event` notifications with per-session
+sequence numbers; see `pkg/protocol/events.go` for the unified event model.
 
 ## Layout
 
