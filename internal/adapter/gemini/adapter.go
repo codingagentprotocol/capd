@@ -7,26 +7,38 @@ import (
 	"context"
 
 	"github.com/codingagentprotocol/capd/internal/adapter"
+	"github.com/codingagentprotocol/capd/internal/proc"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
 const ID = "gemini"
 
-type Adapter struct{}
+// Adapter drives any gemini-cli-family CLI: Gemini itself plus its forks
+// (Qwen Code, iFlow), which keep the same headless flags.
+type Adapter struct {
+	id, name, bin string
+}
 
-func New() *Adapter { return &Adapter{} }
+func New() *Adapter { return NewWithCLI(ID, "Gemini CLI", "gemini") }
 
-func (a *Adapter) ID() string { return ID }
+// NewWithCLI adapts a gemini-cli fork under its own agent id.
+func NewWithCLI(id, name, bin string) *Adapter {
+	return &Adapter{id: id, name: name, bin: bin}
+}
+
+func (a *Adapter) ID() string { return a.id }
 
 func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
-	return adapter.ProbeCLI(ctx, ID, "Gemini CLI", "gemini", "--version")
+	return adapter.ProbeCLI(ctx, a.id, a.name, a.bin, "--version")
 }
 
 func (a *Adapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
-	return adapter.NewTurnSession(turnConfig, opts), nil
-}
-
-var turnConfig = adapter.TurnConfig{
-	BuildSpec: buildSpec,
-	Translate: translate,
+	return adapter.NewTurnSession(adapter.TurnConfig{
+		BuildSpec: func(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
+			spec := buildSpec(opts, nativeID, prompt)
+			spec.Bin = a.bin
+			return spec
+		},
+		Translate: translate,
+	}, opts), nil
 }

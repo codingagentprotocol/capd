@@ -30,6 +30,16 @@ func Registry() *adapter.Registry {
 		cursoragent.New(),
 		gemini.New(),
 		opencode.New(),
+
+		// gemini-cli forks: same headless flags, shared translator.
+		gemini.NewWithCLI("qwen-code", "Qwen Code", "qwen"),
+		gemini.NewWithCLI("iflow", "iFlow CLI", "iflow"),
+
+		// claude-code-compatible headless interface.
+		claudecode.NewWithCLI("codebuddy", "Tencent CodeBuddy", "codebuddy"),
+
+		// Discovery-only until calibrated against real output.
+		adapter.NewPendingCLI("kimi", "Kimi CLI", "kimi", "--version"),
 	)
 }
 

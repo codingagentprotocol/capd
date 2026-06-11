@@ -8,29 +8,42 @@ import (
 	"context"
 
 	"github.com/codingagentprotocol/capd/internal/adapter"
+	"github.com/codingagentprotocol/capd/internal/proc"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
 const ID = "claude-code"
 
-type Adapter struct{}
+// Adapter drives Claude Code and CLIs that clone its headless interface
+// (-p / --output-format stream-json / --resume), e.g. Tencent CodeBuddy.
+type Adapter struct {
+	id, name, bin string
+}
 
-func New() *Adapter { return &Adapter{} }
+func New() *Adapter { return NewWithCLI(ID, "Claude Code", "claude") }
 
-func (a *Adapter) ID() string { return ID }
+// NewWithCLI adapts a claude-code-compatible CLI under its own agent id.
+func NewWithCLI(id, name, bin string) *Adapter {
+	return &Adapter{id: id, name: name, bin: bin}
+}
+
+func (a *Adapter) ID() string { return a.id }
 
 func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
-	return adapter.ProbeCLI(ctx, ID, "Claude Code", "claude", "--version")
+	return adapter.ProbeCLI(ctx, a.id, a.name, a.bin, "--version")
 }
 
 func (a *Adapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
-	if opts.Resume != "" {
-		return adapter.NewTurnSessionResumed(turnConfig, opts, opts.Resume), nil
+	cfg := adapter.TurnConfig{
+		BuildSpec: func(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
+			spec := buildSpec(opts, nativeID, prompt)
+			spec.Bin = a.bin
+			return spec
+		},
+		Translate: translate,
 	}
-	return adapter.NewTurnSession(turnConfig, opts), nil
-}
-
-var turnConfig = adapter.TurnConfig{
-	BuildSpec: buildSpec,
-	Translate: translate,
+	if opts.Resume != "" {
+		return adapter.NewTurnSessionResumed(cfg, opts, opts.Resume), nil
+	}
+	return adapter.NewTurnSession(cfg, opts), nil
 }
