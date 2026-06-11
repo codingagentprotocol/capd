@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -137,6 +138,37 @@ func TestAccountStoreUnknownAccount(t *testing.T) {
 	st := newStore(t)
 	if _, err := st.LoadAccount("missing"); !errors.Is(err, ErrUnknownAccount) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSetCurrentAccountValidatesAccount(t *testing.T) {
+	st := newStore(t)
+	if err := st.UpsertAccount(Account{ID: "codex-one", Provider: "codex", AuthMode: "oauth"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertAccount(Account{ID: "gemini-one", Provider: "gemini", AuthMode: "oauth"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetCurrentAccount("codex", "codex-one"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := st.SetCurrentAccount("codex", "missing"); !errors.Is(err, ErrUnknownAccount) {
+		t.Fatalf("missing account err = %v", err)
+	}
+	if err := st.SetCurrentAccount("codex", ""); err == nil || !strings.Contains(err.Error(), "account id is required") {
+		t.Fatalf("empty account err = %v", err)
+	}
+	if err := st.SetCurrentAccount("codex", "gemini-one"); err == nil || !strings.Contains(err.Error(), `belongs to provider "gemini"`) {
+		t.Fatalf("provider mismatch err = %v", err)
+	}
+
+	current, err := st.CurrentAccount("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != "codex-one" {
+		t.Fatalf("current = %q", current)
 	}
 }
 

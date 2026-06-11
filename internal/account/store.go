@@ -158,7 +158,17 @@ func (st *Store) SetCurrentAccount(provider, accountID string) error {
 	if provider == "" {
 		return fmt.Errorf("provider is required")
 	}
-	_, err := st.db.Exec(`
+	if accountID == "" {
+		return fmt.Errorf("account id is required")
+	}
+	acc, err := st.LoadAccount(accountID)
+	if err != nil {
+		return err
+	}
+	if acc.Provider != provider {
+		return fmt.Errorf("account %q belongs to provider %q, not %q", accountID, acc.Provider, provider)
+	}
+	_, err = st.db.Exec(`
 INSERT INTO account_state (provider, current_account_id) VALUES (?, ?)
 ON CONFLICT(provider) DO UPDATE SET current_account_id = excluded.current_account_id`,
 		provider, accountID)
