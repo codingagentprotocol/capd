@@ -11,19 +11,24 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/codingagentprotocol/capd/internal/account"
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/session"
 )
 
 type Options struct {
-	Host     string
-	Port     int
-	Origins  []string // extra allowed browser origins (localhost always allowed)
-	Token    string
-	Version  string
-	Registry *adapter.Registry
-	Sessions *session.Manager
-	Log      *slog.Logger
+	Host        string
+	Port        int
+	Origins     []string // extra allowed browser origins (localhost always allowed)
+	Token       string
+	Version     string
+	Registry    *adapter.Registry
+	Sessions    *session.Manager
+	Accounts    *account.Store
+	Secrets     secret.Store
+	RuntimeRoot string
+	Log         *slog.Logger
 }
 
 type Server struct {

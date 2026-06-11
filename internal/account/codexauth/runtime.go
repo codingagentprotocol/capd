@@ -38,7 +38,7 @@ func (rp RuntimeProjector) Project(ctx context.Context, acc account.Account) (Ru
 	if err != nil {
 		return RuntimeProfile{}, err
 	}
-	dir := filepath.Join(rp.Root, Provider, acc.ID)
+	dir := filepath.Join(rp.Root, Provider, safeID(acc.ID))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return RuntimeProfile{}, err
 	}

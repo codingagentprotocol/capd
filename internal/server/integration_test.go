@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -18,6 +20,9 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/codingagentprotocol/capd/internal/account"
+	"github.com/codingagentprotocol/capd/internal/account/codexauth"
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/session"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
@@ -27,12 +32,18 @@ import (
 
 type scriptedAdapter struct {
 	mu       sync.Mutex
+	id       string
 	sessions []*scriptedSession
 }
 
-func (f *scriptedAdapter) ID() string { return "fake" }
+func (f *scriptedAdapter) ID() string {
+	if f.id != "" {
+		return f.id
+	}
+	return "fake"
+}
 func (f *scriptedAdapter) Probe(context.Context) (protocol.AgentInfo, error) {
-	return protocol.AgentInfo{ID: "fake", Name: "Fake", Available: true}, nil
+	return protocol.AgentInfo{ID: f.ID(), Name: "Fake", Available: true}, nil
 }
 func (f *scriptedAdapter) Capabilities() protocol.AgentCapabilities {
 	return protocol.AgentCapabilities{
@@ -55,6 +66,15 @@ func (f *scriptedAdapter) StartSession(_ context.Context, opts adapter.SessionOp
 	f.sessions = append(f.sessions, s)
 	f.mu.Unlock()
 	return s, nil
+}
+
+func (f *scriptedAdapter) lastOpts() adapter.SessionOpts {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.sessions) == 0 {
+		return adapter.SessionOpts{}
+	}
+	return f.sessions[len(f.sessions)-1].opts
 }
 
 type scriptedSession struct {
@@ -271,6 +291,53 @@ func newIntegration(t *testing.T) (*httptest.Server, *scriptedAdapter) {
 	return ts, fake
 }
 
+func newCodexAccountIntegration(t *testing.T) (*httptest.Server, *scriptedAdapter, *account.Store) {
+	t.Helper()
+	fake := &scriptedAdapter{id: "codex"}
+	reg := adapter.NewRegistry(fake)
+	dir := t.TempDir()
+	st, err := session.OpenStore(filepath.Join(dir, "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	accounts, err := account.OpenStore(filepath.Join(dir, "accounts.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { accounts.Close() })
+	secrets := secret.NewFileStore(filepath.Join(dir, "secrets"))
+	ref, err := secrets.Put(context.Background(), "codex-test", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "test-token",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"test-token"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-test",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "codex@example.com",
+		AccountID: "acct_test",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(Options{
+		Token: "it-token", Version: "it",
+		Registry: reg, Sessions: session.NewManager(reg, st),
+		Accounts: accounts, Secrets: secrets, RuntimeRoot: filepath.Join(dir, "runtimes"),
+		Log: slog.New(slog.NewTextHandler(testWriter{t}, nil)),
+	})
+	ts := httptest.NewServer(http.HandlerFunc(s.handleWS))
+	t.Cleanup(ts.Close)
+	return ts, fake, accounts
+}
+
 func initialized(t *testing.T, ts *httptest.Server) *testClient {
 	t.Helper()
 	c := dialClient(t, ts, "it-token")
@@ -359,6 +426,45 @@ func TestAgentsRouteAndAutoCreate(t *testing.T) {
 	c.mustResult(c.call(protocol.MethodSessionList, struct{}{}), &list)
 	if len(list.Sessions) != 1 || list.Sessions[0].SessionID != created.SessionID || list.Sessions[0].AgentID != "fake" {
 		t.Fatalf("sessions = %+v", list.Sessions)
+	}
+}
+
+func TestSessionCreateWithCodexAccountProjectsRuntime(t *testing.T) {
+	ts, fake, accounts := newCodexAccountIntegration(t)
+	c := initialized(t, ts)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:   "codex",
+		AccountID: "codex-test",
+	}), &created)
+
+	opts := fake.lastOpts()
+	if len(opts.Env) != 1 || !strings.HasPrefix(opts.Env[0], "CODEX_HOME=") {
+		t.Fatalf("Env = %#v", opts.Env)
+	}
+	codexHome := strings.TrimPrefix(opts.Env[0], "CODEX_HOME=")
+	if _, err := os.Stat(filepath.Join(codexHome, "auth.json")); err != nil {
+		t.Fatal(err)
+	}
+	accountID, err := accounts.SessionAccount(created.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accountID != "codex-test" {
+		t.Fatalf("session account = %q", accountID)
+	}
+}
+
+func TestSessionCreateRejectsAccountForNonCodexAgent(t *testing.T) {
+	ts, _ := newIntegration(t)
+	c := initialized(t, ts)
+	resp := c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:   "fake",
+		AccountID: "codex-test",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams {
+		t.Fatalf("want invalid params, got %+v", resp)
 	}
 }
 

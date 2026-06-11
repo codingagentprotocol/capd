@@ -12,6 +12,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/codingagentprotocol/capd/internal/account"
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/adapter/claudecode"
 	"github.com/codingagentprotocol/capd/internal/adapter/codex"
@@ -96,19 +98,28 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return err
 	}
 	defer store.Close()
+	accountStore, err := account.OpenStore(filepath.Join(home, "accounts.db"))
+	if err != nil {
+		return err
+	}
+	defer accountStore.Close()
+	secrets := secret.NewFileStore(filepath.Join(home, "secrets", "codex"))
 
 	reg := Registry()
 	sessions := session.NewManager(reg, store)
 
 	srv := server.New(server.Options{
-		Host:     cfg.Host,
-		Port:     cfg.Port,
-		Origins:  cfg.Origins,
-		Token:    token,
-		Version:  Version,
-		Registry: reg,
-		Sessions: sessions,
-		Log:      log,
+		Host:        cfg.Host,
+		Port:        cfg.Port,
+		Origins:     cfg.Origins,
+		Token:       token,
+		Version:     Version,
+		Registry:    reg,
+		Sessions:    sessions,
+		Accounts:    accountStore,
+		Secrets:     secrets,
+		RuntimeRoot: filepath.Join(home, "runtimes"),
+		Log:         log,
 	})
 	return srv.Run(ctx)
 }

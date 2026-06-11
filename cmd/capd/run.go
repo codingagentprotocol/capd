@@ -26,6 +26,7 @@ func newRunCmd() *cobra.Command {
 		cwd        string
 		permission string
 		sessionID  string
+		accountID  string
 		model      string
 		effort     string
 		images     []string
@@ -44,13 +45,14 @@ func newRunCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTask(cmd, runOpts{agent: agentID, cwd: cwd, permission: permission,
-				session: sessionID, model: model, effort: effort, images: images, json: showJSON, prompt: args[0]})
+				session: sessionID, account: accountID, model: model, effort: effort, images: images, json: showJSON, prompt: args[0]})
 		},
 	}
 	cmd.Flags().StringVar(&agentID, "agent", "codex", "agent to drive")
 	cmd.Flags().StringVar(&cwd, "cwd", "", "working directory for the agent (default: current directory)")
 	cmd.Flags().StringVar(&permission, "permission", "", "permission mode: default | acceptEdits | full")
 	cmd.Flags().StringVar(&sessionID, "session", "", "continue an existing capd session instead of creating one")
+	cmd.Flags().StringVar(&accountID, "account", "", "agent account id for a new session (currently Codex)")
 	cmd.Flags().StringVar(&model, "model", "", "agent-native model id (empty = agent default)")
 	cmd.Flags().StringVar(&effort, "effort", "", "reasoning effort where supported (codex: minimal..xhigh)")
 	cmd.Flags().StringSliceVar(&images, "image", nil, "image file(s) to attach (agents that support it)")
@@ -59,9 +61,9 @@ func newRunCmd() *cobra.Command {
 }
 
 type runOpts struct {
-	agent, cwd, permission, session, model, effort, prompt string
-	images                                                 []string
-	json                                                   bool
+	agent, cwd, permission, session, account, model, effort, prompt string
+	images                                                          []string
+	json                                                            bool
 }
 
 func runTask(cmd *cobra.Command, o runOpts) error {
@@ -139,7 +141,7 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 			cwd, _ = os.Getwd()
 		}
 		res, err := call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
-			AgentID: agentID, Cwd: cwd, PermissionMode: permission, Model: o.model, Effort: o.effort,
+			AgentID: agentID, AccountID: o.account, Cwd: cwd, PermissionMode: permission, Model: o.model, Effort: o.effort,
 		})
 		if err != nil {
 			return err
@@ -149,6 +151,9 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 		sessionID = created.SessionID
 		fmt.Fprintf(out, "session %s (%s)\n", sessionID, agentID)
 	} else {
+		if o.account != "" {
+			return fmt.Errorf("--account is only valid when creating a new session")
+		}
 		if _, err := call(protocol.MethodSessionAttach, protocol.SessionAttachParams{
 			SessionID: sessionID, FromSeq: ^uint64(0), // live tail only, no replay
 		}); err != nil {

@@ -102,15 +102,28 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 			}
 			agentID = routed.Agent.ID
 		}
-		sess, err := s.opts.Sessions.Create(ctx, agentID, adapter.SessionOpts{
+		opts := adapter.SessionOpts{
 			Cwd:            params.Cwd,
 			Resume:         params.Resume,
 			PermissionMode: params.PermissionMode,
 			Model:          params.Model,
 			Effort:         params.Effort,
-		})
+		}
+		if params.AccountID != "" {
+			env, perr := s.runtimeEnvForAccount(ctx, agentID, params.AccountID)
+			if perr != nil {
+				return nil, perr
+			}
+			opts.Env = env
+		}
+		sess, err := s.opts.Sessions.Create(ctx, agentID, opts)
 		if err != nil {
 			return nil, asProtocolError(err)
+		}
+		if params.AccountID != "" && s.opts.Accounts != nil {
+			if err := s.opts.Accounts.BindSessionAccount(sess.ID, params.AccountID); err != nil {
+				return nil, protocol.NewError(protocol.CodeInternalError, "bind session account: %v", err)
+			}
 		}
 		s.subscribe(ctx, client, sess, 0)
 		return protocol.SessionCreateResult{SessionID: sess.ID}, nil

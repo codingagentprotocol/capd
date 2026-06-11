@@ -89,7 +89,7 @@ func (m *Manager) Create(ctx context.Context, agentID string, opts adapter.Sessi
 		subs:    make(map[int]*subscriber),
 	}
 	if m.store != nil {
-		if err := m.store.SaveSession(SessionRecord{ID: s.ID, AgentID: agentID, Cwd: opts.Cwd, NativeID: opts.Resume}); err != nil {
+		if err := m.store.SaveSession(SessionRecord{ID: s.ID, AgentID: agentID, Cwd: opts.Cwd, NativeID: opts.Resume, Env: opts.Env}); err != nil {
 			inner.Close()
 			return nil, protocol.NewError(protocol.CodeInternalError, "save session: %v", err)
 		}
@@ -155,7 +155,7 @@ func (m *Manager) Resolve(ctx context.Context, id string) (*Session, error) {
 		call.err = protocol.NewError(protocol.CodeAgentNotFound, "agent %q of stored session is not registered", rec.AgentID)
 		return nil, call.err
 	}
-	inner, err := a.StartSession(ctx, adapter.SessionOpts{Cwd: rec.Cwd, Resume: rec.NativeID})
+	inner, err := a.StartSession(ctx, adapter.SessionOpts{Cwd: rec.Cwd, Resume: rec.NativeID, Env: rec.Env})
 	if err != nil {
 		call.err = protocol.NewError(protocol.CodeAgentUnavailable, "revive %s: %v", rec.AgentID, err)
 		return nil, call.err
@@ -289,10 +289,12 @@ func (m *Manager) Fork(ctx context.Context, id string) (*Session, error) {
 	}
 	if m.store != nil {
 		cwd := ""
+		var env []string
 		if rec, err := m.store.LoadSession(parent.ID); err == nil {
 			cwd = rec.Cwd
+			env = rec.Env
 		}
-		if err := m.store.SaveSession(SessionRecord{ID: s.ID, AgentID: s.AgentID, NativeID: nativeID, Cwd: cwd}); err != nil {
+		if err := m.store.SaveSession(SessionRecord{ID: s.ID, AgentID: s.AgentID, NativeID: nativeID, Cwd: cwd, Env: env}); err != nil {
 			inner.Close()
 			return nil, protocol.NewError(protocol.CodeInternalError, "save forked session: %v", err)
 		}

@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 	agent_id   TEXT NOT NULL,
 	native_id  TEXT NOT NULL DEFAULT '',
 	cwd        TEXT NOT NULL DEFAULT '',
+	env_json   TEXT NOT NULL DEFAULT '[]',
 	ended      INTEGER NOT NULL DEFAULT 0,
 	created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
@@ -54,7 +55,39 @@ func OpenStore(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("session: create schema: %w", err)
 	}
+	if err := ensureSessionColumns(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Store{db: db}, nil
+}
+
+func ensureSessionColumns(db *sql.DB) error {
+	rows, err := db.Query("PRAGMA table_info(sessions)")
+	if err != nil {
+		return fmt.Errorf("session: inspect schema: %w", err)
+	}
+	defer rows.Close()
+	cols := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull, pk int
+		var dflt any
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+			return fmt.Errorf("session: inspect schema: %w", err)
+		}
+		cols[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if !cols["env_json"] {
+		if _, err := db.Exec("ALTER TABLE sessions ADD COLUMN env_json TEXT NOT NULL DEFAULT '[]'"); err != nil {
+			return fmt.Errorf("session: add env_json column: %w", err)
+		}
+	}
+	return nil
 }
 
 func (st *Store) Close() error { return st.db.Close() }
@@ -65,6 +98,7 @@ type SessionRecord struct {
 	AgentID   string
 	NativeID  string
 	Cwd       string
+	Env       []string
 	Ended     bool
 	CreatedAt int64
 }
@@ -72,7 +106,7 @@ type SessionRecord struct {
 // LoadSessions returns the most recent sessions, newest first.
 func (st *Store) LoadSessions(limit int) ([]SessionRecord, error) {
 	rows, err := st.db.Query(
-		"SELECT id, agent_id, native_id, cwd, ended, created_at FROM sessions ORDER BY created_at DESC, id DESC LIMIT ?", limit)
+		"SELECT id, agent_id, native_id, cwd, env_json, ended, created_at FROM sessions ORDER BY created_at DESC, id DESC LIMIT ?", limit)
 	if err != nil {
 		return nil, err
 	}
@@ -82,9 +116,11 @@ func (st *Store) LoadSessions(limit int) ([]SessionRecord, error) {
 	for rows.Next() {
 		var rec SessionRecord
 		var ended int
-		if err := rows.Scan(&rec.ID, &rec.AgentID, &rec.NativeID, &rec.Cwd, &ended, &rec.CreatedAt); err != nil {
+		var envJSON string
+		if err := rows.Scan(&rec.ID, &rec.AgentID, &rec.NativeID, &rec.Cwd, &envJSON, &ended, &rec.CreatedAt); err != nil {
 			return nil, err
 		}
+		rec.Env = decodeEnv(envJSON)
 		rec.Ended = ended != 0
 		out = append(out, rec)
 	}
@@ -92,9 +128,10 @@ func (st *Store) LoadSessions(limit int) ([]SessionRecord, error) {
 }
 
 func (st *Store) SaveSession(rec SessionRecord) error {
+	envJSON := encodeEnv(rec.Env)
 	_, err := st.db.Exec(
-		"INSERT OR REPLACE INTO sessions (id, agent_id, native_id, cwd, ended) VALUES (?, ?, ?, ?, ?)",
-		rec.ID, rec.AgentID, rec.NativeID, rec.Cwd, boolInt(rec.Ended))
+		"INSERT OR REPLACE INTO sessions (id, agent_id, native_id, cwd, env_json, ended) VALUES (?, ?, ?, ?, ?, ?)",
+		rec.ID, rec.AgentID, rec.NativeID, rec.Cwd, envJSON, boolInt(rec.Ended))
 	return err
 }
 
@@ -111,12 +148,14 @@ func (st *Store) MarkEnded(id string) error {
 func (st *Store) LoadSession(id string) (SessionRecord, error) {
 	rec := SessionRecord{ID: id}
 	var ended int
+	var envJSON string
 	err := st.db.QueryRow(
-		"SELECT agent_id, native_id, cwd, ended FROM sessions WHERE id = ?", id,
-	).Scan(&rec.AgentID, &rec.NativeID, &rec.Cwd, &ended)
+		"SELECT agent_id, native_id, cwd, env_json, ended FROM sessions WHERE id = ?", id,
+	).Scan(&rec.AgentID, &rec.NativeID, &rec.Cwd, &envJSON, &ended)
 	if errors.Is(err, sql.ErrNoRows) {
 		return rec, ErrSessionUnknown
 	}
+	rec.Env = decodeEnv(envJSON)
 	rec.Ended = ended != 0
 	return rec, err
 }
@@ -197,4 +236,26 @@ func boolInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+func encodeEnv(env []string) string {
+	if len(env) == 0 {
+		return "[]"
+	}
+	data, err := json.Marshal(env)
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
+}
+
+func decodeEnv(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var env []string
+	if err := json.Unmarshal([]byte(raw), &env); err != nil {
+		return nil
+	}
+	return env
 }

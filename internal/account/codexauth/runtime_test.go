@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/codingagentprotocol/capd/internal/account"
@@ -58,5 +59,30 @@ func TestRuntimeProjectorWritesIsolatedCodexHome(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(profile.CodexHome, ".capd_projection.json")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRuntimeProjectorSanitizesAccountDirectory(t *testing.T) {
+	dir := t.TempDir()
+	secrets := secret.NewFileStore(filepath.Join(dir, "secrets"))
+	ref, err := secrets.Put(context.Background(), "codex-acct", secret.Bundle{
+		Provider:    Provider,
+		AuthMode:    "oauth",
+		AccessToken: "access-secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc := account.Account{ID: "../outside", Provider: Provider, SecretRef: ref.String()}
+	profile, err := RuntimeProjector{
+		Root:    filepath.Join(dir, "runtimes"),
+		Secrets: secrets,
+	}.Project(context.Background(), acc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPrefix := filepath.Join(dir, "runtimes", Provider) + string(filepath.Separator)
+	if !strings.HasPrefix(profile.CodexHome, wantPrefix) {
+		t.Fatalf("CodexHome escaped runtime root: %q", profile.CodexHome)
 	}
 }

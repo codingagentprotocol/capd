@@ -125,6 +125,7 @@ Useful flags and companions:
 
 ```bash
 capd run --agent opencode "..."             # pick the agent
+capd run --agent codex --account codex-acct # use an imported Codex account
 capd run --model gpt-5.3-codex --effort high "..."
 capd run --permission acceptEdits "..."     # default | acceptEdits | full
 capd run --image diagram.png "what's wrong in this architecture?"
@@ -276,6 +277,10 @@ flowchart TB
 - `capd accounts codex import` copies token material into capd's secret
   store, records only metadata in SQLite, and never writes back to the user's
   original `~/.codex`.
+- New Codex sessions can opt into an imported account with `--account` or
+  protocol `session/create.accountId`; the daemon projects that account into
+  a dedicated `CODEX_HOME` and the Codex app-server profile pool keeps it
+  isolated from other accounts.
 
 ## Repository layout
 

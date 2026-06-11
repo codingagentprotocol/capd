@@ -30,6 +30,7 @@ environment variable and file. For a guided tour, read the [README](../README.md
 | `--agent` | `codex` | agent id from `capd agents list` |
 | `--cwd` | current directory | project directory the agent works in |
 | `--session` | _(new session)_ | continue an existing session id (multi-turn; survives restarts) |
+| `--account` | — | imported account id for a new session; currently Codex only |
 | `--permission` | `default` | `default` (read-only sandbox + approvals) · `acceptEdits` (workspace-write) · `full` (no prompts) |
 | `--model` | agent default | agent-native model id, e.g. `gpt-5.3-codex` |
 | `--effort` | agent default | reasoning effort where supported (codex: `minimal` `low` `medium` `high` `xhigh`) |
@@ -144,6 +145,7 @@ resetsAt}`, `planType`, `credits`, plus per-model buckets in
 | Field | Type | Default | Meaning |
 |-------|------|---------|---------|
 | `agentId` | string | required | agent to drive, or `auto` to route |
+| `accountId` | string | — | imported account id; currently supported for Codex sessions |
 | `cwd` | string | user home | project directory; must exist |
 | `permissionMode` | string | `""` (default) | `acceptEdits` · `full`; `full` is rejected at filesystem root |
 | `model` | string | agent default | agent-native model id |

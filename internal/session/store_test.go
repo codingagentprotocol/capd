@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -18,7 +19,7 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 	defer st.Close()
 
-	rec := SessionRecord{ID: "s_1", AgentID: "codex", Cwd: "/tmp"}
+	rec := SessionRecord{ID: "s_1", AgentID: "codex", Cwd: "/tmp", Env: []string{"CODEX_HOME=/tmp/capd-codex"}}
 	if err := st.SaveSession(rec); err != nil {
 		t.Fatal(err)
 	}
@@ -39,6 +40,9 @@ func TestStoreRoundTrip(t *testing.T) {
 	if got.AgentID != "codex" || got.NativeID != "thread-42" || got.Cwd != "/tmp" || got.Ended {
 		t.Fatalf("got %+v", got)
 	}
+	if len(got.Env) != 1 || got.Env[0] != "CODEX_HOME=/tmp/capd-codex" {
+		t.Fatalf("env = %#v", got.Env)
+	}
 
 	events, err := st.LoadEvents("s_1", 1, 100)
 	if err != nil {
@@ -50,6 +54,49 @@ func TestStoreRoundTrip(t *testing.T) {
 
 	if _, err := st.LoadSession("nope"); err != ErrSessionUnknown {
 		t.Fatalf("want ErrSessionUnknown, got %v", err)
+	}
+}
+
+func TestOpenStoreMigratesEnvColumn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`
+CREATE TABLE sessions (
+	id TEXT PRIMARY KEY,
+	agent_id TEXT NOT NULL,
+	native_id TEXT NOT NULL DEFAULT '',
+	cwd TEXT NOT NULL DEFAULT '',
+	ended INTEGER NOT NULL DEFAULT 0,
+	created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+CREATE TABLE events (
+	session_id TEXT NOT NULL,
+	seq INTEGER NOT NULL,
+	type TEXT NOT NULL,
+	data TEXT NOT NULL DEFAULT '{}',
+	PRIMARY KEY (session_id, seq)
+);`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	st, err := OpenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.SaveSession(SessionRecord{ID: "s_1", AgentID: "codex", Env: []string{"CODEX_HOME=/tmp/codex"}}); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := st.LoadSession("s_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.Env) != 1 || rec.Env[0] != "CODEX_HOME=/tmp/codex" {
+		t.Fatalf("env = %#v", rec.Env)
 	}
 }
 
@@ -113,7 +160,7 @@ func TestReviveAfterRestart(t *testing.T) {
 
 	fake := &fakeAdapter{id: "fake"}
 	m1 := NewManager(adapter.NewRegistry(fake), st)
-	sess, err := m1.Create(context.Background(), "fake", adapter.SessionOpts{Cwd: "/work"})
+	sess, err := m1.Create(context.Background(), "fake", adapter.SessionOpts{Cwd: "/work", Env: []string{"CODEX_HOME=/tmp/capd-codex"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,6 +184,9 @@ func TestReviveAfterRestart(t *testing.T) {
 	}
 	if lastOpts.Cwd != "/work" {
 		t.Fatalf("revive Cwd = %q", lastOpts.Cwd)
+	}
+	if len(lastOpts.Env) != 1 || lastOpts.Env[0] != "CODEX_HOME=/tmp/capd-codex" {
+		t.Fatalf("revive Env = %#v", lastOpts.Env)
 	}
 
 	ch, nextSeq, cancel, _ := revived.Subscribe(0)
