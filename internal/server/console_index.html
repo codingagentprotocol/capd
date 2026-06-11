@@ -5,18 +5,30 @@
 <title>CAP Web Client</title>
 <style>
   :root { color-scheme: dark; }
-  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background:#0d1117; color:#c9d1d9; max-width:860px; margin:24px auto; padding:0 16px; }
+  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background:#0d1117; color:#c9d1d9; max-width:1180px; margin:24px auto; padding:0 16px; }
   h1 { font-size:18px; } h1 .v { color:#3fb950; font-size:12px; margin-left:8px; }
-  #bar { display:flex; gap:8px; margin:12px 0; }
+  #bar { display:flex; gap:8px; margin:12px 0; flex-wrap:wrap; }
   select, input, button { background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:6px 10px; font:inherit; }
   input#prompt { flex:1; }
   button { cursor:pointer; } button:hover { border-color:#58a6ff; }
-  #log { background:#010409; border:1px solid #30363d; border-radius:8px; padding:12px; height:420px; overflow-y:auto; white-space:pre-wrap; }
+  #main { display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:12px; align-items:stretch; }
+  #sessions, #log { background:#010409; border:1px solid #30363d; border-radius:8px; padding:12px; height:520px; overflow-y:auto; }
+  #log { white-space:pre-wrap; }
+  #sessions { display:flex; flex-direction:column; gap:8px; }
+  #sessionHead { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#8b949e; font-size:12px; }
+  #sessionHead button { padding:3px 8px; }
+  .sess { border:1px solid #30363d; border-radius:6px; padding:8px; }
+  .sess.active { border-color:#58a6ff; }
+  .sess .id { color:#e6edf3; word-break:break-all; }
+  .sess .meta { color:#8b949e; font-size:12px; margin:4px 0; }
+  .sess button { padding:3px 8px; }
+  .empty { color:#8b949e; font-size:12px; }
   .ev-text { color:#e6edf3; } .ev-tool { color:#d29922; } .ev-out { color:#8b949e; }
   .ev-done { color:#3fb950; } .ev-err { color:#f85149; } .ev-sys { color:#58a6ff; }
   .approval { background:#1c1207; border:1px solid #d29922; border-radius:6px; padding:8px; margin:6px 0; }
   .approval button { margin-right:6px; }
   #status { font-size:12px; color:#8b949e; }
+  @media (max-width: 820px) { #main { grid-template-columns:1fr; } #sessions { height:220px; } }
 </style>
 </head>
 <body>
@@ -31,7 +43,13 @@
   <button id="send">发送</button>
   <button id="cancel">中断</button>
 </div>
-<div id="log"></div>
+<div id="main">
+  <div id="sessions">
+    <div id="sessionHead"><span>Sessions</span><button id="refreshSessions">刷新</button></div>
+    <div class="empty">暂无会话</div>
+  </div>
+  <div id="log"></div>
+</div>
 
 <script>
 // token 来自 ~/.capd/token，通过 ?token=... 传入（演示用；产品里应走配对流程）
@@ -40,6 +58,7 @@ const TOKEN = params.get("token") || "";
 const CAPD = params.get("capd") || "127.0.0.1:7777";
 
 const log = document.getElementById("log");
+const sessionsEl = document.getElementById("sessions");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
 
@@ -99,6 +118,75 @@ function renderApproval(d) {
   log.appendChild(box); log.scrollTop = log.scrollHeight;
 }
 
+function clearLog() {
+  log.textContent = "";
+  deltaEl = null;
+}
+
+async function loadSessions() {
+  try {
+    const { sessions } = await call("session/list", {});
+    renderSessions(sessions || []);
+    updateCwdOptions(sessions || []);
+  } catch (e) {
+    renderSessions([], "会话列表不可用");
+  }
+}
+
+function updateCwdOptions(sessions) {
+  const dirs = [...new Set((sessions || []).map(s => s.cwd).filter(Boolean))];
+  const dl = document.getElementById("cwds");
+  dl.textContent = "";
+  for (const d of dirs) {
+    const o = document.createElement("option");
+    o.value = d; dl.appendChild(o);
+  }
+}
+
+function renderSessions(sessions, emptyText = "暂无会话") {
+  sessionsEl.textContent = "";
+  const head = document.createElement("div");
+  head.id = "sessionHead";
+  const title = document.createElement("span");
+  title.textContent = `Sessions (${sessions.length})`;
+  const refresh = document.createElement("button");
+  refresh.textContent = "刷新";
+  refresh.onclick = loadSessions;
+  head.append(title, refresh);
+  sessionsEl.appendChild(head);
+  if (!sessions.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = emptyText;
+    sessionsEl.appendChild(empty);
+    return;
+  }
+  for (const s of sessions) {
+    const box = document.createElement("div");
+    box.className = "sess" + (s.sessionId === sessionId ? " active" : "");
+    const id = document.createElement("div");
+    id.className = "id";
+    id.textContent = s.sessionId;
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = `${s.agentId} · ${s.state}${s.cwd ? " · " + s.cwd : ""}`;
+    const attach = document.createElement("button");
+    attach.textContent = "接管";
+    attach.disabled = s.state === "ended";
+    attach.onclick = () => attachSession(s.sessionId, true);
+    box.append(id, meta, attach);
+    sessionsEl.appendChild(box);
+  }
+}
+
+async function attachSession(id, replay) {
+  sessionId = id;
+  clearLog();
+  await call("session/attach", { sessionId, fromSeq: replay ? 0 : Number.MAX_SAFE_INTEGER });
+  line("ev-sys", `· 已接管 ${sessionId}`);
+  await loadSessions();
+}
+
 async function connect() {
   ws = new WebSocket(`ws://${CAPD}/ws?token=${TOKEN}`);
   ws.onmessage = (m) => {
@@ -137,14 +225,7 @@ async function connect() {
     line("ev-sys", "· accounts/list 不可用");
   }
 
-  // 最近用过的项目目录 → 输入框的自动补全
-  const { sessions } = await call("session/list", {});
-  const dirs = [...new Set(sessions.map(s => s.cwd).filter(Boolean))];
-  const dl = document.getElementById("cwds");
-  for (const d of dirs) {
-    const o = document.createElement("option");
-    o.value = d; dl.appendChild(o);
-  }
+  await loadSessions();
 }
 
 document.getElementById("send").onclick = async () => {
@@ -159,11 +240,13 @@ document.getElementById("send").onclick = async () => {
     const res = await call("session/create", create);
     sessionId = res.sessionId;
     line("ev-sys", `· 新会话 ${sessionId} @ ${cwd || "~"}`);
+    await loadSessions();
   }
   line("ev-sys", `» ${prompt}`);
   await call("task/send", { sessionId, prompt });
 };
 document.getElementById("cancel").onclick = () => sessionId && call("task/cancel", { sessionId });
+document.getElementById("refreshSessions").onclick = loadSessions;
 document.getElementById("prompt").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("send").click(); });
 
 connect().catch(e => { statusEl.textContent = "连接失败: " + (e.message || JSON.stringify(e)); });
