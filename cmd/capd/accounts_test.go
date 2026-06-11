@@ -49,6 +49,31 @@ func TestCodexAccountsSmokeProjectsWithoutLeakingSecrets(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsListShowsZeroQuotaWithoutLeakingSecrets(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 0}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "list"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if !strings.Contains(text, "0.0%") {
+		t.Fatalf("output missing zero quota: %s", text)
+	}
+	if strings.Contains(text, "access-secret") || strings.Contains(text, "refresh-secret") || strings.Contains(text, "secretRef") {
+		t.Fatalf("list output leaked secret: %s", text)
+	}
+}
+
 func TestCodexAccountsSmokeJSONWithoutLeakingSecrets(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)

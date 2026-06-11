@@ -92,9 +92,7 @@ func newCodexAccountsCmd() *cobra.Command {
 					if plan == "" {
 						plan = q.Plan
 					}
-					if q.PrimaryUsedPercent != 0 {
-						used = fmt.Sprintf("%.1f%%", q.PrimaryUsedPercent)
-					}
+					used = formatPercent(q.PrimaryUsedPercent)
 				}
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", mark, acc.ID, acc.AuthMode, acc.Email, acc.AccountID, plan, used)
 			}
