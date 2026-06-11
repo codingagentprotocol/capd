@@ -578,6 +578,30 @@ func TestAgentsRouteAutoAccountChoosesLowestCachedQuota(t *testing.T) {
 	}
 }
 
+func TestAgentsRouteAutoAccountIgnoresStaleLowQuota(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	addCodexAccountForTest(t, accounts, "codex-fresh", "fresh@example.com")
+	staleAt := time.Now().Add(-account.QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 1, CheckedAt: staleAt}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-fresh", Plan: "pro", PrimaryUsedPercent: 20}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var routed protocol.AgentRouteResult
+	c.mustResult(c.call(protocol.MethodAgentsRoute, protocol.AgentRouteParams{
+		AccountID: protocol.AccountAuto,
+	}), &routed)
+	if routed.Agent.ID != "codex" || routed.AccountID != "codex-fresh" {
+		t.Fatalf("route = %+v", routed)
+	}
+	if !strings.Contains(routed.Reason, "auto account codex-fresh primary 20%") {
+		t.Fatalf("reason = %q", routed.Reason)
+	}
+}
+
 func TestSessionCreateAutoAccountBindsLowestCachedQuota(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
 	addCodexAccountForTest(t, accounts, "codex-high", "high@example.com")

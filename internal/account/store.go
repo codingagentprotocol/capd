@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	_ "modernc.org/sqlite" // CGO-free driver; same portability profile as session store.
 )
@@ -170,11 +171,14 @@ func (st *Store) SaveQuota(q QuotaSnapshot) error {
 	if q.AccountID == "" {
 		return fmt.Errorf("account id is required")
 	}
+	if q.CheckedAt == 0 {
+		q.CheckedAt = time.Now().Unix()
+	}
 	_, err := st.db.Exec(`
 INSERT INTO account_quota (
 	account_id, plan, primary_used_percent, primary_reset_at,
-	secondary_used_percent, secondary_reset_at, code_review_used_percent, raw_json
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	secondary_used_percent, secondary_reset_at, code_review_used_percent, checked_at, raw_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(account_id) DO UPDATE SET
 	plan = excluded.plan,
 	primary_used_percent = excluded.primary_used_percent,
@@ -182,10 +186,10 @@ ON CONFLICT(account_id) DO UPDATE SET
 	secondary_used_percent = excluded.secondary_used_percent,
 	secondary_reset_at = excluded.secondary_reset_at,
 	code_review_used_percent = excluded.code_review_used_percent,
-	checked_at = strftime('%s','now'),
+	checked_at = excluded.checked_at,
 	raw_json = excluded.raw_json`,
 		q.AccountID, q.Plan, q.PrimaryUsedPercent, q.PrimaryResetAt,
-		q.SecondaryUsedPercent, q.SecondaryResetAt, q.CodeReviewUsedPercent, q.RawJSON)
+		q.SecondaryUsedPercent, q.SecondaryResetAt, q.CodeReviewUsedPercent, q.CheckedAt, q.RawJSON)
 	return err
 }
 

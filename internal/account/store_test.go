@@ -3,6 +3,7 @@ package account
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func newStore(t *testing.T) *Store {
@@ -122,6 +123,32 @@ func TestSelectLowestQuotaAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.ID != "low" {
+		t.Fatalf("selected = %+v", got)
+	}
+}
+
+func TestSelectLowestQuotaAccountIgnoresStaleQuota(t *testing.T) {
+	st := newStore(t)
+	for _, acc := range []Account{
+		{ID: "stale-low", Provider: "codex", AuthMode: "oauth"},
+		{ID: "fresh-mid", Provider: "codex", AuthMode: "oauth"},
+	} {
+		if err := st.UpsertAccount(acc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	staleAt := time.Now().Add(-QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "stale-low", PrimaryUsedPercent: 1, CheckedAt: staleAt}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "fresh-mid", PrimaryUsedPercent: 20}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := SelectLowestQuotaAccount(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "fresh-mid" {
 		t.Fatalf("selected = %+v", got)
 	}
 }

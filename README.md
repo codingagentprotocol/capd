@@ -299,9 +299,11 @@ flowchart TB
   closed instead of silently falling back.
 - New Codex sessions can opt into an imported account with `--account` or
   protocol `session/create.accountId`; `accountId:"auto"` picks the imported
-  Codex account with the lowest cached primary quota usage. The daemon projects
-  that account into a dedicated `CODEX_HOME` and the Codex app-server profile
-  pool keeps it isolated from other accounts.
+  Codex account with the lowest fresh cached primary quota usage. Quota cache
+  rows older than 30 minutes are treated like unknown usage so stale low-usage
+  snapshots do not dominate routing. The daemon projects that account into a
+  dedicated `CODEX_HOME` and the Codex app-server profile pool keeps it
+  isolated from other accounts.
 
 ## Repository layout
 

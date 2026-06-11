@@ -150,9 +150,10 @@ Ask capd to pick an installed agent. Params mirror route signals:
 
 When `accountId` is present, routing is account-aware and currently selects
 Codex only, because imported account runtimes are Codex-specific. Use
-`accountId:"auto"` to choose the imported Codex account with the lowest cached
-primary quota usage; accounts without cached quota are treated conservatively
-until `accounts/quota` or `agents/usage` refreshes them.
+`accountId:"auto"` to choose the imported Codex account with the lowest fresh
+cached primary quota usage. Accounts without cached quota, or with quota rows
+older than 30 minutes, are treated conservatively until `accounts/quota` or
+`agents/usage` refreshes them.
 
 ### `agents/usage`
 

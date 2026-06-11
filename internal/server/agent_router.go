@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
@@ -116,10 +117,10 @@ func (s *Server) selectCodexAccountForRoute() (account.Account, string, *protoco
 	if err != nil {
 		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
 	}
-	if q, err := s.opts.Accounts.LoadQuota(best.ID); err == nil {
+	if q, err := s.opts.Accounts.LoadQuota(best.ID); err == nil && account.QuotaSnapshotFresh(q, time.Now()) {
 		return best, fmt.Sprintf("auto account %s primary %.0f%%", best.ID, q.PrimaryUsedPercent), nil
 	}
-	return best, fmt.Sprintf("auto account %s without cached quota", best.ID), nil
+	return best, fmt.Sprintf("auto account %s without fresh cached quota", best.ID), nil
 }
 
 func routeRequirements(params protocol.AgentRouteParams) protocol.AgentCapabilities {
