@@ -28,7 +28,10 @@ type Options struct {
 	Accounts    *account.Store
 	Secrets     secret.Store
 	RuntimeRoot string
-	Log         *slog.Logger
+	// CodexQuotaBaseURL is for tests and private deployments that proxy
+	// ChatGPT. Empty uses codexquota.DefaultBaseURL.
+	CodexQuotaBaseURL string
+	Log               *slog.Logger
 }
 
 type Server struct {

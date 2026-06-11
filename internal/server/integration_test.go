@@ -315,6 +315,11 @@ func newIntegration(t *testing.T) (*httptest.Server, *scriptedAdapter) {
 }
 
 func newCodexAccountIntegration(t *testing.T) (*httptest.Server, *scriptedAdapter, *account.Store) {
+	_, ts, fake, accounts := newCodexAccountIntegrationServer(t)
+	return ts, fake, accounts
+}
+
+func newCodexAccountIntegrationServer(t *testing.T) (*Server, *httptest.Server, *scriptedAdapter, *account.Store) {
 	t.Helper()
 	fake := &scriptedAdapter{id: "codex"}
 	reg := adapter.NewRegistry(fake)
@@ -334,6 +339,8 @@ func newCodexAccountIntegration(t *testing.T) (*httptest.Server, *scriptedAdapte
 		Provider:    codexauth.Provider,
 		AuthMode:    "oauth",
 		AccessToken: "test-token",
+		AccountID:   "acct_test",
+		Email:       "codex@example.com",
 		RawAuthJSON: []byte(`{"tokens":{"access_token":"test-token"}}`),
 	})
 	if err != nil {
@@ -361,7 +368,7 @@ func newCodexAccountIntegration(t *testing.T) (*httptest.Server, *scriptedAdapte
 	})
 	ts := httptest.NewServer(http.HandlerFunc(s.handleWS))
 	t.Cleanup(ts.Close)
-	return ts, fake, accounts
+	return s, ts, fake, accounts
 }
 
 func initialized(t *testing.T, ts *httptest.Server) *testClient {
@@ -550,6 +557,57 @@ func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 	data, _ := json.Marshal(result)
 	if strings.Contains(string(data), "test-token") || strings.Contains(string(data), "secret") || strings.Contains(string(data), "must-not-return") {
 		t.Fatalf("accounts/list leaked sensitive data: %s", data)
+	}
+}
+
+func TestAccountsQuotaRefreshesBackendQuotaSafely(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	var sawAuth, sawAccount, sawReferer string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/backend-api/wham/usage" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		sawAuth = r.Header.Get("Authorization")
+		sawAccount = r.Header.Get("ChatGPT-Account-Id")
+		sawReferer = r.Header.Get("Referer")
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": "team",
+			"rateLimits": map[string]any{
+				"primary":    map[string]any{"usedPercent": 37, "resetsAt": "2026-06-11T20:00:00Z"},
+				"secondary":  map[string]any{"usedPercent": 12, "resetsAt": "2026-06-11T21:00:00Z"},
+				"codeReview": map[string]any{"usedPercent": 9},
+			},
+			"debug": "must-not-return",
+		})
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+	c := initialized(t, ts)
+
+	var result protocol.AccountsQuotaResult
+	c.mustResult(c.call(protocol.MethodAccountsQuota, protocol.AccountsQuotaParams{
+		Provider:  codexauth.Provider,
+		AccountID: "codex-test",
+	}), &result)
+	if sawAuth != "Bearer test-token" || sawAccount != "acct_test" || sawReferer != "https://chatgpt.com/" {
+		t.Fatalf("headers auth=%q account=%q referer=%q", sawAuth, sawAccount, sawReferer)
+	}
+	if result.Account.ID != "codex-test" || result.Account.Email != "codex@example.com" || result.Account.Quota == nil {
+		t.Fatalf("account = %+v", result.Account)
+	}
+	if result.Account.Quota.Plan != "team" || result.Account.Quota.PrimaryUsedPercent != 37 || result.Account.Quota.CodeReviewUsedPercent != 9 {
+		t.Fatalf("quota = %+v", result.Account.Quota)
+	}
+	q, err := accounts.LoadQuota("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Plan != "team" || q.SecondaryUsedPercent != 12 {
+		t.Fatalf("cached quota = %+v", q)
+	}
+	data, _ := json.Marshal(result)
+	if strings.Contains(string(data), "test-token") || strings.Contains(string(data), "secret") || strings.Contains(string(data), "must-not-return") {
+		t.Fatalf("accounts/quota leaked sensitive data: %s", data)
 	}
 }
 

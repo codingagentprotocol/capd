@@ -158,6 +158,15 @@ Returns imported account metadata and cached quota snapshots only. It never
 returns `secret_ref`, access tokens, refresh tokens, ID tokens, API keys, or
 raw quota JSON.
 
+### `accounts/quota`
+
+`{"provider": "codex", "accountId": "codex-acct"}` → `{"account": {...}}`.
+
+Refreshes one imported Codex account through the ChatGPT backend quota endpoint,
+updates the local quota snapshot, and returns the same safe account summary
+shape as `accounts/list`. Omit `accountId` to refresh the current Codex account.
+The response never returns token material, `secret_ref`, or raw backend JSON.
+
 ### `session/create`
 
 | Field | Type | Default | Meaning |

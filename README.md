@@ -185,7 +185,7 @@ must be `initialize` (version negotiation).
 | Group | Methods |
 |-------|---------|
 | agents | `agents/list`, `agents/route`, `agents/usage` |
-| accounts | `accounts/list` |
+| accounts | `accounts/list`, `accounts/quota` |
 | session | `session/create`, `session/list`, `session/attach`, `session/history`, `session/fork`, `session/rollback`, `session/close` |
 | task | `task/send` (text + image attachments), `task/steer`, `task/cancel`, `task/review` |
 | approval | `approval/reply` (`approve` / `approveAlways` / `deny`) |

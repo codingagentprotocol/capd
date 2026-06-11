@@ -11,6 +11,13 @@
   select, input, button { background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:6px 10px; font:inherit; }
   input#prompt { flex:1; }
   button { cursor:pointer; } button:hover { border-color:#58a6ff; }
+  button:disabled { cursor:not-allowed; opacity:.55; }
+  #accounts { display:flex; gap:8px; margin:12px 0; overflow-x:auto; padding-bottom:2px; }
+  .acct { min-width:220px; border:1px solid #30363d; border-radius:6px; padding:8px; background:#010409; }
+  .acct.active { border-color:#3fb950; }
+  .acct .name { color:#e6edf3; word-break:break-all; }
+  .acct .quota { color:#8b949e; font-size:12px; margin:4px 0; }
+  .acct button { padding:3px 8px; }
   #main { display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:12px; align-items:stretch; }
   #sessions, #log { background:#010409; border:1px solid #30363d; border-radius:8px; padding:12px; height:520px; overflow-y:auto; }
   #log { white-space:pre-wrap; }
@@ -43,6 +50,7 @@
   <button id="send">发送</button>
   <button id="cancel">中断</button>
 </div>
+<div id="accounts"></div>
 <div id="main">
   <div id="sessions">
     <div id="sessionHead"><span>Sessions</span><button id="refreshSessions">刷新</button></div>
@@ -59,6 +67,7 @@ const CAPD = params.get("capd") || "127.0.0.1:7777";
 
 const log = document.getElementById("log");
 const sessionsEl = document.getElementById("sessions");
+const accountsEl = document.getElementById("accounts");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
 
@@ -130,6 +139,72 @@ async function loadSessions() {
     updateCwdOptions(sessions || []);
   } catch (e) {
     renderSessions([], "会话列表不可用");
+  }
+}
+
+async function loadAccounts() {
+  try {
+    const result = await call("accounts/list", { provider: "codex" });
+    renderAccounts(result.accounts || [], result.currentAccountId || "");
+  } catch (e) {
+    accountsEl.textContent = "";
+    line("ev-sys", "· accounts/list 不可用");
+  }
+}
+
+function renderAccounts(accounts, currentAccountId) {
+  accountsEl.textContent = "";
+  const accountSel = document.getElementById("account");
+  const selected = accountSel.value;
+  accountSel.textContent = "";
+  accountSel.appendChild(new Option("默认账号", ""));
+  for (const a of accounts) {
+    const option = new Option(accountLabel(a), a.id);
+    if ((selected && a.id === selected) || (!selected && a.id === currentAccountId)) option.selected = true;
+    accountSel.appendChild(option);
+
+    const card = document.createElement("div");
+    card.className = "acct" + (a.id === accountSel.value ? " active" : "");
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = a.email || a.id;
+    const quota = document.createElement("div");
+    quota.className = "quota";
+    quota.textContent = quotaLabel(a);
+    const refresh = document.createElement("button");
+    refresh.textContent = "刷新 quota";
+    refresh.onclick = () => refreshQuota(a.id, refresh);
+    card.append(name, quota, refresh);
+    accountsEl.appendChild(card);
+  }
+}
+
+function accountLabel(a) {
+  const quota = a.quota && a.quota.primaryUsedPercent ? ` · ${a.quota.primaryUsedPercent}%` : "";
+  return `${a.email || a.id}${a.plan ? " · " + a.plan : ""}${quota}`;
+}
+
+function quotaLabel(a) {
+  if (!a.quota) return `${a.plan || "unknown plan"} · quota 未缓存`;
+  const parts = [];
+  if (a.quota.plan || a.plan) parts.push(a.quota.plan || a.plan);
+  if (a.quota.primaryUsedPercent) parts.push(`primary ${a.quota.primaryUsedPercent}%`);
+  if (a.quota.secondaryUsedPercent) parts.push(`secondary ${a.quota.secondaryUsedPercent}%`);
+  if (a.quota.codeReviewUsedPercent) parts.push(`review ${a.quota.codeReviewUsedPercent}%`);
+  if (a.quota.checkedAt) parts.push(`checked ${new Date(a.quota.checkedAt * 1000).toLocaleString()}`);
+  return parts.join(" · ") || "quota 已缓存";
+}
+
+async function refreshQuota(accountId, button) {
+  button.disabled = true;
+  try {
+    const { account } = await call("accounts/quota", { provider: "codex", accountId });
+    line("ev-sys", `· quota 已刷新 ${account.email || account.id}`);
+    await loadAccounts();
+  } catch (e) {
+    line("ev-err", `✗ quota 刷新失败: ${e.message || JSON.stringify(e)}`);
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -210,21 +285,7 @@ async function connect() {
     sel.appendChild(o);
   }
 
-  try {
-    const { accounts, currentAccountId } = await call("accounts/list", { provider: "codex" });
-    const accountSel = document.getElementById("account");
-    for (const a of accounts || []) {
-      const o = document.createElement("option");
-      o.value = a.id;
-      const quota = a.quota && a.quota.primaryUsedPercent ? ` · ${a.quota.primaryUsedPercent}%` : "";
-      o.textContent = `${a.email || a.id}${a.plan ? " · " + a.plan : ""}${quota}`;
-      if (a.id === currentAccountId) o.selected = true;
-      accountSel.appendChild(o);
-    }
-  } catch (e) {
-    line("ev-sys", "· accounts/list 不可用");
-  }
-
+  await loadAccounts();
   await loadSessions();
 }
 

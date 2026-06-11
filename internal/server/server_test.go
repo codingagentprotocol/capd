@@ -61,6 +61,9 @@ func TestConsoleServedWithSecurityHeaders(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "accounts/list") {
 		t.Fatal("console HTML missing accounts/list integration")
 	}
+	if !strings.Contains(rec.Body.String(), "accounts/quota") {
+		t.Fatal("console HTML missing accounts/quota integration")
+	}
 	if !strings.Contains(rec.Body.String(), "session/attach") {
 		t.Fatal("console HTML missing session attach integration")
 	}
