@@ -21,7 +21,70 @@ func newAccountsCmd() *cobra.Command {
 		Use:   "accounts",
 		Short: "Manage local agent accounts",
 	}
-	cmd.AddCommand(newCodexAccountsCmd())
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List imported accounts across all providers",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			accounts, _, err := openAccountDeps()
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			list, err := accounts.ListAccounts("")
+			if err != nil {
+				return err
+			}
+			rows := make([]accountListRow, 0, len(list))
+			currentByProvider := map[string]string{}
+			for _, acc := range list {
+				current, ok := currentByProvider[acc.Provider]
+				if !ok {
+					current, err = accounts.CurrentAccount(acc.Provider)
+					if err != nil {
+						return err
+					}
+					currentByProvider[acc.Provider] = current
+				}
+				row := accountListRow{
+					Current:   acc.ID == current,
+					ID:        acc.ID,
+					Provider:  acc.Provider,
+					AuthMode:  acc.AuthMode,
+					Email:     acc.Email,
+					AccountID: acc.AccountID,
+					Plan:      acc.Plan,
+				}
+				if q, err := accounts.LoadQuota(acc.ID); err == nil {
+					if row.Plan == "" {
+						row.Plan = q.Plan
+					}
+					row.PrimaryUsed = formatPercent(q.PrimaryUsedPercent)
+				}
+				rows = append(rows, row)
+			}
+			if jsonOut {
+				out, _ := json.MarshalIndent(rows, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+				return nil
+			}
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
+			fmt.Fprintln(w, "CURRENT\tPROVIDER\tID\tMODE\tEMAIL\tREMOTE_ACCOUNT\tPLAN\tPRIMARY_USED")
+			for _, row := range rows {
+				mark := ""
+				if row.Current {
+					mark = "*"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					mark, row.Provider, row.ID, row.AuthMode, row.Email, row.AccountID, row.Plan, row.PrimaryUsed)
+			}
+			return w.Flush()
+		},
+	}
+	listCmd.Flags().Bool("json", false, "print imported account metadata as JSON without token material")
+
+	cmd.AddCommand(listCmd, newCodexAccountsCmd())
 	return cmd
 }
 
@@ -346,6 +409,17 @@ type codexSmokeAccount struct {
 	ProjectionOK       bool     `json:"projectionOk"`
 	PrimaryUsed        string   `json:"primaryUsed"`
 	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
+}
+
+type accountListRow struct {
+	Current     bool   `json:"current"`
+	Provider    string `json:"provider"`
+	ID          string `json:"id"`
+	AuthMode    string `json:"authMode,omitempty"`
+	Email       string `json:"email,omitempty"`
+	AccountID   string `json:"accountId,omitempty"`
+	Plan        string `json:"plan,omitempty"`
+	PrimaryUsed string `json:"primaryUsed,omitempty"`
 }
 
 func formatPercent(value float64) string {

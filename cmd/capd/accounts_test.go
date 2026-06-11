@@ -75,6 +75,91 @@ func TestCodexAccountsListShowsZeroQuotaWithoutLeakingSecrets(t *testing.T) {
 	}
 }
 
+func TestAccountsListShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "gemini-test",
+		Provider:  "gemini",
+		AuthMode:  "oauth",
+		Email:     "gemini@example.com",
+		AccountID: "gemini_remote",
+		SecretRef: "file:gemini-secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SetCurrentAccount("gemini", "gemini-test"); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 0}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"list"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{"PROVIDER", "codex-test", "gemini-test", "gemini@example.com", "0.0%"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("output missing %q: %s", want, text)
+		}
+	}
+	for _, secret := range []string{"access-secret", "refresh-secret", "secretRef", "gemini-secret"} {
+		if strings.Contains(text, secret) {
+			t.Fatalf("accounts list leaked %q: %s", secret, text)
+		}
+	}
+}
+
+func TestAccountsListJSONShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "gemini-test",
+		Provider:  "gemini",
+		AuthMode:  "oauth",
+		Email:     "gemini@example.com",
+		SecretRef: "file:gemini-secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"list", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, secret := range []string{"access-secret", "refresh-secret", "secretRef", "secret_ref", "gemini-secret"} {
+		if strings.Contains(text, secret) {
+			t.Fatalf("accounts list json leaked %q: %s", secret, text)
+		}
+	}
+	var rows []accountListRow
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	if rows[0].Provider != codexauth.Provider || rows[0].ID != "codex-test" || !rows[0].Current {
+		t.Fatalf("first row = %+v", rows[0])
+	}
+	if rows[1].Provider != "gemini" || rows[1].ID != "gemini-test" {
+		t.Fatalf("second row = %+v", rows[1])
+	}
+}
+
 func TestCodexAccountsSmokeJSONWithoutLeakingSecrets(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)
