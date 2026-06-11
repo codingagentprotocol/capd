@@ -19,6 +19,9 @@ func Home() (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		return "", err
+	}
 	return dir, nil
 }
 
@@ -34,6 +37,9 @@ func EnsureToken() (string, error) {
 
 	if data, err := os.ReadFile(path); err == nil {
 		if tok := strings.TrimSpace(string(data)); tok != "" {
+			if err := os.Chmod(path, 0o600); err != nil {
+				return "", err
+			}
 			return tok, nil
 		}
 	}
