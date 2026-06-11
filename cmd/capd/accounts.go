@@ -79,13 +79,23 @@ func newCodexAccountsCmd() *cobra.Command {
 				return err
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "CURRENT\tID\tMODE\tEMAIL\tCHATGPT_ACCOUNT")
+			fmt.Fprintln(w, "CURRENT\tID\tMODE\tEMAIL\tCHATGPT_ACCOUNT\tPLAN\tPRIMARY_USED")
 			for _, acc := range list {
 				mark := ""
 				if acc.ID == current {
 					mark = "*"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", mark, acc.ID, acc.AuthMode, acc.Email, acc.AccountID)
+				plan := acc.Plan
+				used := ""
+				if q, err := accounts.LoadQuota(acc.ID); err == nil {
+					if plan == "" {
+						plan = q.Plan
+					}
+					if q.PrimaryUsedPercent != 0 {
+						used = fmt.Sprintf("%.1f%%", q.PrimaryUsedPercent)
+					}
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", mark, acc.ID, acc.AuthMode, acc.Email, acc.AccountID, plan, used)
 			}
 			return w.Flush()
 		},
