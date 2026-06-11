@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"os"
 
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/discovery"
@@ -67,6 +68,16 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		var params protocol.SessionCreateParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		if params.Cwd == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return nil, protocol.NewError(protocol.CodeInternalError, "no cwd given and no home dir: %v", err)
+			}
+			params.Cwd = home
+		}
+		if info, err := os.Stat(params.Cwd); err != nil || !info.IsDir() {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "cwd %q is not a directory", params.Cwd)
 		}
 		sess, err := s.opts.Sessions.Create(ctx, params.AgentID, adapter.SessionOpts{
 			Cwd:            params.Cwd,

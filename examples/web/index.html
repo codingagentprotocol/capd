@@ -24,6 +24,8 @@
 <div id="status">connecting…</div>
 <div id="bar">
   <select id="agent"></select>
+  <input id="cwd" list="cwds" placeholder="项目目录（留空=主目录）" style="flex:0 0 260px" />
+  <datalist id="cwds"></datalist>
   <input id="prompt" placeholder="让 agent 干点什么…" />
   <button id="send">发送</button>
   <button id="cancel">中断</button>
@@ -118,6 +120,15 @@ async function connect() {
     o.value = a.id; o.textContent = `${a.id} (${a.version || "?"})`;
     sel.appendChild(o);
   }
+
+  // 最近用过的项目目录 → 输入框的自动补全
+  const { sessions } = await call("session/list", {});
+  const dirs = [...new Set(sessions.map(s => s.cwd).filter(Boolean))];
+  const dl = document.getElementById("cwds");
+  for (const d of dirs) {
+    const o = document.createElement("option");
+    o.value = d; dl.appendChild(o);
+  }
 }
 
 document.getElementById("send").onclick = async () => {
@@ -125,9 +136,10 @@ document.getElementById("send").onclick = async () => {
   if (!prompt) return;
   document.getElementById("prompt").value = "";
   if (!sessionId) {
-    const res = await call("session/create", { agentId: document.getElementById("agent").value, cwd: "/tmp" });
+    const cwd = document.getElementById("cwd").value.trim();
+    const res = await call("session/create", { agentId: document.getElementById("agent").value, cwd });
     sessionId = res.sessionId;
-    line("ev-sys", `· 新会话 ${sessionId}`);
+    line("ev-sys", `· 新会话 ${sessionId} @ ${cwd || "~"}`);
   }
   line("ev-sys", `» ${prompt}`);
   await call("task/send", { sessionId, prompt });
