@@ -316,6 +316,7 @@ func newCodexAccountsCmd() *cobra.Command {
 				OK:              true,
 				CheckedAccounts: len(list),
 				QuotaRefreshed:  refreshQuota,
+				SecretBackend:   secrets.Backend(),
 				Accounts:        make([]codexSmokeAccount, 0, len(list)),
 			}
 			for _, acc := range list {
@@ -383,6 +384,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			if result.AutoRoute != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s (%s)\n", result.AutoRoute.AccountID, result.AutoRoute.Reason)
 			}
+			fmt.Fprintf(cmd.OutOrStdout(), "secret backend: %s\n", result.SecretBackend)
 			return nil
 		},
 	}
@@ -410,6 +412,7 @@ type codexSmokeResult struct {
 	OK              bool                 `json:"ok"`
 	CheckedAccounts int                  `json:"checkedAccounts"`
 	QuotaRefreshed  bool                 `json:"quotaRefreshed"`
+	SecretBackend   string               `json:"secretBackend"`
 	AutoRoute       *codexSmokeAutoRoute `json:"autoRoute,omitempty"`
 	Accounts        []codexSmokeAccount  `json:"accounts"`
 }

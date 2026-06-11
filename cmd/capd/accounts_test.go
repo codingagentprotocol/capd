@@ -35,6 +35,9 @@ func TestCodexAccountsSmokeProjectsWithoutLeakingSecrets(t *testing.T) {
 	if !strings.Contains(text, "codex-test") || !strings.Contains(text, "12.5%") {
 		t.Fatalf("output = %s", text)
 	}
+	if !strings.Contains(text, "secret backend: file") {
+		t.Fatalf("output missing secret backend: %s", text)
+	}
 	if strings.Contains(text, "access-secret") || strings.Contains(text, "refresh-secret") {
 		t.Fatalf("smoke output leaked secret: %s", text)
 	}
@@ -184,7 +187,7 @@ func TestCodexAccountsSmokeJSONWithoutLeakingSecrets(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if !result.OK || result.CheckedAccounts != 1 || len(result.Accounts) != 1 {
+	if !result.OK || result.CheckedAccounts != 1 || result.SecretBackend != secret.BackendFile || len(result.Accounts) != 1 {
 		t.Fatalf("result = %+v", result)
 	}
 	acc := result.Accounts[0]
@@ -245,7 +248,7 @@ func TestCodexAccountsSmokeJSONIncludesAutoRouteEvidence(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.CheckedAccounts != 2 || result.AutoRoute == nil {
+	if result.CheckedAccounts != 2 || result.SecretBackend != secret.BackendFile || result.AutoRoute == nil {
 		t.Fatalf("result = %+v", result)
 	}
 	if result.AutoRoute.AccountID != "codex-low" || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 4 {

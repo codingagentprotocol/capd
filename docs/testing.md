@@ -56,5 +56,5 @@ The smoke command verifies imported account metadata, SecretStore readability,
 per-account `CODEX_HOME` projection, private `auth.json` permissions, auto-route
 account selection, and optionally ChatGPT backend quota refresh. It prints only
 account metadata, projection paths, quota percentages, and the selected
-`autoRoute.accountId`; token material is never printed. Use `--json` to capture
-machine-readable smoke evidence in long tasks or CI logs.
+`autoRoute.accountId` plus `secretBackend`; token material is never printed. Use
+`--json` to capture machine-readable smoke evidence in long tasks or CI logs.
