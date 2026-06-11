@@ -103,7 +103,10 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return err
 	}
 	defer accountStore.Close()
-	secrets := secret.NewFileStore(filepath.Join(home, "secrets", "codex"))
+	secrets, err := secret.Open(filepath.Join(home, "secrets", "codex"), "")
+	if err != nil {
+		return err
+	}
 
 	reg := Registry()
 	sessions := session.NewManager(reg, store)

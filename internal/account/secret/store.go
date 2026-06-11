@@ -61,7 +61,7 @@ func NewFileStore(root string) *FileStore {
 	return &FileStore{root: root}
 }
 
-func (st *FileStore) Backend() string { return "file" }
+func (st *FileStore) Backend() string { return BackendFile }
 
 func (st *FileStore) Put(_ context.Context, id string, bundle Bundle) (Ref, error) {
 	if id == "" {

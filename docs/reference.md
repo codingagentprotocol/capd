@@ -98,6 +98,7 @@ boot, restarts on crash, never root.
 | `CAPD_HOST` | same as `--host` |
 | `CAPD_PORT` | same as `--port` |
 | `CAPD_ORIGINS` | comma-separated extra WebSocket origins |
+| `CAPD_SECRET_BACKEND` | secret storage backend; default `file`. `native` is reserved for platform keychains and errors until a safe native implementation is available |
 
 Precedence: flags > environment > defaults.
 

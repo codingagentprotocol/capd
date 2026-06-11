@@ -285,6 +285,9 @@ flowchart TB
 - `capd accounts codex import` copies token material into capd's secret
   store, records only metadata in SQLite, and never writes back to the user's
   original `~/.codex`.
+- Secret storage defaults to the local file backend (`0600`). The
+  `CAPD_SECRET_BACKEND=native` selector is reserved for platform keychains and
+  currently fails closed until a safe native implementation is available.
 - New Codex sessions can opt into an imported account with `--account` or
   protocol `session/create.accountId`; the daemon projects that account into
   a dedicated `CODEX_HOME` and the Codex app-server profile pool keeps it

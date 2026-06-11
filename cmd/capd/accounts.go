@@ -235,6 +235,10 @@ func openAccountDeps() (*account.Store, secret.Store, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	secrets := secret.NewFileStore(filepath.Join(home, "secrets", "codex"))
+	secrets, err := secret.Open(filepath.Join(home, "secrets", "codex"), "")
+	if err != nil {
+		accounts.Close()
+		return nil, nil, err
+	}
 	return accounts, secrets, nil
 }
