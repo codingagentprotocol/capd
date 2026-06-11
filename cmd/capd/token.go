@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/codingagentprotocol/capd/internal/config"
 	"github.com/codingagentprotocol/capd/internal/daemon"
 )
 
@@ -20,7 +21,7 @@ func newTokenCmd() *cobra.Command {
 				return err
 			}
 			if url {
-				fmt.Fprintf(cmd.OutOrStdout(), "http://127.0.0.1:7777/console/?token=%s\n", token)
+				fmt.Fprintln(cmd.OutOrStdout(), consoleURL(config.Load(), token))
 				return nil
 			}
 			home, err := daemon.Home()

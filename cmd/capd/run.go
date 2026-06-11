@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,8 +81,8 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 	}
 	token := strings.TrimSpace(string(tokenBytes))
 
-	addr := net.JoinHostPort(cfg.Host, fmt.Sprint(cfg.Port))
-	conn, _, err := websocket.Dial(ctx, "ws://"+addr+"/ws?token="+token, nil)
+	addr := daemonWSURL(cfg, token)
+	conn, _, err := websocket.Dial(ctx, addr, nil)
 	if err != nil {
 		return fmt.Errorf("connect to capd at %s (is 'capd start' running?): %w", addr, err)
 	}

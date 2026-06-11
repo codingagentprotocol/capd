@@ -257,7 +257,7 @@ flowchart TB
     headers["header guard\nno client Authorization/Cookie/X-API-Key\nCRLF rejection"]
     redact["redaction\nmask secrets\nshorten account ids"]
     account["account control plane\nSQLite metadata only\nno tokens"]
-    secret["secret plane\nfuture SecretStore\nkeychain / file fallback"]
+    secret["secret plane\nSecretStore\nnative OS backend / file fallback"]
     runtime["runtime projection\nper-account CODEX_HOME\nCodex app-server profile"]
     upstream["agent / OpenAI upstream"]
 

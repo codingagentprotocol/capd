@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,8 +32,8 @@ func newSessionsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("no daemon token (is capd started?): %w", err)
 			}
-			addr := net.JoinHostPort(cfg.Host, fmt.Sprint(cfg.Port))
-			conn, _, err := websocket.Dial(ctx, "ws://"+addr+"/ws?token="+strings.TrimSpace(string(tokenBytes)), nil)
+			addr := daemonWSURL(cfg, strings.TrimSpace(string(tokenBytes)))
+			conn, _, err := websocket.Dial(ctx, addr, nil)
 			if err != nil {
 				return fmt.Errorf("connect to capd at %s (is 'capd start' running?): %w", addr, err)
 			}
