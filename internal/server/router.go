@@ -84,6 +84,9 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if info, err := os.Stat(params.Cwd); err != nil || !info.IsDir() {
 			return nil, protocol.NewError(protocol.CodeInvalidParams, "cwd %q is not a directory", params.Cwd)
 		}
+		if !validPermissionMode(params.PermissionMode) {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "unknown permissionMode %q", params.PermissionMode)
+		}
 		sess, err := s.opts.Sessions.Create(ctx, params.AgentID, adapter.SessionOpts{
 			Cwd:            params.Cwd,
 			Resume:         params.Resume,
@@ -253,7 +256,7 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 // subscribe wires a session's event stream to this client connection for the
 // connection's lifetime. Returns the seq the live stream continues from.
 func (s *Server) subscribe(ctx context.Context, client *wsClient, sess *session.Session, fromSeq uint64) uint64 {
-	ch, nextSeq, cancel := sess.Subscribe(fromSeq)
+	ch, nextSeq, cancel, overflow := sess.Subscribe(fromSeq)
 	go func() {
 		defer cancel()
 		for {
@@ -262,7 +265,21 @@ func (s *Server) subscribe(ctx context.Context, client *wsClient, sess *session.
 				if !ok {
 					return
 				}
-				client.notify(protocol.MethodEvent, ev)
+				if !client.notify(protocol.MethodEvent, ev) {
+					return
+				}
+			case <-overflow:
+				client.notify(protocol.MethodEvent, protocol.Event{
+					SessionID: sess.ID,
+					Seq:       nextSeq,
+					Type:      protocol.EventError,
+					Data: map[string]any{
+						"message":  "event stream overflow; reconnect with session/attach from the last received seq",
+						"overflow": true,
+					},
+				})
+				client.cancel()
+				return
 			case <-ctx.Done():
 				return
 			}
@@ -276,4 +293,13 @@ func asProtocolError(err error) *protocol.Error {
 		return perr
 	}
 	return protocol.NewError(protocol.CodeInternalError, "%v", err)
+}
+
+func validPermissionMode(mode string) bool {
+	switch mode {
+	case protocol.PermissionDefault, protocol.PermissionAcceptEdits, protocol.PermissionFull:
+		return true
+	default:
+		return false
+	}
 }

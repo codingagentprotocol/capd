@@ -43,6 +43,10 @@ func Start(ctx context.Context, spec Spec) (*Proc, error) {
 	if err != nil {
 		return nil, fmt.Errorf("proc: stdout pipe: %w", err)
 	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("proc: stderr pipe: %w", err)
+	}
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("proc: start %s: %w", spec.Bin, err)
 	}
@@ -59,6 +63,9 @@ func Start(ctx context.Context, spec Spec) (*Proc, error) {
 				return
 			}
 		}
+	}()
+	go func() {
+		_, _ = io.Copy(io.Discard, stderr)
 	}()
 
 	return &Proc{cmd: cmd, stdin: stdin, Lines: lines}, nil

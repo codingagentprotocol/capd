@@ -2,6 +2,8 @@ package proc
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +25,33 @@ func TestStartLinesAndExit(t *testing.T) {
 	}
 	if len(lines) != 2 || lines[0] != "one" || lines[1] != "two" {
 		t.Fatalf("lines = %v", lines)
+	}
+}
+
+func TestStartDrainsStderr(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	p, err := Start(ctx, Spec{
+		Bin: os.Args[0],
+		Args: []string{
+			"-test.run=TestHelperProcess",
+			"--",
+			"stderr-flood",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.CloseStdin(); err != nil {
+		t.Fatal(err)
+	}
+	line, ok := <-p.Lines
+	if !ok || line != "stdout-ok" {
+		t.Fatalf("line = %q, ok = %v", line, ok)
+	}
+	if err := p.Wait(); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -99,4 +128,15 @@ func TestCwd(t *testing.T) {
 	if line != "/tmp" && line != "/private/tmp" { // macOS symlinks /tmp
 		t.Fatalf("pwd = %q", line)
 	}
+}
+
+func TestHelperProcess(t *testing.T) {
+	if len(os.Args) < 3 || os.Args[len(os.Args)-1] != "stderr-flood" {
+		return
+	}
+	for i := 0; i < 20000; i++ {
+		fmt.Fprintln(os.Stderr, "stderr noise stderr noise stderr noise stderr noise")
+	}
+	fmt.Println("stdout-ok")
+	os.Exit(0)
 }

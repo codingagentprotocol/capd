@@ -338,6 +338,17 @@ func TestSessionLifecycleAndReplay(t *testing.T) {
 	}
 }
 
+func TestRejectsInvalidPermissionMode(t *testing.T) {
+	ts, _ := newIntegration(t)
+	c := initialized(t, ts)
+	resp := c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID: "fake", PermissionMode: "surprise-me",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams {
+		t.Fatalf("want invalid params, got %+v", resp)
+	}
+}
+
 func TestForkRollbackAndReview(t *testing.T) {
 	ts, fake := newIntegration(t)
 	c := initialized(t, ts)

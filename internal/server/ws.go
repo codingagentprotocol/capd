@@ -16,28 +16,34 @@ import (
 type wsClient struct {
 	conn        *websocket.Conn
 	out         chan []byte
+	cancel      context.CancelFunc
 	initialized bool
 }
 
 // enqueue never blocks: a client that stops reading loses messages rather
 // than stalling a session pump.
-func (c *wsClient) enqueue(data []byte) {
+func (c *wsClient) enqueue(data []byte) bool {
 	select {
 	case c.out <- data:
+		return true
 	default:
+		if c.cancel != nil {
+			c.cancel()
+		}
+		return false
 	}
 }
 
-func (c *wsClient) notify(method string, params any) {
+func (c *wsClient) notify(method string, params any) bool {
 	n, err := protocol.NewNotification(method, params)
 	if err != nil {
-		return
+		return false
 	}
 	data, err := json.Marshal(n)
 	if err != nil {
-		return
+		return false
 	}
-	c.enqueue(data)
+	return c.enqueue(data)
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +67,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	client := &wsClient{conn: conn, out: make(chan []byte, 512)}
+	client := &wsClient{conn: conn, out: make(chan []byte, 512), cancel: cancel}
 	go func() { // writer loop
 		for {
 			select {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
@@ -29,7 +30,9 @@ func (as *appServer) ensureClient() (*rpcClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := c.Call(context.Background(), "initialize", map[string]any{
+	initCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := c.Call(initCtx, "initialize", map[string]any{
 		"clientInfo": map[string]any{"name": "capd", "title": "capd", "version": "0.1"},
 	}, nil); err != nil {
 		c.Kill()

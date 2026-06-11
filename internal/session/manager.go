@@ -13,6 +13,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"sync"
 
 	"github.com/codingagentprotocol/capd/internal/adapter"
@@ -34,10 +35,17 @@ type Manager struct {
 
 	mu       sync.Mutex
 	sessions map[string]*Session
+	reviving map[string]*reviveCall
 }
 
 func NewManager(reg *adapter.Registry, store *Store) *Manager {
-	return &Manager{registry: reg, store: store, sessions: make(map[string]*Session)}
+	return &Manager{registry: reg, store: store, sessions: make(map[string]*Session), reviving: make(map[string]*reviveCall)}
+}
+
+type reviveCall struct {
+	wg   sync.WaitGroup
+	sess *Session
+	err  error
 }
 
 // Session pairs an adapter session with the daemon-side event log.
@@ -52,9 +60,14 @@ type Session struct {
 	mu      sync.Mutex
 	buf     []protocol.Event // ring of the last maxBuffer events
 	nextSeq uint64
-	subs    map[int]chan protocol.Event
+	subs    map[int]*subscriber
 	nextSub int
 	ended   bool
+}
+
+type subscriber struct {
+	ch       chan protocol.Event
+	overflow chan struct{}
 }
 
 // Create starts a new agent session and begins pumping its events.
@@ -73,10 +86,13 @@ func (m *Manager) Create(ctx context.Context, agentID string, opts adapter.Sessi
 		manager: m,
 		inner:   inner,
 		store:   m.store,
-		subs:    make(map[int]chan protocol.Event),
+		subs:    make(map[int]*subscriber),
 	}
 	if m.store != nil {
-		m.store.SaveSession(SessionRecord{ID: s.ID, AgentID: agentID, Cwd: opts.Cwd, NativeID: opts.Resume})
+		if err := m.store.SaveSession(SessionRecord{ID: s.ID, AgentID: agentID, Cwd: opts.Cwd, NativeID: opts.Resume}); err != nil {
+			inner.Close()
+			return nil, protocol.NewError(protocol.CodeInternalError, "save session: %v", err)
+		}
 	}
 	m.mu.Lock()
 	m.sessions[s.ID] = s
@@ -108,20 +124,41 @@ func (m *Manager) Resolve(ctx context.Context, id string) (*Session, error) {
 		return nil, protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
 	}
 
+	m.mu.Lock()
+	if call := m.reviving[id]; call != nil {
+		m.mu.Unlock()
+		call.wg.Wait()
+		return call.sess, call.err
+	}
+	call := &reviveCall{}
+	call.wg.Add(1)
+	m.reviving[id] = call
+	m.mu.Unlock()
+	defer func() {
+		m.mu.Lock()
+		delete(m.reviving, id)
+		m.mu.Unlock()
+		call.wg.Done()
+	}()
+
 	rec, err := m.store.LoadSession(id)
 	if err != nil {
-		return nil, protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
+		call.err = protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
+		return nil, call.err
 	}
 	if rec.Ended {
-		return nil, protocol.NewError(protocol.CodeSessionClosed, "session %q has ended", id)
+		call.err = protocol.NewError(protocol.CodeSessionClosed, "session %q has ended", id)
+		return nil, call.err
 	}
 	a, ok := m.registry.Get(rec.AgentID)
 	if !ok {
-		return nil, protocol.NewError(protocol.CodeAgentNotFound, "agent %q of stored session is not registered", rec.AgentID)
+		call.err = protocol.NewError(protocol.CodeAgentNotFound, "agent %q of stored session is not registered", rec.AgentID)
+		return nil, call.err
 	}
 	inner, err := a.StartSession(ctx, adapter.SessionOpts{Cwd: rec.Cwd, Resume: rec.NativeID})
 	if err != nil {
-		return nil, protocol.NewError(protocol.CodeAgentUnavailable, "revive %s: %v", rec.AgentID, err)
+		call.err = protocol.NewError(protocol.CodeAgentUnavailable, "revive %s: %v", rec.AgentID, err)
+		return nil, call.err
 	}
 
 	s := &Session{
@@ -130,7 +167,7 @@ func (m *Manager) Resolve(ctx context.Context, id string) (*Session, error) {
 		manager: m,
 		inner:   inner,
 		store:   m.store,
-		subs:    make(map[int]chan protocol.Event),
+		subs:    make(map[int]*subscriber),
 	}
 	if history, err := m.store.LoadRecentEvents(id, maxBuffer); err == nil && len(history) > 0 {
 		s.buf = history
@@ -144,6 +181,7 @@ func (m *Manager) Resolve(ctx context.Context, id string) (*Session, error) {
 	m.sessions[s.ID] = s
 	m.mu.Unlock()
 	go s.pump()
+	call.sess = s
 	return s, nil
 }
 
@@ -247,14 +285,17 @@ func (m *Manager) Fork(ctx context.Context, id string) (*Session, error) {
 		manager: m,
 		inner:   inner,
 		store:   m.store,
-		subs:    make(map[int]chan protocol.Event),
+		subs:    make(map[int]*subscriber),
 	}
 	if m.store != nil {
 		cwd := ""
 		if rec, err := m.store.LoadSession(parent.ID); err == nil {
 			cwd = rec.Cwd
 		}
-		m.store.SaveSession(SessionRecord{ID: s.ID, AgentID: s.AgentID, NativeID: nativeID, Cwd: cwd})
+		if err := m.store.SaveSession(SessionRecord{ID: s.ID, AgentID: s.AgentID, NativeID: nativeID, Cwd: cwd}); err != nil {
+			inner.Close()
+			return nil, protocol.NewError(protocol.CodeInternalError, "save forked session: %v", err)
+		}
 	}
 	m.mu.Lock()
 	m.sessions[s.ID] = s
@@ -276,10 +317,15 @@ func (m *Manager) Close(id string) error {
 		if _, err := m.store.LoadSession(id); err != nil {
 			return protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
 		}
-		return m.store.MarkEnded(id)
+		if err := m.store.MarkEnded(id); err != nil {
+			return protocol.NewError(protocol.CodeInternalError, "mark session ended: %v", err)
+		}
+		return nil
 	}
 	if m.store != nil {
-		m.store.MarkEnded(id)
+		if err := m.store.MarkEnded(id); err != nil {
+			return protocol.NewError(protocol.CodeInternalError, "mark session ended: %v", err)
+		}
 	}
 	return s.inner.Close()
 }
@@ -303,32 +349,57 @@ func (s *Session) pump() {
 		if len(s.buf) > maxBuffer {
 			s.buf = s.buf[len(s.buf)-maxBuffer:]
 		}
-		s.persist(ev)
-		for _, ch := range s.subs {
-			select {
-			case ch <- ev:
-			default: // slow subscriber: drop rather than stall the session
+		persistErr := s.persist(ev)
+		s.broadcastLocked(ev)
+		if persistErr != nil {
+			errEv := protocol.Event{
+				SessionID: s.ID,
+				Seq:       s.nextSeq,
+				Type:      protocol.EventError,
+				Data: map[string]any{
+					"message":           fmt.Sprintf("persist event %d failed: %v", ev.Seq, persistErr),
+					"persistenceFailed": true,
+				},
 			}
+			s.nextSeq++
+			s.buf = append(s.buf, errEv)
+			if len(s.buf) > maxBuffer {
+				s.buf = s.buf[len(s.buf)-maxBuffer:]
+			}
+			s.broadcastLocked(errEv)
 		}
 		s.mu.Unlock()
 	}
 
 	// Adapter stream ended: tell subscribers and close them out.
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.ended = true
 	end := protocol.Event{SessionID: s.ID, Seq: s.nextSeq, Type: protocol.EventSessionEnded}
 	s.nextSeq++
 	s.buf = append(s.buf, end)
-	s.persist(end)
-	for id, ch := range s.subs {
+	if err := s.persist(end); err != nil {
+		errEv := protocol.Event{
+			SessionID: s.ID,
+			Seq:       s.nextSeq,
+			Type:      protocol.EventError,
+			Data: map[string]any{
+				"message":           fmt.Sprintf("persist session end failed: %v", err),
+				"persistenceFailed": true,
+			},
+		}
+		s.nextSeq++
+		s.buf = append(s.buf, errEv)
+		s.broadcastLocked(errEv)
+	}
+	for id, sub := range s.subs {
 		select {
-		case ch <- end:
+		case sub.ch <- end:
 		default:
 		}
-		close(ch)
+		close(sub.ch)
 		delete(s.subs, id)
 	}
+	s.mu.Unlock()
 	if s.manager != nil {
 		s.manager.forgetEnded(s.ID, s)
 	}
@@ -336,14 +407,31 @@ func (s *Session) pump() {
 
 // persist writes one event through to the store and keeps the stored
 // native conversation id current. Called with s.mu held.
-func (s *Session) persist(ev protocol.Event) {
+func (s *Session) persist(ev protocol.Event) error {
 	if s.store == nil {
-		return
+		return nil
 	}
-	s.store.AppendEvent(ev)
+	if err := s.store.AppendEvent(ev); err != nil {
+		return err
+	}
 	if ev.Type == protocol.EventSessionStarted {
 		if nid, ok := ev.Data["nativeSessionId"].(string); ok && nid != "" {
-			s.store.SetNativeID(s.ID, nid)
+			if err := s.store.SetNativeID(s.ID, nid); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Session) broadcastLocked(ev protocol.Event) {
+	for id, sub := range s.subs {
+		select {
+		case sub.ch <- ev:
+		default:
+			close(sub.overflow)
+			close(sub.ch)
+			delete(s.subs, id)
 		}
 	}
 }
@@ -351,7 +439,7 @@ func (s *Session) persist(ev protocol.Event) {
 // Subscribe returns a channel that replays buffered events from fromSeq and
 // then follows the live stream, plus the seq the live stream continues from.
 // The returned cancel func must be called when the subscriber goes away.
-func (s *Session) Subscribe(fromSeq uint64) (<-chan protocol.Event, uint64, func()) {
+func (s *Session) Subscribe(fromSeq uint64) (<-chan protocol.Event, uint64, func(), <-chan struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -388,21 +476,23 @@ func (s *Session) Subscribe(fromSeq uint64) (<-chan protocol.Event, uint64, func
 
 	if s.ended {
 		close(ch)
-		return ch, s.nextSeq, func() {}
+		overflow := make(chan struct{})
+		return ch, s.nextSeq, func() {}, overflow
 	}
 
 	id := s.nextSub
 	s.nextSub++
-	s.subs[id] = ch
+	sub := &subscriber{ch: ch, overflow: make(chan struct{})}
+	s.subs[id] = sub
 	cancel := func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		if ch, ok := s.subs[id]; ok {
+		if sub, ok := s.subs[id]; ok {
 			delete(s.subs, id)
-			close(ch)
+			close(sub.ch)
 		}
 	}
-	return ch, s.nextSeq, cancel
+	return ch, s.nextSeq, cancel, sub.overflow
 }
 
 func (s *Session) isEnded() bool {

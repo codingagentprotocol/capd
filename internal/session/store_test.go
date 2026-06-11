@@ -56,10 +56,12 @@ func TestStoreRoundTrip(t *testing.T) {
 // fakeAdapter records the SessionOpts it was started with and emits a
 // scripted event stream.
 type fakeAdapter struct {
+	mu          sync.Mutex
 	id          string
 	lastOpts    adapter.SessionOpts
 	lastSession *fakeSession
 	startCount  int
+	startDelay  time.Duration
 }
 
 func (f *fakeAdapter) ID() string { return f.id }
@@ -67,10 +69,21 @@ func (f *fakeAdapter) Probe(context.Context) (protocol.AgentInfo, error) {
 	return protocol.AgentInfo{ID: f.id, Available: true}, nil
 }
 func (f *fakeAdapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
+	if f.startDelay > 0 {
+		time.Sleep(f.startDelay)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.lastOpts = opts
 	f.startCount++
 	f.lastSession = &fakeSession{events: make(chan protocol.Event, 8)}
 	return f.lastSession, nil
+}
+
+func (f *fakeAdapter) snapshot() (adapter.SessionOpts, *fakeSession, int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.lastOpts, f.lastSession, f.startCount
 }
 
 type fakeSession struct {
@@ -118,14 +131,15 @@ func TestReviveAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fake.lastOpts.Resume != "native-7" {
-		t.Fatalf("revive Resume = %q, want native-7", fake.lastOpts.Resume)
+	lastOpts, _, _ := fake.snapshot()
+	if lastOpts.Resume != "native-7" {
+		t.Fatalf("revive Resume = %q, want native-7", lastOpts.Resume)
 	}
-	if fake.lastOpts.Cwd != "/work" {
-		t.Fatalf("revive Cwd = %q", fake.lastOpts.Cwd)
+	if lastOpts.Cwd != "/work" {
+		t.Fatalf("revive Cwd = %q", lastOpts.Cwd)
 	}
 
-	ch, nextSeq, cancel := revived.Subscribe(0)
+	ch, nextSeq, cancel, _ := revived.Subscribe(0)
 	defer cancel()
 	if nextSeq != 2 {
 		t.Fatalf("nextSeq = %d, want 2", nextSeq)
@@ -162,11 +176,12 @@ func TestReviveAfterLongHistoryKeepsNextSeq(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fake.lastOpts.Resume != "native-long" {
-		t.Fatalf("revive Resume = %q, want native-long", fake.lastOpts.Resume)
+	lastOpts, _, _ := fake.snapshot()
+	if lastOpts.Resume != "native-long" {
+		t.Fatalf("revive Resume = %q, want native-long", lastOpts.Resume)
 	}
 
-	ch, nextSeq, cancel := revived.Subscribe(0)
+	ch, nextSeq, cancel, _ := revived.Subscribe(0)
 	defer cancel()
 	if nextSeq != uint64(eventCount) {
 		t.Fatalf("nextSeq = %d, want %d", nextSeq, eventCount)
@@ -200,7 +215,8 @@ func TestReviveAfterAdapterStreamEndsInSameManager(t *testing.T) {
 		return err == nil && rec.NativeID == "native-7"
 	})
 
-	fake.lastSession.crash()
+	_, lastSession, _ := fake.snapshot()
+	lastSession.crash()
 	waitFor(t, func() bool {
 		list := m.List(10)
 		return len(list) == 1 && list[0].SessionID == sess.ID && list[0].State == protocol.SessionStateStored
@@ -209,11 +225,77 @@ func TestReviveAfterAdapterStreamEndsInSameManager(t *testing.T) {
 	if _, err := m.Resolve(context.Background(), sess.ID); err != nil {
 		t.Fatal(err)
 	}
-	if fake.startCount != 2 {
-		t.Fatalf("startCount = %d, want 2", fake.startCount)
+	lastOpts, _, startCount := fake.snapshot()
+	if startCount != 2 {
+		t.Fatalf("startCount = %d, want 2", startCount)
 	}
-	if fake.lastOpts.Resume != "native-7" {
-		t.Fatalf("revive Resume = %q, want native-7", fake.lastOpts.Resume)
+	if lastOpts.Resume != "native-7" {
+		t.Fatalf("revive Resume = %q, want native-7", lastOpts.Resume)
+	}
+}
+
+func TestConcurrentResolveRevivesOnce(t *testing.T) {
+	st, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	if err := st.SaveSession(SessionRecord{ID: "s_concurrent", AgentID: "fake", Cwd: "/work", NativeID: "native-c"}); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeAdapter{id: "fake", startDelay: 50 * time.Millisecond}
+	m := NewManager(adapter.NewRegistry(fake), st)
+
+	const callers = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, callers)
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := m.Resolve(context.Background(), "s_concurrent")
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	lastOpts, _, startCount := fake.snapshot()
+	if startCount != 1 {
+		t.Fatalf("startCount = %d, want 1", startCount)
+	}
+	if lastOpts.Resume != "native-c" {
+		t.Fatalf("revive Resume = %q, want native-c", lastOpts.Resume)
+	}
+}
+
+func TestSubscriberOverflowSignals(t *testing.T) {
+	fake := &fakeAdapter{id: "fake"}
+	m := NewManager(adapter.NewRegistry(fake), nil)
+	sess, err := m.Create(context.Background(), "fake", adapter.SessionOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, cancel, overflow := sess.Subscribe(0)
+	defer cancel()
+	_, lastSession, _ := fake.snapshot()
+
+	for i := 0; i < subBuffer+1; i++ {
+		lastSession.events <- protocol.Event{
+			Type: protocol.EventOutputText,
+			Data: map[string]any{"text": "x"},
+		}
+	}
+
+	select {
+	case <-overflow:
+	case <-time.After(2 * time.Second):
+		t.Fatal("overflow was not signaled")
 	}
 }
 
