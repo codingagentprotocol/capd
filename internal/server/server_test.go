@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -66,6 +67,49 @@ func TestConsoleServedWithSecurityHeaders(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "session/attach") {
 		t.Fatal("console HTML missing session attach integration")
+	}
+}
+
+func TestConsoleStaticContract(t *testing.T) {
+	html := consoleHTML
+	required := []string{
+		`value="auto"`,
+		"自动账号",
+		"accounts/list",
+		"accounts/quota",
+		"session/list",
+		"session/attach",
+		"session/create",
+		"hasNumber(a.quota.primaryUsedPercent)",
+		"button.disabled = true",
+	}
+	for _, needle := range required {
+		if !strings.Contains(html, needle) {
+			t.Fatalf("console HTML missing %q", needle)
+		}
+	}
+	forbidden := []string{
+		"secretRef",
+		"secret_ref",
+		"rawAuthJson",
+		"RawAuthJSON",
+		"localStorage.setItem",
+		"sessionStorage.setItem",
+	}
+	for _, needle := range forbidden {
+		if strings.Contains(html, needle) {
+			t.Fatalf("console HTML contains forbidden token %q", needle)
+		}
+	}
+}
+
+func TestConsoleExampleMatchesEmbedded(t *testing.T) {
+	data, err := os.ReadFile("../../examples/web/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != consoleHTML {
+		t.Fatal("examples/web/index.html differs from embedded console_index.html")
 	}
 }
 

@@ -183,7 +183,7 @@ function renderAccounts(accounts, currentAccountId) {
 }
 
 function accountLabel(a) {
-  const quota = a.quota && a.quota.primaryUsedPercent ? ` · ${a.quota.primaryUsedPercent}%` : "";
+  const quota = hasNumber(a.quota && a.quota.primaryUsedPercent) ? ` · ${a.quota.primaryUsedPercent}%` : "";
   return `${a.email || a.id}${a.plan ? " · " + a.plan : ""}${quota}`;
 }
 
@@ -191,11 +191,15 @@ function quotaLabel(a) {
   if (!a.quota) return `${a.plan || "unknown plan"} · quota 未缓存`;
   const parts = [];
   if (a.quota.plan || a.plan) parts.push(a.quota.plan || a.plan);
-  if (a.quota.primaryUsedPercent) parts.push(`primary ${a.quota.primaryUsedPercent}%`);
-  if (a.quota.secondaryUsedPercent) parts.push(`secondary ${a.quota.secondaryUsedPercent}%`);
-  if (a.quota.codeReviewUsedPercent) parts.push(`review ${a.quota.codeReviewUsedPercent}%`);
+  if (hasNumber(a.quota.primaryUsedPercent)) parts.push(`primary ${a.quota.primaryUsedPercent}%`);
+  if (hasNumber(a.quota.secondaryUsedPercent)) parts.push(`secondary ${a.quota.secondaryUsedPercent}%`);
+  if (hasNumber(a.quota.codeReviewUsedPercent)) parts.push(`review ${a.quota.codeReviewUsedPercent}%`);
   if (a.quota.checkedAt) parts.push(`checked ${new Date(a.quota.checkedAt * 1000).toLocaleString()}`);
   return parts.join(" · ") || "quota 已缓存";
+}
+
+function hasNumber(v) {
+  return typeof v === "number" && Number.isFinite(v);
 }
 
 async function refreshQuota(accountId, button) {
