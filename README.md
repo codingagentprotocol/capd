@@ -287,8 +287,8 @@ flowchart TB
   original `~/.codex`.
 - Secret storage defaults to the local file backend (`0600`). Set
   `CAPD_SECRET_BACKEND=native` to use the OS secret backend where implemented;
-  macOS stores bundles in the user Keychain, while unsupported platforms fail
-  closed instead of silently falling back.
+  macOS stores bundles in the user Keychain, Windows uses Credential Manager,
+  and unsupported platforms fail closed instead of silently falling back.
 - New Codex sessions can opt into an imported account with `--account` or
   protocol `session/create.accountId`; the daemon projects that account into
   a dedicated `CODEX_HOME` and the Codex app-server profile pool keeps it
