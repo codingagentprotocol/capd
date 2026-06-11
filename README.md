@@ -12,23 +12,60 @@ Every agent CLI speaks its own dialect: different flags, session models, and
 streaming formats. capd translates all of them into one unified protocol, so
 a client written once can drive any agent.
 
+## Architecture at a glance
+
+```mermaid
+flowchart LR
+    web["Web app"]
+    desktop["Desktop app"]
+    cli["capd run / watch"]
+
+    subgraph cap["capd daemon"]
+        server["server\nWebSocket + JSON-RPC\nmethod dispatch + fan-out"]
+        session["session\nlive registry\nseq event log\nSQLite persistence"]
+        adapter["adapter\none translator per agent dialect"]
+        proc["proc\nsubprocess lifecycle\nstdout/stderr stream plumbing"]
+        account["account\nsafe account metadata\nquota snapshots\nsession binding"]
+
+        server --> session
+        session --> adapter
+        adapter --> proc
+        server -. account-aware routing .-> account
+        session -. session-account map .-> account
+    end
+
+    codex["Codex CLI\napp-server profile pool"]
+    claude["Claude Code\nheadless exec"]
+    gemini["Gemini / Qwen / iFlow\nheadless exec"]
+    opencode["OpenCode\nheadless exec"]
+    cursor["Cursor CLI\nheadless exec"]
+
+    web -- "CAP over WebSocket\nJSON-RPC 2.0" --> server
+    desktop -- "CAP over WebSocket\nJSON-RPC 2.0" --> server
+    cli -- "local client" --> server
+
+    proc --> codex
+    proc --> claude
+    proc --> gemini
+    proc --> opencode
+    proc --> cursor
 ```
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│   Web app   │  │ Desktop app │  │  capd run   │   clients
-└──────┬──────┘  └──────┬──────┘  └──────┬──────┘
-       └────────────────┼────────────────┘
-                ws://127.0.0.1:7777/ws       CAP: JSON-RPC 2.0,
-                        │                    token auth, origin allowlist
-┌───────────────────────┴───────────────────────┐
-│                     capd                      │
-│  server    method dispatch · event fan-out    │
-│  session   seq event log · SQLite persistence │
-│  adapter   one translator per agent dialect   │
-│  proc      subprocess & stream plumbing       │
-└──┬──────────┬──────────┬──────────┬───────────┘
-   │          │          │          │
- codex      claude     gemini    opencode  ···    agent CLIs
- (app-server engine)   (headless exec mode)
+
+The dependency direction stays one-way:
+
+```mermaid
+flowchart LR
+    cmd["cmd/capd"] --> daemon["internal/daemon"]
+    daemon --> server["internal/server"]
+    server --> session["internal/session"]
+    session --> adapter["internal/adapter"]
+    adapter --> proc["internal/proc"]
+    protocol["pkg/protocol\npublic CAP contract"]
+
+    cmd -.-> protocol
+    server -.-> protocol
+    session -.-> protocol
+    adapter -.-> protocol
 ```
 
 ## Why capd
@@ -155,6 +192,36 @@ picker, project directory, streaming, approval buttons — is in
 
 Any single link can die without losing a conversation:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server as capd server
+    participant Session as session manager
+    participant DB as SQLite event log
+    participant Agent as agent CLI
+
+    Client->>Server: session/create
+    Server->>Session: create live session
+    Session->>Agent: start native session
+    Agent-->>Session: streamed events
+    Session-->>DB: persist seq events
+    Session-->>Client: event notifications
+
+    Client--xServer: disconnect
+    Agent-->>Session: keeps running
+    Session-->>DB: keeps appending events
+
+    Client->>Server: session/attach fromSeq
+    Server->>Session: resolve or revive
+    Session-->>DB: load missed events
+    Session-->>Client: replay + live follow
+
+    Agent--xSession: engine exits
+    Session-->>Client: error + task.done engineDied
+    Client->>Server: next touch
+    Session->>Agent: fresh process + native resume
+```
+
 - **Client drops** → events keep accumulating; re-attach replays from your
   last `seq`.
 - **Daemon restarts** → session identity and the event log live in SQLite
@@ -167,6 +234,26 @@ Any single link can die without losing a conversation:
 
 ## Security
 
+```mermaid
+flowchart TB
+    client["Client request"]
+    auth["daemon auth\nCAPD token\nconstant-time compare"]
+    origin["browser origin allowlist\nlocalhost by default"]
+    policy["request policy\ncwd, permission mode,\nattachments, approvals"]
+    headers["header guard\nno client Authorization/Cookie/X-API-Key\nCRLF rejection"]
+    redact["redaction\nmask secrets\nshorten account ids"]
+    account["account control plane\nSQLite metadata only\nno tokens"]
+    secret["secret plane\nfuture SecretStore\nkeychain / file fallback"]
+    runtime["runtime projection\nper-account CODEX_HOME\nCodex app-server profile"]
+    upstream["agent / OpenAI upstream"]
+
+    client --> auth --> origin --> policy --> headers
+    headers --> redact
+    headers --> runtime --> upstream
+    account -. secret ref only .-> secret
+    account --> runtime
+```
+
 - Binds `127.0.0.1` by default; remote exposure is an explicit choice
   (`--host`, TLS via your reverse proxy).
 - Token auth on every connection (`~/.capd/token`, 0600, generated on first
@@ -175,6 +262,13 @@ Any single link can die without losing a conversation:
   `--origins` / `CAPD_ORIGINS` — never default-open.
 - Sessions declare sandbox and approval policy explicitly; unknown approval
   requests are denied by default.
+- Client-supplied sensitive headers (`Authorization`, `Cookie`, `X-API-Key`,
+  `Proxy-Authorization`, …) are rejected at trust boundaries.
+- Header values are checked for newline injection; diagnostics use redacted
+  headers so access tokens never land in logs or protocol events.
+- Codex account support is split into a control plane and a runtime plane:
+  SQLite stores account metadata and quota snapshots, while each runtime can
+  use its own `CODEX_HOME` and app-server profile.
 
 ## Repository layout
 
@@ -183,6 +277,7 @@ Any single link can die without losing a conversation:
 | `pkg/protocol/` | CAP wire format — public contract; SDKs build against this |
 | `internal/server/` | WebSocket, auth, dispatch, per-connection fan-out |
 | `internal/session/` | Session registry, seq event log, SQLite store |
+| `internal/account/` | Account metadata, quota snapshots, safe Codex header builders |
 | `internal/adapter/` | Adapter engine + one package per agent dialect |
 | `internal/discovery/` | Probes which CLIs are installed |
 | `internal/proc/` | Subprocess lifecycle and line-stream plumbing |
