@@ -160,6 +160,51 @@ func TestRuntimeProjectorSyncsRefreshedProjectedAuth(t *testing.T) {
 	}
 }
 
+func TestRuntimeProjectorIgnoresOversizedProjectedAuth(t *testing.T) {
+	dir := t.TempDir()
+	secrets := secret.NewFileStore(filepath.Join(dir, "secrets"))
+	ref, err := secrets.Put(context.Background(), "codex-acct", secret.Bundle{
+		Provider:     Provider,
+		AuthMode:     "chatgpt",
+		AccessToken:  "old-access",
+		RefreshToken: "old-refresh",
+		RawAuthJSON:  []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"old-access","refresh_token":"old-refresh"},"last_refresh":"2026-06-01T00:00:00Z"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc := account.Account{ID: "codex-acct", Provider: Provider, SecretRef: ref.String(), AccountID: "acct_1"}
+	projector := RuntimeProjector{
+		Root:    filepath.Join(dir, "runtimes"),
+		Secrets: secrets,
+	}
+	profile, err := projector.Project(context.Background(), acc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profile.CodexHome, "auth.json"), []byte(strings.Repeat(" ", maxAuthJSONBytes+1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := projector.Project(context.Background(), acc); err != nil {
+		t.Fatal(err)
+	}
+
+	authBytes, err := os.ReadFile(filepath.Join(profile.CodexHome, "auth.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(authBytes) > maxAuthJSONBytes || !strings.Contains(string(authBytes), "old-access") {
+		t.Fatalf("projected auth was not restored from SecretStore: len=%d body=%q", len(authBytes), authBytes)
+	}
+	bundle, err := secrets.Get(context.Background(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bundle.AccessToken != "old-access" || strings.Contains(string(bundle.RawAuthJSON), strings.Repeat(" ", 32)) {
+		t.Fatalf("bundle = %+v", bundle)
+	}
+}
+
 func assertMode(t *testing.T, path string, want os.FileMode) {
 	t.Helper()
 	info, err := os.Stat(path)

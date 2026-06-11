@@ -76,7 +76,7 @@ func (rp RuntimeProjector) Project(ctx context.Context, acc account.Account) (Ru
 }
 
 func (rp RuntimeProjector) syncRefreshedAuth(ctx context.Context, ref secret.Ref, current secret.Bundle, authPath string) (secret.Bundle, bool) {
-	projected, err := os.ReadFile(authPath)
+	projected, err := readAuthJSON(authPath)
 	if err != nil {
 		return secret.Bundle{}, false
 	}
