@@ -94,8 +94,12 @@ capd run --image diagram.png "what's wrong in this architecture?"
 capd run --session s_xxx "follow-up..."     # multi-turn, survives restarts
 
 capd sessions             # all sessions: live / stored / ended
+capd watch s_xxx          # re-join a long-running task: replay + follow
 capd agents usage codex   # plan, rate-limit windows, reset times
 ```
+
+Every flag, protocol field, and event is documented in
+[docs/reference.md](docs/reference.md).
 
 ### Permission modes
 
