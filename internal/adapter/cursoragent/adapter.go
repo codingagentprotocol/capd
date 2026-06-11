@@ -30,6 +30,9 @@ func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
 }
 
 func (a *Adapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
+	if err := adapter.RequireBin(ID, "cursor-agent"); err != nil {
+		return nil, err
+	}
 	if opts.Resume != "" {
 		return adapter.NewTurnSessionResumed(turnConfig, opts, opts.Resume), nil
 	}

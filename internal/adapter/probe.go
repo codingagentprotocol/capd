@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
 	"time"
@@ -30,4 +31,13 @@ func ProbeCLI(ctx context.Context, id, name, bin string, versionArgs ...string) 
 		info.Version = strings.TrimSpace(line)
 	}
 	return info, nil
+}
+
+// RequireBin fails fast when the CLI is not on PATH — session creation for a
+// missing agent should error immediately, not at first Send.
+func RequireBin(id, bin string) error {
+	if _, err := exec.LookPath(bin); err != nil {
+		return fmt.Errorf("agent %q is not installed (%s not on PATH)", id, bin)
+	}
+	return nil
 }

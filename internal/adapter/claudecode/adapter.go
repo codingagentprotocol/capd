@@ -34,6 +34,9 @@ func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
 }
 
 func (a *Adapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
+	if err := adapter.RequireBin(a.id, a.bin); err != nil {
+		return nil, err
+	}
 	cfg := adapter.TurnConfig{
 		BuildSpec: func(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
 			spec := buildSpec(opts, nativeID, prompt)
