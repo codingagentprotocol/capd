@@ -207,6 +207,12 @@ function hasNumber(v) {
   return typeof v === "number" && Number.isFinite(v);
 }
 
+function capdWebSocketURL() {
+  const u = new URL(`ws://${CAPD}/ws`);
+  u.searchParams.set("token", TOKEN);
+  return u.toString();
+}
+
 async function refreshQuota(accountId, button) {
   button.disabled = true;
   try {
@@ -275,7 +281,7 @@ async function attachSession(id, replay) {
 }
 
 async function connect() {
-  ws = new WebSocket(`ws://${CAPD}/ws?token=${TOKEN}`);
+  ws = new WebSocket(capdWebSocketURL());
   ws.onmessage = (m) => {
     const msg = JSON.parse(m.data);
     if (msg.method === "event") { onEvent(msg.params); return; }

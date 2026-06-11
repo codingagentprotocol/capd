@@ -84,6 +84,8 @@ func TestConsoleStaticContract(t *testing.T) {
 		"hasNumber(a.quota.primaryUsedPercent)",
 		"button.disabled = true",
 		`searchParams.delete("token")`,
+		`searchParams.set("token", TOKEN)`,
+		"capdWebSocketURL",
 		"history.replaceState",
 	}
 	for _, needle := range required {
@@ -98,6 +100,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"RawAuthJSON",
 		"localStorage.setItem",
 		"sessionStorage.setItem",
+		"?token=${TOKEN}",
 	}
 	for _, needle := range forbidden {
 		if strings.Contains(html, needle) {
