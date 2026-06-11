@@ -97,3 +97,13 @@ func TestBuildSpecResolvesCodexBinary(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildSpecPropagatesEnvironment(t *testing.T) {
+	spec := buildSpec(adapter.SessionOpts{
+		Cwd: "/tmp",
+		Env: []string{"CODEX_HOME=/tmp/capd-codex-account"},
+	}, "", adapter.Message{Prompt: "hi"})
+	if len(spec.Env) != 1 || spec.Env[0] != "CODEX_HOME=/tmp/capd-codex-account" {
+		t.Fatalf("Env = %#v", spec.Env)
+	}
+}

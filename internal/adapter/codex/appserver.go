@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,22 +12,51 @@ import (
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
-// appServer multiplexes codex sessions onto one `codex app-server` process —
-// the same engine codex's desktop app embeds. Notifications and approval
-// requests are routed to sessions by threadId.
+// appServer owns a pool of codex app-server profiles. Each profile maps to a
+// distinct environment (notably CODEX_HOME for multi-account use), so sessions
+// never share an app-server across account/runtime boundaries.
 type appServer struct {
+	mu       sync.Mutex
+	profiles map[string]*appServerProfile
+}
+
+type appServerProfile struct {
+	env []string
+
 	mu       sync.Mutex
 	client   *rpcClient
 	sessions map[string]*appSession // threadId → session
 }
 
-func (as *appServer) ensureClient() (*rpcClient, error) {
+func (as *appServer) profile(env []string) *appServerProfile {
 	as.mu.Lock()
 	defer as.mu.Unlock()
-	if as.client != nil && as.client.Alive() {
-		return as.client, nil
+	if as.profiles == nil {
+		as.profiles = make(map[string]*appServerProfile)
 	}
-	c, err := startRPC(as.routeNotification, as.routeServerRequest, as.handleEngineDeath)
+	key := profileKey(env)
+	if p := as.profiles[key]; p != nil {
+		return p
+	}
+	p := &appServerProfile{env: append([]string(nil), env...)}
+	as.profiles[key] = p
+	return p
+}
+
+func profileKey(env []string) string {
+	if len(env) == 0 {
+		return "default"
+	}
+	return strings.Join(env, "\x00")
+}
+
+func (p *appServerProfile) ensureClient() (*rpcClient, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.client != nil && p.client.Alive() {
+		return p.client, nil
+	}
+	c, err := startRPC(p.env, p.routeNotification, p.routeServerRequest, p.handleEngineDeath)
 	if err != nil {
 		return nil, err
 	}
@@ -38,37 +68,37 @@ func (as *appServer) ensureClient() (*rpcClient, error) {
 		c.Kill()
 		return nil, fmt.Errorf("initialize app-server: %w", err)
 	}
-	as.client = c
-	as.sessions = make(map[string]*appSession)
+	p.client = c
+	p.sessions = make(map[string]*appSession)
 	return c, nil
 }
 
-func (as *appServer) register(threadID string, s *appSession) {
-	as.mu.Lock()
-	as.sessions[threadID] = s
-	as.mu.Unlock()
+func (p *appServerProfile) register(threadID string, s *appSession) {
+	p.mu.Lock()
+	p.sessions[threadID] = s
+	p.mu.Unlock()
 }
 
-func (as *appServer) unregister(threadID string) {
-	as.mu.Lock()
-	delete(as.sessions, threadID)
-	as.mu.Unlock()
+func (p *appServerProfile) unregister(threadID string) {
+	p.mu.Lock()
+	delete(p.sessions, threadID)
+	p.mu.Unlock()
 }
 
-func (as *appServer) lookup(params json.RawMessage) *appSession {
+func (p *appServerProfile) lookup(params json.RawMessage) *appSession {
 	var probe struct {
 		ThreadID string `json:"threadId"`
 	}
 	if err := json.Unmarshal(params, &probe); err != nil || probe.ThreadID == "" {
 		return nil
 	}
-	as.mu.Lock()
-	defer as.mu.Unlock()
-	return as.sessions[probe.ThreadID]
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.sessions[probe.ThreadID]
 }
 
-func (as *appServer) routeNotification(method string, params json.RawMessage) {
-	if s := as.lookup(params); s != nil {
+func (p *appServerProfile) routeNotification(method string, params json.RawMessage) {
+	if s := p.lookup(params); s != nil {
 		s.handleNotification(method, params)
 	}
 }
@@ -76,15 +106,15 @@ func (as *appServer) routeNotification(method string, params json.RawMessage) {
 // handleEngineDeath fires when the app-server process exits: every live
 // session gets an error event and is closed, which makes the manager mark it
 // ended and lets the next touch revive it (fresh app-server, native resume).
-func (as *appServer) handleEngineDeath() {
-	as.mu.Lock()
-	sessions := make([]*appSession, 0, len(as.sessions))
-	for _, s := range as.sessions {
+func (p *appServerProfile) handleEngineDeath() {
+	p.mu.Lock()
+	sessions := make([]*appSession, 0, len(p.sessions))
+	for _, s := range p.sessions {
 		sessions = append(sessions, s)
 	}
-	as.sessions = make(map[string]*appSession)
-	as.client = nil
-	as.mu.Unlock()
+	p.sessions = make(map[string]*appSession)
+	p.client = nil
+	p.mu.Unlock()
 
 	for _, s := range sessions {
 		s.emit(protocol.EventError, map[string]any{"message": "codex app-server exited; session will revive on next use"})
@@ -93,15 +123,15 @@ func (as *appServer) handleEngineDeath() {
 	}
 }
 
-func (as *appServer) routeServerRequest(id json.RawMessage, method string, params json.RawMessage) {
-	if s := as.lookup(params); s != nil {
+func (p *appServerProfile) routeServerRequest(id json.RawMessage, method string, params json.RawMessage) {
+	if s := p.lookup(params); s != nil {
 		s.handleServerRequest(id, method, params)
 		return
 	}
 	// Unroutable request: deny rather than leave codex hanging.
-	as.mu.Lock()
-	c := as.client
-	as.mu.Unlock()
+	p.mu.Lock()
+	c := p.client
+	p.mu.Unlock()
 	if c != nil {
 		c.Respond(id, map[string]any{"decision": "reject"})
 	}
@@ -109,7 +139,8 @@ func (as *appServer) routeServerRequest(id json.RawMessage, method string, param
 
 // startAppSession starts (or resumes) a thread and returns the session.
 func (as *appServer) startAppSession(ctx context.Context, opts adapter.SessionOpts) (*appSession, error) {
-	c, err := as.ensureClient()
+	profile := as.profile(opts.Env)
+	c, err := profile.ensureClient()
 	if err != nil {
 		return nil, err
 	}
@@ -145,13 +176,13 @@ func (as *appServer) startAppSession(ctx context.Context, opts adapter.SessionOp
 	}
 
 	s := &appSession{
-		owner:    as,
+		owner:    profile,
 		client:   c,
 		threadID: result.Thread.ID,
 		effort:   opts.Effort,
 		events:   make(chan protocol.Event, 256),
 	}
-	as.register(s.threadID, s)
+	profile.register(s.threadID, s)
 	s.emit(protocol.EventSessionStarted, map[string]any{
 		"nativeSessionId": s.threadID, "threadId": s.threadID,
 	})
@@ -179,7 +210,7 @@ func permissionMapping(mode string) (approvalPolicy, sandbox string) {
 
 // appSession is one codex thread exposed as an adapter.Session.
 type appSession struct {
-	owner    *appServer
+	owner    *appServerProfile
 	client   *rpcClient
 	threadID string
 	effort   string

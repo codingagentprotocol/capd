@@ -33,7 +33,7 @@ func buildSpec(opts adapter.SessionOpts, nativeID string, msg adapter.Message) p
 		args = append(args, "resume", nativeID)
 	}
 	args = append(args, prompt)
-	return proc.Spec{Bin: binPath(), Args: args, Cwd: opts.Cwd}
+	return proc.Spec{Bin: binPath(), Args: args, Cwd: opts.Cwd, Env: opts.Env}
 }
 
 // codexEvent is the JSONL shape of `codex exec --json` (verified against

@@ -32,6 +32,7 @@ type SessionOpts struct {
 	PermissionMode string
 	Model          string // agent-native model id; empty = agent default
 	Effort         string // agent-native reasoning effort; empty = default
+	Env            []string
 }
 
 // Message is one user turn: a prompt plus optional attachments. Adapters

@@ -8,8 +8,9 @@ import (
 )
 
 func newTestAppSession() *appSession {
+	profile := &appServerProfile{sessions: map[string]*appSession{}}
 	return &appSession{
-		owner:    &appServer{sessions: map[string]*appSession{}},
+		owner:    profile,
 		threadID: "t1",
 		events:   make(chan protocol.Event, 64),
 	}
@@ -110,11 +111,9 @@ func TestAppServerApprovalRequestToEvent(t *testing.T) {
 	if d["kind"] != "command" || d["command"] != "rm -rf /" || d["approvalId"] == "" {
 		t.Fatalf("data = %+v", d)
 	}
-	// internal noise must not leak
 	if _, has := d["threadId"]; has {
 		t.Fatal("threadId should be stripped")
 	}
-	// the pending approval is registered for Approve to find
 	s.mu.Lock()
 	_, ok := s.approvals[d["approvalId"].(string)]
 	s.mu.Unlock()
@@ -137,7 +136,7 @@ func TestDecisionTranslation(t *testing.T) {
 		protocol.DecisionApprove:       "accept",
 		protocol.DecisionApproveAlways: "acceptForSession",
 		protocol.DecisionDeny:          "reject",
-		"garbage":                      "reject", // unknown is never an approve
+		"garbage":                      "reject",
 	}
 	for in, want := range cases {
 		if got := translateDecision(in); got != want {
@@ -151,7 +150,7 @@ func TestPermissionMapping(t *testing.T) {
 		{protocol.PermissionDefault, "on-request", "read-only"},
 		{protocol.PermissionAcceptEdits, "on-request", "workspace-write"},
 		{protocol.PermissionFull, "never", "danger-full-access"},
-		{"garbage", "on-request", "read-only"}, // unknown mode degrades to safest
+		{"garbage", "on-request", "read-only"},
 	}
 	for _, c := range cases {
 		a, sb := permissionMapping(c.mode)
@@ -162,14 +161,14 @@ func TestPermissionMapping(t *testing.T) {
 }
 
 func TestEngineDeathClosesSessions(t *testing.T) {
-	as := &appServer{sessions: map[string]*appSession{}}
-	s := &appSession{owner: as, threadID: "t1", events: make(chan protocol.Event, 8)}
-	as.sessions["t1"] = s
+	profile := &appServerProfile{sessions: map[string]*appSession{}}
+	s := &appSession{owner: profile, threadID: "t1", events: make(chan protocol.Event, 8)}
+	profile.sessions["t1"] = s
 
-	as.handleEngineDeath()
+	profile.handleEngineDeath()
 
 	var sawError, sawDone bool
-	for ev := range s.events { // channel closes via s.Close()
+	for ev := range s.events {
 		if ev.Type == protocol.EventError {
 			sawError = true
 		}
@@ -180,7 +179,30 @@ func TestEngineDeathClosesSessions(t *testing.T) {
 	if !sawError || !sawDone {
 		t.Fatalf("error=%v done=%v", sawError, sawDone)
 	}
-	if len(as.sessions) != 0 {
+	if len(profile.sessions) != 0 {
 		t.Fatal("sessions not cleared")
+	}
+}
+
+func TestAppServerProfileUsesDefaultKeyForEmptyEnv(t *testing.T) {
+	if got := profileKey(nil); got != "default" {
+		t.Fatalf("profileKey(nil) = %q", got)
+	}
+}
+
+func TestAppServerProfileSeparatesEnvironments(t *testing.T) {
+	var pool appServer
+	first := pool.profile([]string{"CODEX_HOME=/tmp/capd/a"})
+	again := pool.profile([]string{"CODEX_HOME=/tmp/capd/a"})
+	second := pool.profile([]string{"CODEX_HOME=/tmp/capd/b"})
+
+	if first != again {
+		t.Fatal("same environment did not reuse profile")
+	}
+	if first == second {
+		t.Fatal("different environments reused one profile")
+	}
+	if first.env[0] != "CODEX_HOME=/tmp/capd/a" {
+		t.Fatalf("profile env = %#v", first.env)
 	}
 }

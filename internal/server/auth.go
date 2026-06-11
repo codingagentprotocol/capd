@@ -4,6 +4,8 @@ import (
 	"crypto/subtle"
 	"net/http"
 	"strings"
+
+	"github.com/codingagentprotocol/capd/internal/security"
 )
 
 // authorized checks the daemon token on a handshake request. Browsers cannot
@@ -17,6 +19,9 @@ func (s *Server) authorized(r *http.Request) bool {
 		}
 	}
 	if tok == "" {
+		return false
+	}
+	if err := security.ValidateHeaderValue(tok); err != nil {
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(tok), []byte(s.opts.Token)) == 1

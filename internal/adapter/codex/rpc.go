@@ -50,9 +50,9 @@ type rpcMessage struct {
 	} `json:"error,omitempty"`
 }
 
-func startRPC(onNotify func(string, json.RawMessage), onServerReq func(json.RawMessage, string, json.RawMessage), onDead func()) (*rpcClient, error) {
+func startRPC(env []string, onNotify func(string, json.RawMessage), onServerReq func(json.RawMessage, string, json.RawMessage), onDead func()) (*rpcClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	p, err := proc.Start(ctx, proc.Spec{Bin: binPath(), Args: []string{"app-server"}})
+	p, err := proc.Start(ctx, proc.Spec{Bin: binPath(), Args: []string{"app-server"}, Env: env})
 	if err != nil {
 		cancel()
 		return nil, err
