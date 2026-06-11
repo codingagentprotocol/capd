@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
@@ -144,6 +145,35 @@ func TestResolveUsageAccountAuto(t *testing.T) {
 		t.Fatal(err)
 	}
 	if acc.ID != "codex-low" {
+		t.Fatalf("account = %+v", acc)
+	}
+}
+
+func TestResolveUsageAccountAutoIgnoresStaleQuota(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-fresh",
+		Provider:  codexauth.Provider,
+		AuthMode:  "chatgpt",
+		Email:     "fresh@example.com",
+		SecretRef: "file:codex-fresh",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	staleAt := time.Now().Add(-account.QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 1, CheckedAt: staleAt}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-fresh", PrimaryUsedPercent: 20}); err != nil {
+		t.Fatal(err)
+	}
+	acc, err := resolveUsageAccount(accounts, "auto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acc.ID != "codex-fresh" {
 		t.Fatalf("account = %+v", acc)
 	}
 }

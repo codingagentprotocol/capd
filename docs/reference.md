@@ -63,7 +63,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 |---------|--------|
 | `capd agents list` | table: id, available/not installed, version, binary path |
 | `capd agents usage <id>` | account snapshot JSON: plan, 5h/weekly window used %, reset timestamps, credits (codex) |
-| `capd agents usage codex --account <id\|auto>` | usage for an imported Codex account, or the lowest cached-quota Codex account with `auto`; also refreshes the local quota snapshot |
+| `capd agents usage codex --account <id\|auto>` | usage for an imported Codex account, or the lowest fresh cached-quota Codex account with `auto`; also refreshes the local quota snapshot |
 
 ### `capd accounts codex` — local Codex account control plane
 
@@ -184,7 +184,7 @@ The response never returns token material, `secret_ref`, or raw backend JSON.
 | Field | Type | Default | Meaning |
 |-------|------|---------|---------|
 | `agentId` | string | required | agent to drive, or `auto` to route |
-| `accountId` | string | — | imported account id, or `auto` to choose the lowest cached Codex quota; currently supported for Codex sessions |
+| `accountId` | string | — | imported account id, or `auto` to choose the lowest fresh cached Codex quota; currently supported for Codex sessions |
 | `cwd` | string | user home | project directory; must exist |
 | `permissionMode` | string | `""` (default) | `acceptEdits` · `full`; `full` is rejected at filesystem root |
 | `model` | string | agent default | agent-native model id |
