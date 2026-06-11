@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 
 	_ "modernc.org/sqlite" // CGO-free driver; keeps cross-compilation trivial
 
@@ -18,7 +19,8 @@ var ErrSessionUnknown = errors.New("session: unknown id")
 // loses nothing: the agent-native id lets a revived session keep its
 // conversation, and the event log serves attach replays.
 type Store struct {
-	db *sql.DB
+	db   *sql.DB
+	path string
 }
 
 const schema = `
@@ -59,7 +61,12 @@ func OpenStore(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	st := &Store{db: db, path: path}
+	if err := st.tightenFilePermissions(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return st, nil
 }
 
 func ensureSessionColumns(db *sql.DB) error {
@@ -132,17 +139,17 @@ func (st *Store) SaveSession(rec SessionRecord) error {
 	_, err := st.db.Exec(
 		"INSERT OR REPLACE INTO sessions (id, agent_id, native_id, cwd, env_json, ended) VALUES (?, ?, ?, ?, ?, ?)",
 		rec.ID, rec.AgentID, rec.NativeID, rec.Cwd, envJSON, boolInt(rec.Ended))
-	return err
+	return st.afterWrite(err)
 }
 
 func (st *Store) SetNativeID(id, nativeID string) error {
 	_, err := st.db.Exec("UPDATE sessions SET native_id = ? WHERE id = ?", nativeID, id)
-	return err
+	return st.afterWrite(err)
 }
 
 func (st *Store) MarkEnded(id string) error {
 	_, err := st.db.Exec("UPDATE sessions SET ended = 1 WHERE id = ?", id)
-	return err
+	return st.afterWrite(err)
 }
 
 func (st *Store) LoadSession(id string) (SessionRecord, error) {
@@ -168,7 +175,7 @@ func (st *Store) AppendEvent(ev protocol.Event) error {
 	_, err = st.db.Exec(
 		"INSERT OR IGNORE INTO events (session_id, seq, type, data) VALUES (?, ?, ?, ?)",
 		ev.SessionID, ev.Seq, string(ev.Type), string(data))
-	return err
+	return st.afterWrite(err)
 }
 
 // LoadEvents returns up to limit events from fromSeq onward, in seq order.
@@ -229,6 +236,25 @@ func (st *Store) NextSeq(sessionID string) (uint64, error) {
 		return 0, nil
 	}
 	return uint64(next.Int64), nil
+}
+
+func (st *Store) afterWrite(err error) error {
+	if err != nil {
+		return err
+	}
+	return st.tightenFilePermissions()
+}
+
+func (st *Store) tightenFilePermissions() error {
+	if st.path == "" {
+		return nil
+	}
+	for _, path := range []string{st.path, st.path + "-wal", st.path + "-shm"} {
+		if err := os.Chmod(path, 0o600); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("session: chmod store file %q: %w", path, err)
+		}
+	}
+	return nil
 }
 
 func boolInt(b bool) int {

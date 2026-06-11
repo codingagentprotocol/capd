@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -57,6 +58,32 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 }
 
+func TestStoreTightensFilePermissions(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "capd.db")
+	if err := os.WriteFile(dbPath, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dbPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := OpenStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	assertStoreFileMode(t, dbPath)
+	if err := st.SaveSession(SessionRecord{ID: "s_1", AgentID: "codex", Env: []string{"CODEX_HOME=/tmp/capd-codex"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendEvent(protocol.Event{SessionID: "s_1", Seq: 1, Type: protocol.EventOutputText, Data: map[string]any{"text": "hello"}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		assertStoreFileMode(t, path)
+	}
+}
+
 func TestOpenStoreMigratesEnvColumn(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "old.db")
 	db, err := sql.Open("sqlite", path)
@@ -97,6 +124,20 @@ CREATE TABLE events (
 	}
 	if len(rec.Env) != 1 || rec.Env[0] != "CODEX_HOME=/tmp/codex" {
 		t.Fatalf("env = %#v", rec.Env)
+	}
+}
+
+func assertStoreFileMode(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("%s mode = %o", path, info.Mode().Perm())
 	}
 }
 
