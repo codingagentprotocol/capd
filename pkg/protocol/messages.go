@@ -4,6 +4,7 @@ package protocol
 const (
 	MethodInitialize      = "initialize"       // version negotiation, must be the first call
 	MethodAgentsList      = "agents/list"      // list discovered agent CLIs
+	MethodAgentsRoute     = "agents/route"     // choose an agent for requested capabilities
 	MethodAgentsUsage     = "agents/usage"     // account usage / rate-limit data for one agent
 	MethodSessionCreate   = "session/create"   // start an agent session
 	MethodSessionList     = "session/list"     // enumerate sessions and their liveness
@@ -60,6 +61,8 @@ type AgentInfo struct {
 }
 
 type AgentCapabilities struct {
+	Model     bool `json:"model,omitempty"`
+	Effort    bool `json:"effort,omitempty"`
 	Streaming bool `json:"streaming,omitempty"`
 	Approvals bool `json:"approvals,omitempty"`
 	Steer     bool `json:"steer,omitempty"`
@@ -73,6 +76,22 @@ type AgentCapabilities struct {
 
 type AgentsListResult struct {
 	Agents []AgentInfo `json:"agents"`
+}
+
+const AgentAuto = "auto"
+
+type AgentRouteParams struct {
+	Prompt       string            `json:"prompt,omitempty"`
+	Attachments  []Attachment      `json:"attachments,omitempty"`
+	Model        string            `json:"model,omitempty"`
+	Effort       string            `json:"effort,omitempty"`
+	Capabilities AgentCapabilities `json:"capabilities,omitempty"`
+	Prefer       []string          `json:"prefer,omitempty"`
+}
+
+type AgentRouteResult struct {
+	Agent  AgentInfo `json:"agent"`
+	Reason string    `json:"reason"`
 }
 
 type AgentsUsageParams struct {
@@ -95,7 +114,7 @@ const (
 )
 
 type SessionCreateParams struct {
-	AgentID string `json:"agentId"`
+	AgentID string `json:"agentId"`          // use "auto" to let capd choose
 	Cwd     string `json:"cwd,omitempty"`    // working directory for the agent
 	Resume  string `json:"resume,omitempty"` // agent-native session id to resume
 	// PermissionMode is one of the Permission* constants. Interactive

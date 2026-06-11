@@ -36,6 +36,8 @@ func (f *scriptedAdapter) Probe(context.Context) (protocol.AgentInfo, error) {
 }
 func (f *scriptedAdapter) Capabilities() protocol.AgentCapabilities {
 	return protocol.AgentCapabilities{
+		Model:     true,
+		Effort:    true,
 		Streaming: true,
 		Approvals: true,
 		Steer:     true,
@@ -330,8 +332,33 @@ func TestAgentsListReportsCapabilities(t *testing.T) {
 		t.Fatalf("agents = %+v", list.Agents)
 	}
 	got := list.Agents[0].Capabilities
-	if !got.Streaming || !got.Approvals || !got.Steer || !got.Fork || !got.Rollback || !got.Review || !got.Images || !got.Usage || !got.Resume {
+	if !got.Model || !got.Effort || !got.Streaming || !got.Approvals || !got.Steer || !got.Fork || !got.Rollback || !got.Review || !got.Images || !got.Usage || !got.Resume {
 		t.Fatalf("capabilities = %+v", got)
+	}
+}
+
+func TestAgentsRouteAndAutoCreate(t *testing.T) {
+	ts, _ := newIntegration(t)
+	c := initialized(t, ts)
+
+	var routed protocol.AgentRouteResult
+	c.mustResult(c.call(protocol.MethodAgentsRoute, protocol.AgentRouteParams{
+		Effort:       "high",
+		Capabilities: protocol.AgentCapabilities{Review: true},
+	}), &routed)
+	if routed.Agent.ID != "fake" || routed.Reason == "" {
+		t.Fatalf("route = %+v", routed)
+	}
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID: protocol.AgentAuto,
+		Effort:  "high",
+	}), &created)
+	var list protocol.SessionListResult
+	c.mustResult(c.call(protocol.MethodSessionList, struct{}{}), &list)
+	if len(list.Sessions) != 1 || list.Sessions[0].SessionID != created.SessionID || list.Sessions[0].AgentID != "fake" {
+		t.Fatalf("sessions = %+v", list.Sessions)
 	}
 }
 

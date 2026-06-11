@@ -50,6 +50,13 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		agents := discovery.Discover(ctx, s.opts.Registry)
 		return protocol.AgentsListResult{Agents: agents}, nil
 
+	case protocol.MethodAgentsRoute:
+		var params protocol.AgentRouteParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		return s.routeAgent(ctx, params)
+
 	case protocol.MethodAgentsUsage:
 		var params protocol.AgentsUsageParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
@@ -87,7 +94,15 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if perr := s.policy.validateSessionCreate(params); perr != nil {
 			return nil, perr
 		}
-		sess, err := s.opts.Sessions.Create(ctx, params.AgentID, adapter.SessionOpts{
+		agentID := params.AgentID
+		if agentID == protocol.AgentAuto {
+			routed, perr := s.routeAgent(ctx, routeParamsForCreate(params))
+			if perr != nil {
+				return nil, perr
+			}
+			agentID = routed.Agent.ID
+		}
+		sess, err := s.opts.Sessions.Create(ctx, agentID, adapter.SessionOpts{
 			Cwd:            params.Cwd,
 			Resume:         params.Resume,
 			PermissionMode: params.PermissionMode,

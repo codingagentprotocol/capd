@@ -31,6 +31,7 @@ func (a *Adapter) ID() string { return a.id }
 
 func (a *Adapter) Capabilities() protocol.AgentCapabilities {
 	return protocol.AgentCapabilities{
+		Model:  true,
 		Resume: true,
 	}
 }

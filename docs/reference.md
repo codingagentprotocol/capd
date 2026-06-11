@@ -105,8 +105,15 @@ Mismatched versions are rejected with code `-32005`.
 No params. → `{"agents": [{"id", "name", "bin", "version", "available", "capabilities"}]}`
 
 `capabilities` is daemon-known behavior clients can use for routing and UI:
-`streaming`, `approvals`, `steer`, `fork`, `rollback`, `review`, `images`,
-`usage`, `resume`.
+`model`, `effort`, `streaming`, `approvals`, `steer`, `fork`, `rollback`,
+`review`, `images`, `usage`, `resume`.
+
+### `agents/route`
+
+Ask capd to pick an installed agent. Params mirror route signals:
+`{"prompt", "attachments", "model", "effort", "capabilities", "prefer"}`.
+
+→ `{"agent": {...}, "reason": "matched capabilities: effort, review"}`
 
 ### `agents/usage`
 
@@ -119,7 +126,7 @@ resetsAt}`, `planType`, `credits`, plus per-model buckets in
 
 | Field | Type | Default | Meaning |
 |-------|------|---------|---------|
-| `agentId` | string | required | agent to drive |
+| `agentId` | string | required | agent to drive, or `auto` to route |
 | `cwd` | string | user home | project directory; must exist |
 | `permissionMode` | string | `""` (default) | `acceptEdits` · `full`; `full` is rejected at filesystem root |
 | `model` | string | agent default | agent-native model id |
