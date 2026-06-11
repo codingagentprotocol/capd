@@ -191,6 +191,69 @@ func TestCodexAccountsSmokeJSONWithoutLeakingSecrets(t *testing.T) {
 	if acc.ID != "codex-test" || !acc.ProjectionOK || acc.PrimaryUsed != "0.0%" || acc.PrimaryUsedPercent == nil || *acc.PrimaryUsedPercent != 0 {
 		t.Fatalf("account = %+v", acc)
 	}
+	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" {
+		t.Fatalf("auto route = %+v", result.AutoRoute)
+	}
+}
+
+func TestCodexAccountsSmokeJSONIncludesAutoRouteEvidence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, secrets := seedCodexAccount(t)
+	defer accounts.Close()
+	ref, err := secrets.Put(context.Background(), "codex-low", secret.Bundle{
+		Provider:     codexauth.Provider,
+		AuthMode:     "chatgpt",
+		AccessToken:  "low-access-secret",
+		RefreshToken: "low-refresh-secret",
+		RawAuthJSON:  []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"low-access-secret","refresh_token":"low-refresh-secret"},"last_refresh":"2026-06-01T00:00:00Z"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-low",
+		Provider:  codexauth.Provider,
+		AuthMode:  "chatgpt",
+		Email:     "low@example.com",
+		AccountID: "acct_low",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 72}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", Plan: "pro", PrimaryUsedPercent: 4}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json", "--require-multiple"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, secret := range []string{"access-secret", "refresh-secret", "low-access-secret", "low-refresh-secret", "secretRef"} {
+		if strings.Contains(text, secret) {
+			t.Fatalf("smoke json leaked sensitive data: %s", text)
+		}
+	}
+	var result codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.CheckedAccounts != 2 || result.AutoRoute == nil {
+		t.Fatalf("result = %+v", result)
+	}
+	if result.AutoRoute.AccountID != "codex-low" || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 4 {
+		t.Fatalf("auto route = %+v", result.AutoRoute)
+	}
+	if !strings.Contains(result.AutoRoute.Reason, "lowest fresh cached primary quota") {
+		t.Fatalf("auto route reason = %q", result.AutoRoute.Reason)
+	}
 }
 
 func TestCodexAccountsSmokeFailsWithoutAccounts(t *testing.T) {

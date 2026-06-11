@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -361,6 +362,11 @@ func newCodexAccountsCmd() *cobra.Command {
 				row.PrimaryUsed = used
 				result.Accounts = append(result.Accounts, row)
 			}
+			if route, err := codexSmokeAutoRouteEvidence(accounts); err != nil {
+				return err
+			} else {
+				result.AutoRoute = route
+			}
 			if jsonOut {
 				out, _ := json.MarshalIndent(result, "", "  ")
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))
@@ -371,7 +377,13 @@ func newCodexAccountsCmd() *cobra.Command {
 			for _, row := range result.Accounts {
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", row.ID, row.Email, row.ProjectedCodexHome, row.AuthMode, row.PrimaryUsed)
 			}
-			return w.Flush()
+			if err := w.Flush(); err != nil {
+				return err
+			}
+			if result.AutoRoute != nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s (%s)\n", result.AutoRoute.AccountID, result.AutoRoute.Reason)
+			}
+			return nil
 		},
 	}
 	smokeCmd.Flags().Bool("quota", false, "also refresh ChatGPT backend quota for every imported account")
@@ -395,10 +407,19 @@ func verifyProjectedAuth(codexHome string) error {
 }
 
 type codexSmokeResult struct {
-	OK              bool                `json:"ok"`
-	CheckedAccounts int                 `json:"checkedAccounts"`
-	QuotaRefreshed  bool                `json:"quotaRefreshed"`
-	Accounts        []codexSmokeAccount `json:"accounts"`
+	OK              bool                 `json:"ok"`
+	CheckedAccounts int                  `json:"checkedAccounts"`
+	QuotaRefreshed  bool                 `json:"quotaRefreshed"`
+	AutoRoute       *codexSmokeAutoRoute `json:"autoRoute,omitempty"`
+	Accounts        []codexSmokeAccount  `json:"accounts"`
+}
+
+type codexSmokeAutoRoute struct {
+	AccountID string   `json:"accountId"`
+	Reason    string   `json:"reason"`
+	Score     float64  `json:"score"`
+	Fresh     bool     `json:"fresh"`
+	Primary   *float64 `json:"primaryUsedPercent,omitempty"`
 }
 
 type codexSmokeAccount struct {
@@ -420,6 +441,26 @@ type accountListRow struct {
 	AccountID   string `json:"accountId,omitempty"`
 	Plan        string `json:"plan,omitempty"`
 	PrimaryUsed string `json:"primaryUsed,omitempty"`
+}
+
+func codexSmokeAutoRouteEvidence(accounts *account.Store) (*codexSmokeAutoRoute, error) {
+	acc, err := account.SelectLowestQuotaAccount(accounts, codexauth.Provider)
+	if err != nil {
+		return nil, err
+	}
+	current, _ := accounts.CurrentAccount(codexauth.Provider)
+	route := &codexSmokeAutoRoute{
+		AccountID: acc.ID,
+		Score:     account.QuotaRouteScore(accounts, acc, current),
+	}
+	if q, err := accounts.LoadQuota(acc.ID); err == nil && account.QuotaSnapshotFresh(q, time.Now()) {
+		route.Fresh = true
+		route.Primary = &q.PrimaryUsedPercent
+		route.Reason = fmt.Sprintf("lowest fresh cached primary quota %.1f%%", q.PrimaryUsedPercent)
+	} else {
+		route.Reason = "selected without fresh cached quota"
+	}
+	return route, nil
 }
 
 func formatPercent(value float64) string {
