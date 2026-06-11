@@ -30,6 +30,8 @@ type SessionOpts struct {
 	// PermissionMode is one of the protocol.Permission* constants; each
 	// adapter maps it onto its CLI's native flags, never onto config files.
 	PermissionMode string
+	Model          string // agent-native model id; empty = agent default
+	Effort         string // agent-native reasoning effort; empty = default
 }
 
 // Steerer is an optional session capability: inject guidance into the

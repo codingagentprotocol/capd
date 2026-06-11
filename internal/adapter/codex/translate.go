@@ -14,6 +14,9 @@ import (
 // thread.started.
 func buildSpec(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
 	args := []string{"exec", "--json", "--skip-git-repo-check"}
+	if opts.Model != "" {
+		args = append(args, "-m", opts.Model)
+	}
 	switch opts.PermissionMode {
 	case protocol.PermissionAcceptEdits, protocol.PermissionFull:
 		// workspace-write sandbox with automatic execution; codex exec has

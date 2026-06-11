@@ -40,6 +40,9 @@ var turnConfig = adapter.TurnConfig{BuildSpec: buildSpec, Translate: translate}
 
 func buildSpec(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
 	args := []string{"run", prompt, "--format", "json"}
+	if opts.Model != "" {
+		args = append(args, "-m", opts.Model)
+	}
 	if nativeID != "" {
 		args = append(args, "--session", nativeID)
 	}

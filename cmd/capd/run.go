@@ -26,6 +26,8 @@ func newRunCmd() *cobra.Command {
 		cwd        string
 		permission string
 		sessionID  string
+		model      string
+		effort     string
 		showJSON   bool
 	)
 
@@ -40,18 +42,27 @@ func newRunCmd() *cobra.Command {
   capd run --session s_ab12cd34 "now add a unit test"   # continue a session`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTask(cmd, agentID, cwd, permission, sessionID, args[0], showJSON)
+			return runTask(cmd, runOpts{agent: agentID, cwd: cwd, permission: permission,
+				session: sessionID, model: model, effort: effort, json: showJSON, prompt: args[0]})
 		},
 	}
 	cmd.Flags().StringVar(&agentID, "agent", "codex", "agent to drive")
 	cmd.Flags().StringVar(&cwd, "cwd", "", "working directory for the agent (default: current directory)")
 	cmd.Flags().StringVar(&permission, "permission", "", "permission mode: default | acceptEdits | full")
 	cmd.Flags().StringVar(&sessionID, "session", "", "continue an existing capd session instead of creating one")
+	cmd.Flags().StringVar(&model, "model", "", "agent-native model id (empty = agent default)")
+	cmd.Flags().StringVar(&effort, "effort", "", "reasoning effort where supported (codex: minimal..xhigh)")
 	cmd.Flags().BoolVar(&showJSON, "json", false, "print raw event JSON instead of formatted output")
 	return cmd
 }
 
-func runTask(cmd *cobra.Command, agentID, cwd, permission, sessionID, prompt string, showJSON bool) error {
+type runOpts struct {
+	agent, cwd, permission, session, model, effort, prompt string
+	json                                                   bool
+}
+
+func runTask(cmd *cobra.Command, o runOpts) error {
+	agentID, cwd, permission, sessionID, prompt, showJSON := o.agent, o.cwd, o.permission, o.session, o.prompt, o.json
 	ctx := cmd.Context()
 	out := cmd.OutOrStdout()
 
@@ -125,7 +136,7 @@ func runTask(cmd *cobra.Command, agentID, cwd, permission, sessionID, prompt str
 			cwd, _ = os.Getwd()
 		}
 		res, err := call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
-			AgentID: agentID, Cwd: cwd, PermissionMode: permission,
+			AgentID: agentID, Cwd: cwd, PermissionMode: permission, Model: o.model, Effort: o.effort,
 		})
 		if err != nil {
 			return err

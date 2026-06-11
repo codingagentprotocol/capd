@@ -118,6 +118,9 @@ func (as *appServer) startAppSession(ctx context.Context, opts adapter.SessionOp
 	approval, sandbox := permissionMapping(opts.PermissionMode)
 	params["approvalPolicy"] = approval
 	params["sandbox"] = sandbox
+	if opts.Model != "" {
+		params["model"] = opts.Model
+	}
 
 	var result struct {
 		Thread struct {
@@ -142,6 +145,7 @@ func (as *appServer) startAppSession(ctx context.Context, opts adapter.SessionOp
 		owner:    as,
 		client:   c,
 		threadID: result.Thread.ID,
+		effort:   opts.Effort,
 		events:   make(chan protocol.Event, 256),
 	}
 	as.register(s.threadID, s)
@@ -175,6 +179,7 @@ type appSession struct {
 	owner    *appServer
 	client   *rpcClient
 	threadID string
+	effort   string
 	events   chan protocol.Event
 
 	mu        sync.Mutex
@@ -205,10 +210,14 @@ func (s *appSession) Send(ctx context.Context, prompt string) error {
 			ID string `json:"id"`
 		} `json:"turn"`
 	}
-	err := s.client.Call(ctx, "turn/start", map[string]any{
+	turnParams := map[string]any{
 		"threadId": s.threadID,
 		"input":    []map[string]any{{"type": "text", "text": prompt}},
-	}, &result)
+	}
+	if s.effort != "" {
+		turnParams["effort"] = s.effort
+	}
+	err := s.client.Call(ctx, "turn/start", turnParams, &result)
 	if err != nil {
 		return err
 	}

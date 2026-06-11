@@ -83,6 +83,8 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 			Cwd:            params.Cwd,
 			Resume:         params.Resume,
 			PermissionMode: params.PermissionMode,
+			Model:          params.Model,
+			Effort:         params.Effort,
 		})
 		if err != nil {
 			return nil, asProtocolError(err)

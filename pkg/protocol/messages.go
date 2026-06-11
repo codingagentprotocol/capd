@@ -84,6 +84,12 @@ type SessionCreateParams struct {
 	// PermissionMode is one of the Permission* constants. Interactive
 	// per-action approval (approval.needed events) is a future milestone.
 	PermissionMode string `json:"permissionMode,omitempty"`
+	// Model is the agent-native model identifier (e.g. "gpt-5.3-codex",
+	// "claude-sonnet-4-6"). Empty uses the agent's default.
+	Model string `json:"model,omitempty"`
+	// Effort is the agent-native reasoning effort, where supported
+	// (codex: minimal/low/medium/high/xhigh).
+	Effort string `json:"effort,omitempty"`
 }
 
 type SessionCreateResult struct {
