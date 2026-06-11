@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account"
@@ -35,13 +36,15 @@ type Options struct {
 }
 
 type Server struct {
-	opts   Options
-	log    *slog.Logger
-	policy *policyEngine
+	opts       Options
+	log        *slog.Logger
+	policy     *policyEngine
+	accountMu  sync.Mutex
+	accountMux map[string]*sync.Mutex
 }
 
 func New(opts Options) *Server {
-	return &Server{opts: opts, log: opts.Log, policy: newPolicyEngine()}
+	return &Server{opts: opts, log: opts.Log, policy: newPolicyEngine(), accountMux: map[string]*sync.Mutex{}}
 }
 
 // Run serves until ctx is cancelled.

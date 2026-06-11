@@ -54,35 +54,9 @@ func (im Importer) ImportAuthJSON(ctx context.Context, path string) (ImportResul
 		return ImportResult{}, fmt.Errorf("parse codex auth json: %w", err)
 	}
 
-	fields := map[string]string{}
-	collectStrings(root, "", fields)
-
-	bundle := secret.Bundle{
-		Provider:     Provider,
-		AuthMode:     "oauth",
-		AccessToken:  first(fields, "access_token", "accessToken"),
-		RefreshToken: first(fields, "refresh_token", "refreshToken"),
-		IDToken:      first(fields, "id_token", "idToken"),
-		APIKey:       first(fields, "openai_api_key", "OPENAI_API_KEY", "api_key", "apiKey"),
-		AccountID:    first(fields, "account_id", "accountId", "chatgpt_account_id", "chatgptAccountId"),
-		Email:        first(fields, "email"),
-		RawAuthJSON:  append(json.RawMessage(nil), data...),
-	}
+	bundle := bundleFromAuthJSON(root, data)
 	if bundle.AccessToken == "" && bundle.RefreshToken == "" && bundle.IDToken == "" && bundle.APIKey == "" {
 		return ImportResult{}, fmt.Errorf("codex auth json did not contain a supported token field")
-	}
-	if bundle.APIKey != "" && bundle.AccessToken == "" && bundle.RefreshToken == "" && bundle.IDToken == "" {
-		bundle.AuthMode = "api_key"
-	}
-
-	if bundle.IDToken != "" {
-		claims := parseJWTClaims(bundle.IDToken)
-		if bundle.Email == "" {
-			bundle.Email = stringClaim(claims, "email")
-		}
-		if bundle.AccountID == "" {
-			bundle.AccountID = firstClaim(claims, "account_id", "accountId", "https://api.openai.com/auth/account_id")
-		}
 	}
 
 	id := accountID(bundle)
@@ -109,6 +83,38 @@ func (im Importer) ImportAuthJSON(ctx context.Context, path string) (ImportResul
 		}
 	}
 	return ImportResult{Account: acc, Secret: ref}, nil
+}
+
+func bundleFromAuthJSON(root any, data []byte) secret.Bundle {
+	fields := map[string]string{}
+	collectStrings(root, "", fields)
+	bundle := secret.Bundle{
+		Provider:     Provider,
+		AuthMode:     first(fields, "auth_mode", "authMode"),
+		AccessToken:  first(fields, "access_token", "accessToken"),
+		RefreshToken: first(fields, "refresh_token", "refreshToken"),
+		IDToken:      first(fields, "id_token", "idToken"),
+		APIKey:       first(fields, "openai_api_key", "OPENAI_API_KEY", "api_key", "apiKey"),
+		AccountID:    first(fields, "account_id", "accountId", "chatgpt_account_id", "chatgptAccountId"),
+		Email:        first(fields, "email"),
+		RawAuthJSON:  append(json.RawMessage(nil), data...),
+	}
+	if bundle.AuthMode == "" {
+		bundle.AuthMode = "oauth"
+	}
+	if bundle.APIKey != "" && bundle.AccessToken == "" && bundle.RefreshToken == "" && bundle.IDToken == "" {
+		bundle.AuthMode = "api_key"
+	}
+	if bundle.IDToken != "" {
+		claims := parseJWTClaims(bundle.IDToken)
+		if bundle.Email == "" {
+			bundle.Email = stringClaim(claims, "email")
+		}
+		if bundle.AccountID == "" {
+			bundle.AccountID = firstClaim(claims, "account_id", "accountId", "https://api.openai.com/auth/account_id")
+		}
+	}
+	return bundle
 }
 
 func collectStrings(v any, key string, out map[string]string) {

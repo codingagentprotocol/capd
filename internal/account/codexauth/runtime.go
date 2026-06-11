@@ -39,6 +39,10 @@ func (rp RuntimeProjector) Project(ctx context.Context, acc account.Account) (Ru
 		return RuntimeProfile{}, err
 	}
 	dir := filepath.Join(rp.Root, Provider, safeID(acc.ID))
+	authPath := filepath.Join(dir, "auth.json")
+	if synced, ok := rp.syncRefreshedAuth(ctx, ref, bundle, authPath); ok {
+		bundle = synced
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return RuntimeProfile{}, err
 	}
@@ -49,7 +53,7 @@ func (rp RuntimeProjector) Project(ctx context.Context, acc account.Account) (Ru
 			return RuntimeProfile{}, err
 		}
 	}
-	if err := writePrivate(filepath.Join(dir, "auth.json"), authJSON); err != nil {
+	if err := writePrivate(authPath, authJSON); err != nil {
 		return RuntimeProfile{}, err
 	}
 	marker, _ := json.MarshalIndent(map[string]any{
@@ -66,6 +70,63 @@ func (rp RuntimeProjector) Project(ctx context.Context, acc account.Account) (Ru
 		CodexHome: dir,
 		Env:       []string{"CODEX_HOME=" + dir},
 	}, nil
+}
+
+func (rp RuntimeProjector) syncRefreshedAuth(ctx context.Context, ref secret.Ref, current secret.Bundle, authPath string) (secret.Bundle, bool) {
+	projected, err := os.ReadFile(authPath)
+	if err != nil {
+		return secret.Bundle{}, false
+	}
+	if !authJSONNewer(projected, current.RawAuthJSON) {
+		return secret.Bundle{}, false
+	}
+	var root any
+	if err := json.Unmarshal(projected, &root); err != nil {
+		return secret.Bundle{}, false
+	}
+	bundle := bundleFromAuthJSON(root, projected)
+	if bundle.AccessToken == "" && bundle.RefreshToken == "" && bundle.IDToken == "" && bundle.APIKey == "" {
+		return secret.Bundle{}, false
+	}
+	if bundle.Email == "" {
+		bundle.Email = current.Email
+	}
+	if bundle.AccountID == "" {
+		bundle.AccountID = current.AccountID
+	}
+	if _, err := rp.Secrets.Put(ctx, ref.ID, bundle); err != nil {
+		return secret.Bundle{}, false
+	}
+	return bundle, true
+}
+
+func authJSONNewer(candidate, current json.RawMessage) bool {
+	candidateTime, ok := authLastRefresh(candidate)
+	if !ok {
+		return false
+	}
+	currentTime, ok := authLastRefresh(current)
+	if !ok {
+		return true
+	}
+	return candidateTime.After(currentTime)
+}
+
+func authLastRefresh(data []byte) (time.Time, bool) {
+	if len(data) == 0 {
+		return time.Time{}, false
+	}
+	var body struct {
+		LastRefresh string `json:"last_refresh"`
+	}
+	if err := json.Unmarshal(data, &body); err != nil || body.LastRefresh == "" {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339Nano, body.LastRefresh)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 func parseSecretRef(value string) (secret.Ref, error) {

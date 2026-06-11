@@ -80,6 +80,13 @@ The import stores token material in `~/.capd/secrets/codex/*.json` with mode
 refresh tokens, ID tokens, and API keys are intentionally kept out of the
 database, protocol responses, and logs.
 
+Codex-managed ChatGPT OAuth refresh is handled by Codex itself inside each
+projected `CODEX_HOME`. Before capd rewrites a projection, it checks whether
+the projected `auth.json` has a newer `last_refresh` than SecretStore and, if
+so, syncs that refreshed token bundle back into SecretStore. Projection is
+serialized per account so concurrent sessions cannot overwrite each other's
+refreshed token file.
+
 ### `capd sessions` — session inventory
 
 Table: session id, agent, state (`live`/`stored`/`ended`), created, project

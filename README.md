@@ -285,6 +285,10 @@ flowchart TB
 - `capd accounts codex import` copies token material into capd's secret
   store, records only metadata in SQLite, and never writes back to the user's
   original `~/.codex`.
+- Codex owns the ChatGPT OAuth refresh flow. When Codex refreshes a
+  capd-managed per-account `auth.json`, capd syncs the newer projected token
+  bundle back into SecretStore before the next projection, with per-account
+  runtime locking to avoid concurrent refresh-file races.
 - Secret storage defaults to the local file backend (`0600`). Set
   `CAPD_SECRET_BACKEND=native` to use the OS secret backend where implemented;
   macOS stores bundles in the user Keychain, Windows uses Credential Manager,

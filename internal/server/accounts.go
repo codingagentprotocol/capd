@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
@@ -31,6 +32,8 @@ func (s *Server) runtimeEnvForAccount(ctx context.Context, agentID, accountID st
 	if acc.Provider != codexauth.Provider {
 		return nil, protocol.NewError(protocol.CodeInvalidParams, "accountId %q is not a Codex account", accountID)
 	}
+	unlock := s.lockAccountRuntime(acc.ID)
+	defer unlock()
 	profile, err := codexauth.RuntimeProjector{
 		Root:    s.opts.RuntimeRoot,
 		Secrets: s.opts.Secrets,
@@ -42,6 +45,18 @@ func (s *Server) runtimeEnvForAccount(ctx context.Context, agentID, accountID st
 		return nil, protocol.NewError(protocol.CodeInternalError, "%v", fmt.Errorf("empty runtime environment for account %q", accountID))
 	}
 	return profile.Env, nil
+}
+
+func (s *Server) lockAccountRuntime(accountID string) func() {
+	s.accountMu.Lock()
+	mu := s.accountMux[accountID]
+	if mu == nil {
+		mu = &sync.Mutex{}
+		s.accountMux[accountID] = mu
+	}
+	s.accountMu.Unlock()
+	mu.Lock()
+	return mu.Unlock
 }
 
 func (s *Server) listAccounts(params protocol.AccountsListParams) (protocol.AccountsListResult, *protocol.Error) {
