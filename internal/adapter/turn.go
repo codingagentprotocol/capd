@@ -111,7 +111,9 @@ func (s *TurnSession) runTurn(ctx context.Context, nativeID string, msg Message)
 
 	spec := s.cfg.BuildSpec(s.opts, nativeID, msg)
 	if p, err := proc.Start(ctx, spec); err != nil {
-		emit(protocol.EventError, map[string]any{"message": err.Error()})
+		if ctx.Err() == nil { // a canceled turn is not an error
+			emit(protocol.EventError, map[string]any{"message": err.Error()})
+		}
 	} else {
 		// Turn CLIs take the prompt as an argument; an open stdin pipe
 		// makes some of them (codex) wait for more input.
@@ -135,7 +137,11 @@ func (s *TurnSession) runTurn(ctx context.Context, nativeID string, msg Message)
 		}
 	}
 	if done == nil {
-		done = &protocol.Event{Type: protocol.EventTaskDone, Data: map[string]any{"ok": false}}
+		data := map[string]any{"ok": false}
+		if ctx.Err() != nil {
+			data["canceled"] = true // canceled before the process even spawned
+		}
+		done = &protocol.Event{Type: protocol.EventTaskDone, Data: data}
 	}
 
 	s.mu.Lock()
