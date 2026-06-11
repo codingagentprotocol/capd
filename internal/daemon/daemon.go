@@ -11,7 +11,9 @@ import (
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/adapter/claudecode"
 	"github.com/codingagentprotocol/capd/internal/adapter/codex"
+	"github.com/codingagentprotocol/capd/internal/adapter/cursoragent"
 	"github.com/codingagentprotocol/capd/internal/adapter/gemini"
+	"github.com/codingagentprotocol/capd/internal/adapter/opencode"
 	"github.com/codingagentprotocol/capd/internal/config"
 	"github.com/codingagentprotocol/capd/internal/server"
 	"github.com/codingagentprotocol/capd/internal/session"
@@ -25,7 +27,9 @@ func Registry() *adapter.Registry {
 	return adapter.NewRegistry(
 		claudecode.New(),
 		codex.New(),
+		cursoragent.New(),
 		gemini.New(),
+		opencode.New(),
 	)
 }
 
