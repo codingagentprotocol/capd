@@ -514,6 +514,34 @@ func TestAgentsUsageWithCodexAccountProjectsRuntimeAndCachesQuota(t *testing.T) 
 	}
 }
 
+func TestAgentsUsageWithAutoAccountChoosesLowestCachedQuota(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	addCodexAccountForTest(t, accounts, "codex-high", "high@example.com")
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-high", PrimaryUsedPercent: 90}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var result protocol.AgentsUsageResult
+	c.mustResult(c.call(protocol.MethodAgentsUsage, protocol.AgentsUsageParams{
+		AgentID:   "codex",
+		AccountID: protocol.AccountAuto,
+	}), &result)
+	if result.AccountID != "codex-test" {
+		t.Fatalf("usage account = %q", result.AccountID)
+	}
+	q, err := accounts.LoadQuota("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Plan != "pro" || q.PrimaryUsedPercent != 25 {
+		t.Fatalf("quota = %+v", q)
+	}
+}
+
 func TestAgentsRouteWithAccountRequiresCodex(t *testing.T) {
 	ts, _, _ := newCodexAccountIntegration(t)
 	c := initialized(t, ts)

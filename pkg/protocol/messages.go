@@ -110,8 +110,9 @@ type AgentsUsageParams struct {
 // agent-specific (codex: rateLimits with usedPercent / resetsAt / planType);
 // capd passes it through rather than flattening dialects prematurely.
 type AgentsUsageResult struct {
-	AgentID string         `json:"agentId"`
-	Usage   map[string]any `json:"usage"`
+	AgentID   string         `json:"agentId"`
+	AccountID string         `json:"accountId,omitempty"`
+	Usage     map[string]any `json:"usage"`
 }
 
 type AccountsListParams struct {

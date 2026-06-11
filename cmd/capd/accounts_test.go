@@ -61,6 +61,51 @@ func TestCodexAccountsSmokeFailsWithoutAccounts(t *testing.T) {
 	}
 }
 
+func TestResolveUsageAccountAuto(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-low",
+		Provider:  codexauth.Provider,
+		AuthMode:  "chatgpt",
+		Email:     "low@example.com",
+		SecretRef: "file:codex-low",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 80}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", PrimaryUsedPercent: 5}); err != nil {
+		t.Fatal(err)
+	}
+	acc, err := resolveUsageAccount(accounts, "auto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acc.ID != "codex-low" {
+		t.Fatalf("account = %+v", acc)
+	}
+}
+
+func TestResolveUsageAccountAutoNoAccounts(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	home, err := daemon.Home()
+	if err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := account.OpenStore(filepath.Join(home, "accounts.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer accounts.Close()
+	_, err = resolveUsageAccount(accounts, "auto")
+	if err == nil || !strings.Contains(err.Error(), "no imported Codex accounts") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func seedCodexAccount(t *testing.T) (*account.Store, secret.Store) {
 	t.Helper()
 	home, err := daemon.Home()

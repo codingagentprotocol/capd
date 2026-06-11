@@ -63,7 +63,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 |---------|--------|
 | `capd agents list` | table: id, available/not installed, version, binary path |
 | `capd agents usage <id>` | account snapshot JSON: plan, 5h/weekly window used %, reset timestamps, credits (codex) |
-| `capd agents usage codex --account <id>` | usage for an imported Codex account; also refreshes the local quota snapshot |
+| `capd agents usage codex --account <id\|auto>` | usage for an imported Codex account, or the lowest cached-quota Codex account with `auto`; also refreshes the local quota snapshot |
 
 ### `capd accounts codex` — local Codex account control plane
 

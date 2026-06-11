@@ -99,3 +99,48 @@ func TestAccountStoreUnknownAccount(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestSelectLowestQuotaAccount(t *testing.T) {
+	st := newStore(t)
+	for _, acc := range []Account{
+		{ID: "high", Provider: "codex", AuthMode: "oauth"},
+		{ID: "low", Provider: "codex", AuthMode: "oauth"},
+		{ID: "missing", Provider: "codex", AuthMode: "oauth"},
+	} {
+		if err := st.UpsertAccount(acc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "high", PrimaryUsedPercent: 90}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "low", PrimaryUsedPercent: 10}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := SelectLowestQuotaAccount(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "low" {
+		t.Fatalf("selected = %+v", got)
+	}
+}
+
+func TestSelectLowestQuotaAccountTiePrefersCurrent(t *testing.T) {
+	st := newStore(t)
+	for _, id := range []string{"a", "b"} {
+		if err := st.UpsertAccount(Account{ID: id, Provider: "codex", AuthMode: "oauth"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SetCurrentAccount("codex", "b"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := SelectLowestQuotaAccount(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "b" {
+		t.Fatalf("selected = %+v", got)
+	}
+}

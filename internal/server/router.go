@@ -73,8 +73,16 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		}
 		var usage map[string]any
 		var err error
+		effectiveAccountID := params.AccountID
 		if params.AccountID != "" {
-			env, perr := s.runtimeEnvForAccount(ctx, params.AgentID, params.AccountID)
+			if params.AccountID == protocol.AccountAuto {
+				acc, _, perr := s.selectCodexAccountForRoute()
+				if perr != nil {
+					return nil, perr
+				}
+				effectiveAccountID = acc.ID
+			}
+			env, perr := s.runtimeEnvForAccount(ctx, params.AgentID, effectiveAccountID)
 			if perr != nil {
 				return nil, perr
 			}
@@ -89,10 +97,10 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if err != nil {
 			return nil, protocol.NewError(protocol.CodeAgentUnavailable, "usage: %v", err)
 		}
-		if params.AccountID != "" && s.opts.Accounts != nil {
-			_ = s.opts.Accounts.SaveQuota(account.QuotaFromUsage(params.AccountID, usage))
+		if effectiveAccountID != "" && s.opts.Accounts != nil {
+			_ = s.opts.Accounts.SaveQuota(account.QuotaFromUsage(effectiveAccountID, usage))
 		}
-		return protocol.AgentsUsageResult{AgentID: params.AgentID, Usage: usage}, nil
+		return protocol.AgentsUsageResult{AgentID: params.AgentID, AccountID: effectiveAccountID, Usage: usage}, nil
 
 	case protocol.MethodAccountsList:
 		var params protocol.AccountsListParams

@@ -140,6 +140,7 @@ capd sessions             # all sessions: live / stored / ended
 capd watch s_xxx          # re-join a long-running task: replay + follow
 capd agents usage codex   # plan, rate-limit windows, reset times
 capd agents usage codex --account codex-acct
+capd agents usage codex --account auto
 
 capd accounts codex import   # import local ~/.codex/auth.json into capd
 capd accounts codex list     # imported Codex accounts, current account marked

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"text/tabwriter"
@@ -13,6 +14,7 @@ import (
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/daemon"
 	"github.com/codingagentprotocol/capd/internal/discovery"
+	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
 func newAgentsCmd() *cobra.Command {
@@ -63,7 +65,7 @@ func newAgentsCmd() *cobra.Command {
 					return err
 				}
 				defer accounts.Close()
-				acc, err := accounts.LoadAccount(accountID)
+				acc, err := resolveUsageAccount(accounts, accountID)
 				if err != nil {
 					return err
 				}
@@ -80,7 +82,7 @@ func newAgentsCmd() *cobra.Command {
 				}
 				usage, err = accountUp.UsageFor(cmd.Context(), adapter.SessionOpts{Env: profile.Env})
 				if err == nil {
-					_ = accounts.SaveQuota(account.QuotaFromUsage(accountID, usage))
+					_ = accounts.SaveQuota(account.QuotaFromUsage(acc.ID, usage))
 				}
 			} else {
 				usage, err = up.Usage(cmd.Context())
@@ -96,4 +98,22 @@ func newAgentsCmd() *cobra.Command {
 	usageCmd.Flags().String("account", "", "imported account id for account-specific usage (currently Codex)")
 	cmd.AddCommand(usageCmd)
 	return cmd
+}
+
+func resolveUsageAccount(accounts *account.Store, accountID string) (account.Account, error) {
+	if accountID == protocol.AccountAuto {
+		acc, err := account.SelectLowestQuotaAccount(accounts, codexauth.Provider)
+		if errors.Is(err, account.ErrUnknownAccount) {
+			return account.Account{}, fmt.Errorf("no imported Codex accounts; run capd accounts codex import first")
+		}
+		return acc, err
+	}
+	acc, err := accounts.LoadAccount(accountID)
+	if err != nil {
+		return account.Account{}, err
+	}
+	if acc.Provider != codexauth.Provider {
+		return account.Account{}, fmt.Errorf("account %q is not a Codex account", accountID)
+	}
+	return acc, nil
 }

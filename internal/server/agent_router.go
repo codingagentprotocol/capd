@@ -112,38 +112,14 @@ func (s *Server) selectCodexAccountForRoute() (account.Account, string, *protoco
 	if s.opts.Accounts == nil {
 		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
 	}
-	accounts, err := s.opts.Accounts.ListAccounts(codexauth.Provider)
+	best, err := account.SelectLowestQuotaAccount(s.opts.Accounts, codexauth.Provider)
 	if err != nil {
-		return account.Account{}, "", protocol.NewError(protocol.CodeInternalError, "list accounts: %v", err)
-	}
-	if len(accounts) == 0 {
 		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
-	}
-	current, _ := s.opts.Accounts.CurrentAccount(codexauth.Provider)
-	best := accounts[0]
-	bestScore := quotaRouteScore(s.opts.Accounts, best, current)
-	for _, acc := range accounts[1:] {
-		score := quotaRouteScore(s.opts.Accounts, acc, current)
-		if score < bestScore || (score == bestScore && acc.ID == current) {
-			best = acc
-			bestScore = score
-		}
 	}
 	if q, err := s.opts.Accounts.LoadQuota(best.ID); err == nil {
 		return best, fmt.Sprintf("auto account %s primary %.0f%%", best.ID, q.PrimaryUsedPercent), nil
 	}
 	return best, fmt.Sprintf("auto account %s without cached quota", best.ID), nil
-}
-
-func quotaRouteScore(st *account.Store, acc account.Account, current string) float64 {
-	score := 75.0
-	if q, err := st.LoadQuota(acc.ID); err == nil {
-		score = q.PrimaryUsedPercent
-	}
-	if acc.ID == current {
-		score -= 0.01
-	}
-	return score
 }
 
 func routeRequirements(params protocol.AgentRouteParams) protocol.AgentCapabilities {

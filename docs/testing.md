@@ -48,6 +48,7 @@ For multi-account routing readiness:
 
 ```bash
 capd accounts codex smoke --quota --require-multiple
+capd agents usage codex --account auto
 ```
 
 The smoke command verifies imported account metadata, SecretStore readability,
