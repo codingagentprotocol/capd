@@ -156,6 +156,42 @@ func (st *Store) LoadEvents(sessionID string, fromSeq uint64, limit int) ([]prot
 	return out, rows.Err()
 }
 
+// LoadRecentEvents returns the newest limit events, still ordered by seq.
+func (st *Store) LoadRecentEvents(sessionID string, limit int) ([]protocol.Event, error) {
+	rows, err := st.db.Query(
+		"SELECT seq, type, data FROM (SELECT seq, type, data FROM events WHERE session_id = ? ORDER BY seq DESC LIMIT ?) ORDER BY seq",
+		sessionID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []protocol.Event
+	for rows.Next() {
+		ev := protocol.Event{SessionID: sessionID}
+		var typ, data string
+		if err := rows.Scan(&ev.Seq, &typ, &data); err != nil {
+			return nil, err
+		}
+		ev.Type = protocol.EventType(typ)
+		json.Unmarshal([]byte(data), &ev.Data)
+		out = append(out, ev)
+	}
+	return out, rows.Err()
+}
+
+// NextSeq returns the next sequence number after the stored event log.
+func (st *Store) NextSeq(sessionID string) (uint64, error) {
+	var next sql.NullInt64
+	if err := st.db.QueryRow("SELECT MAX(seq) + 1 FROM events WHERE session_id = ?", sessionID).Scan(&next); err != nil {
+		return 0, err
+	}
+	if !next.Valid {
+		return 0, nil
+	}
+	return uint64(next.Int64), nil
+}
+
 func boolInt(b bool) int {
 	if b {
 		return 1

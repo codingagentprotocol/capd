@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -55,8 +56,10 @@ func TestStoreRoundTrip(t *testing.T) {
 // fakeAdapter records the SessionOpts it was started with and emits a
 // scripted event stream.
 type fakeAdapter struct {
-	id       string
-	lastOpts adapter.SessionOpts
+	id          string
+	lastOpts    adapter.SessionOpts
+	lastSession *fakeSession
+	startCount  int
 }
 
 func (f *fakeAdapter) ID() string { return f.id }
@@ -65,19 +68,25 @@ func (f *fakeAdapter) Probe(context.Context) (protocol.AgentInfo, error) {
 }
 func (f *fakeAdapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
 	f.lastOpts = opts
-	return &fakeSession{events: make(chan protocol.Event, 8)}, nil
+	f.startCount++
+	f.lastSession = &fakeSession{events: make(chan protocol.Event, 8)}
+	return f.lastSession, nil
 }
 
-type fakeSession struct{ events chan protocol.Event }
+type fakeSession struct {
+	events chan protocol.Event
+	once   sync.Once
+}
 
 func (s *fakeSession) Send(_ context.Context, _ adapter.Message) error {
 	s.events <- protocol.Event{Type: protocol.EventSessionStarted, Data: map[string]any{"nativeSessionId": "native-7"}}
 	s.events <- protocol.Event{Type: protocol.EventTaskDone, Data: map[string]any{"ok": true}}
 	return nil
 }
-func (s *fakeSession) Cancel()                        {}
-func (s *fakeSession) Events() <-chan protocol.Event  { return s.events }
-func (s *fakeSession) Close() error                   { close(s.events); return nil }
+func (s *fakeSession) Cancel()                       {}
+func (s *fakeSession) Events() <-chan protocol.Event { return s.events }
+func (s *fakeSession) Close() error                  { s.crash(); return nil }
+func (s *fakeSession) crash()                        { s.once.Do(func() { close(s.events) }) }
 
 // TestReviveAfterRestart simulates a daemon restart: a second Manager over
 // the same store must revive the session with the stored native id and
@@ -124,6 +133,87 @@ func TestReviveAfterRestart(t *testing.T) {
 	first := <-ch
 	if first.Seq != 0 || first.Type != protocol.EventSessionStarted {
 		t.Fatalf("replayed first = %+v", first)
+	}
+}
+
+func TestReviveAfterLongHistoryKeepsNextSeq(t *testing.T) {
+	st, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	if err := st.SaveSession(SessionRecord{ID: "s_long", AgentID: "fake", Cwd: "/work", NativeID: "native-long"}); err != nil {
+		t.Fatal(err)
+	}
+	eventCount := maxBuffer + 7
+	for i := 0; i < eventCount; i++ {
+		if err := st.AppendEvent(protocol.Event{
+			SessionID: "s_long", Seq: uint64(i), Type: protocol.EventOutputText,
+			Data: map[string]any{"text": "x"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	fake := &fakeAdapter{id: "fake"}
+	m := NewManager(adapter.NewRegistry(fake), st)
+	revived, err := m.Resolve(context.Background(), "s_long")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.lastOpts.Resume != "native-long" {
+		t.Fatalf("revive Resume = %q, want native-long", fake.lastOpts.Resume)
+	}
+
+	ch, nextSeq, cancel := revived.Subscribe(0)
+	defer cancel()
+	if nextSeq != uint64(eventCount) {
+		t.Fatalf("nextSeq = %d, want %d", nextSeq, eventCount)
+	}
+	for i := 0; i < eventCount; i++ {
+		ev := <-ch
+		if ev.Seq != uint64(i) {
+			t.Fatalf("replay event %d seq = %d", i, ev.Seq)
+		}
+	}
+}
+
+func TestReviveAfterAdapterStreamEndsInSameManager(t *testing.T) {
+	st, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	fake := &fakeAdapter{id: "fake"}
+	m := NewManager(adapter.NewRegistry(fake), st)
+	sess, err := m.Create(context.Background(), "fake", adapter.SessionOpts{Cwd: "/work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.Send(context.Background(), adapter.Message{Prompt: "hello"}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool {
+		rec, err := st.LoadSession(sess.ID)
+		return err == nil && rec.NativeID == "native-7"
+	})
+
+	fake.lastSession.crash()
+	waitFor(t, func() bool {
+		list := m.List(10)
+		return len(list) == 1 && list[0].SessionID == sess.ID && list[0].State == protocol.SessionStateStored
+	})
+
+	if _, err := m.Resolve(context.Background(), sess.ID); err != nil {
+		t.Fatal(err)
+	}
+	if fake.startCount != 2 {
+		t.Fatalf("startCount = %d, want 2", fake.startCount)
+	}
+	if fake.lastOpts.Resume != "native-7" {
+		t.Fatalf("revive Resume = %q, want native-7", fake.lastOpts.Resume)
 	}
 }
 

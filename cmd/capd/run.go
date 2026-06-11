@@ -255,15 +255,34 @@ func printEvent(out interface{ Write([]byte) (int, error) }, params json.RawMess
 		fmt.Fprintf(out, "⚠ approval needed (%s): %s\n  reply via a client with approvalId=%s\n",
 			str("kind"), str("command"), str("approvalId"))
 	case protocol.EventError:
-		fmt.Fprintf(out, "✗ %s\n", str("message"))
+		msg := str("message")
+		if msg == "" {
+			msg = compactJSON(ev.Data)
+		}
+		fmt.Fprintf(out, "✗ %s\n", msg)
 	case protocol.EventTaskDone:
 		ok, _ := ev.Data["ok"].(bool)
 		if ok {
 			fmt.Fprintln(out, "✓ done")
 		} else {
-			fmt.Fprintln(out, "✗ turn failed or canceled")
+			switch {
+			case str("message") != "":
+				fmt.Fprintf(out, "✗ %s\n", str("message"))
+			case ev.Data["error"] != nil:
+				fmt.Fprintf(out, "✗ %s\n", compactJSON(ev.Data["error"]))
+			default:
+				fmt.Fprintln(out, "✗ turn failed or canceled")
+			}
 		}
 		return true
 	}
 	return false
+}
+
+func compactJSON(v any) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprint(v)
+	}
+	return string(data)
 }

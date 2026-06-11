@@ -26,6 +26,10 @@ func (s *Server) dispatch(ctx context.Context, client *wsClient, req *protocol.R
 }
 
 func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Request) (any, *protocol.Error) {
+	if !client.initialized && req.Method != protocol.MethodInitialize {
+		return nil, protocol.NewError(protocol.CodeInvalidRequest, "initialize must be the first request")
+	}
+
 	switch req.Method {
 	case protocol.MethodInitialize:
 		var params protocol.InitializeParams
@@ -39,6 +43,7 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		res := protocol.InitializeResult{ProtocolVersion: protocol.Version}
 		res.Daemon.Name = "capd"
 		res.Daemon.Version = s.opts.Version
+		client.initialized = true
 		return res, nil
 
 	case protocol.MethodAgentsList:

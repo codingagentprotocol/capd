@@ -45,8 +45,9 @@ type Session struct {
 	ID      string
 	AgentID string
 
-	inner adapter.Session
-	store *Store
+	manager *Manager
+	inner   adapter.Session
+	store   *Store
 
 	mu      sync.Mutex
 	buf     []protocol.Event // ring of the last maxBuffer events
@@ -69,6 +70,7 @@ func (m *Manager) Create(ctx context.Context, agentID string, opts adapter.Sessi
 	s := &Session{
 		ID:      newID(),
 		AgentID: agentID,
+		manager: m,
 		inner:   inner,
 		store:   m.store,
 		subs:    make(map[int]chan protocol.Event),
@@ -89,9 +91,18 @@ func (m *Manager) Create(ctx context.Context, agentID string, opts adapter.Sessi
 // conversation and reloads recent history into the replay buffer.
 func (m *Manager) Resolve(ctx context.Context, id string) (*Session, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if s, ok := m.sessions[id]; ok {
-		return s, nil
+		m.mu.Unlock()
+		if !s.isEnded() {
+			return s, nil
+		}
+		m.mu.Lock()
+		if cur, ok := m.sessions[id]; ok && cur == s {
+			delete(m.sessions, id)
+		}
+		m.mu.Unlock()
+	} else {
+		m.mu.Unlock()
 	}
 	if m.store == nil {
 		return nil, protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
@@ -116,15 +127,22 @@ func (m *Manager) Resolve(ctx context.Context, id string) (*Session, error) {
 	s := &Session{
 		ID:      rec.ID,
 		AgentID: rec.AgentID,
+		manager: m,
 		inner:   inner,
 		store:   m.store,
 		subs:    make(map[int]chan protocol.Event),
 	}
-	if history, err := m.store.LoadEvents(id, 0, maxBuffer); err == nil && len(history) > 0 {
+	if history, err := m.store.LoadRecentEvents(id, maxBuffer); err == nil && len(history) > 0 {
 		s.buf = history
-		s.nextSeq = history[len(history)-1].Seq + 1
 	}
+	if nextSeq, err := m.store.NextSeq(id); err == nil {
+		s.nextSeq = nextSeq
+	} else if len(s.buf) > 0 {
+		s.nextSeq = s.buf[len(s.buf)-1].Seq + 1
+	}
+	m.mu.Lock()
 	m.sessions[s.ID] = s
+	m.mu.Unlock()
 	go s.pump()
 	return s, nil
 }
@@ -226,6 +244,7 @@ func (m *Manager) Fork(ctx context.Context, id string) (*Session, error) {
 	s := &Session{
 		ID:      newID(),
 		AgentID: parent.AgentID,
+		manager: m,
 		inner:   inner,
 		store:   m.store,
 		subs:    make(map[int]chan protocol.Event),
@@ -251,12 +270,26 @@ func (m *Manager) Close(id string) error {
 	delete(m.sessions, id)
 	m.mu.Unlock()
 	if !ok {
-		return protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
+		if m.store == nil {
+			return protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
+		}
+		if _, err := m.store.LoadSession(id); err != nil {
+			return protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
+		}
+		return m.store.MarkEnded(id)
 	}
 	if m.store != nil {
 		m.store.MarkEnded(id)
 	}
 	return s.inner.Close()
+}
+
+func (m *Manager) forgetEnded(id string, s *Session) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if cur, ok := m.sessions[id]; ok && cur == s {
+		delete(m.sessions, id)
+	}
 }
 
 // pump stamps, persists, and stores every adapter event, then broadcasts it.
@@ -296,6 +329,9 @@ func (s *Session) pump() {
 		close(ch)
 		delete(s.subs, id)
 	}
+	if s.manager != nil {
+		s.manager.forgetEnded(s.ID, s)
+	}
 }
 
 // persist writes one event through to the store and keeps the stored
@@ -320,9 +356,29 @@ func (s *Session) Subscribe(fromSeq uint64) (<-chan protocol.Event, uint64, func
 	defer s.mu.Unlock()
 
 	var replay []protocol.Event
-	for _, ev := range s.buf {
-		if ev.Seq >= fromSeq {
-			replay = append(replay, ev)
+	if s.store != nil {
+		cursor := fromSeq
+		for cursor < s.nextSeq {
+			events, err := s.store.LoadEvents(s.ID, cursor, 5000)
+			if err != nil || len(events) == 0 {
+				break
+			}
+			for _, ev := range events {
+				if ev.Seq >= s.nextSeq {
+					break
+				}
+				replay = append(replay, ev)
+				cursor = ev.Seq + 1
+			}
+			if cursor <= events[len(events)-1].Seq {
+				break
+			}
+		}
+	} else {
+		for _, ev := range s.buf {
+			if ev.Seq >= fromSeq {
+				replay = append(replay, ev)
+			}
 		}
 	}
 	ch := make(chan protocol.Event, len(replay)+subBuffer)
@@ -347,6 +403,12 @@ func (s *Session) Subscribe(fromSeq uint64) (<-chan protocol.Event, uint64, func
 		}
 	}
 	return ch, s.nextSeq, cancel
+}
+
+func (s *Session) isEnded() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ended
 }
 
 // Send starts a new turn.

@@ -14,8 +14,9 @@ import (
 // wsClient is one connected client. All writes go through the out channel so
 // responses and streamed event notifications never interleave mid-frame.
 type wsClient struct {
-	conn *websocket.Conn
-	out  chan []byte
+	conn        *websocket.Conn
+	out         chan []byte
+	initialized bool
 }
 
 // enqueue never blocks: a client that stops reading loses messages rather

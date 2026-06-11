@@ -468,11 +468,18 @@ func (s *appSession) handleNotification(method string, params json.RawMessage) {
 		s.emit(protocol.EventTaskDone, data)
 
 	case "error":
-		var p struct {
-			Message string `json:"message"`
-		}
+		var p map[string]any
 		json.Unmarshal(params, &p)
-		s.emit(protocol.EventError, map[string]any{"message": p.Message})
+		msg, _ := p["message"].(string)
+		if msg == "" {
+			if errObj, ok := p["error"].(map[string]any); ok {
+				msg, _ = errObj["message"].(string)
+			}
+		}
+		if msg == "" {
+			msg = string(params)
+		}
+		s.emit(protocol.EventError, map[string]any{"message": msg})
 	}
 }
 

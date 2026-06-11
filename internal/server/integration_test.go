@@ -48,6 +48,8 @@ type scriptedSession struct {
 
 	mu       sync.Mutex
 	steered  []string
+	rolled   []int
+	reviewed []protocol.ReviewTarget
 	approved map[string]string
 	closed   bool
 }
@@ -83,6 +85,29 @@ func (s *scriptedSession) Approve(_ context.Context, id, decision string) error 
 		return fmt.Errorf("unknown approval %q", id)
 	}
 	s.events <- protocol.Event{Type: protocol.EventToolResult, Data: map[string]any{"output": "ran-after-" + decision}}
+	s.events <- protocol.Event{Type: protocol.EventTaskDone, Data: map[string]any{"ok": true}}
+	return nil
+}
+
+func (s *scriptedSession) Fork(context.Context) (adapter.Session, string, error) {
+	forked := &scriptedSession{events: make(chan protocol.Event, 64)}
+	forked.events <- protocol.Event{Type: protocol.EventSessionStarted, Data: map[string]any{"nativeSessionId": "fake-native-fork"}}
+	return forked, "fake-native-fork", nil
+}
+
+func (s *scriptedSession) Rollback(_ context.Context, numTurns int) error {
+	s.mu.Lock()
+	s.rolled = append(s.rolled, numTurns)
+	s.mu.Unlock()
+	s.events <- protocol.Event{Type: protocol.EventOutputText, Data: map[string]any{"text": fmt.Sprintf("rolled:%d", numTurns)}}
+	return nil
+}
+
+func (s *scriptedSession) Review(_ context.Context, target protocol.ReviewTarget) error {
+	s.mu.Lock()
+	s.reviewed = append(s.reviewed, target)
+	s.mu.Unlock()
+	s.events <- protocol.Event{Type: protocol.EventOutputText, Data: map[string]any{"text": "review:" + target.Type}}
 	s.events <- protocol.Event{Type: protocol.EventTaskDone, Data: map[string]any{"ok": true}}
 	return nil
 }
@@ -262,6 +287,15 @@ func TestVersionNegotiationRejected(t *testing.T) {
 	}
 }
 
+func TestRequiresInitializeFirst(t *testing.T) {
+	ts, _ := newIntegration(t)
+	c := dialClient(t, ts, "it-token")
+	resp := c.call(protocol.MethodSessionList, struct{}{})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidRequest {
+		t.Fatalf("want invalid request before initialize, got %+v", resp)
+	}
+}
+
 func TestUnknownMethodAndSession(t *testing.T) {
 	ts, _ := newIntegration(t)
 	c := initialized(t, ts)
@@ -302,6 +336,47 @@ func TestSessionLifecycleAndReplay(t *testing.T) {
 	if resp := c.call(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: created.SessionID, Prompt: "x"}); resp.Error == nil {
 		t.Fatalf("send after close should fail, got %+v", resp)
 	}
+}
+
+func TestForkRollbackAndReview(t *testing.T) {
+	ts, fake := newIntegration(t)
+	c := initialized(t, ts)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake"}), &created)
+
+	var forked protocol.SessionForkResult
+	c.mustResult(c.call(protocol.MethodSessionFork, protocol.SessionForkParams{SessionID: created.SessionID}), &forked)
+	if forked.SessionID == "" || forked.SessionID == created.SessionID {
+		t.Fatalf("forked session id = %q", forked.SessionID)
+	}
+	if ev := c.waitEvent(protocol.EventSessionStarted); ev.Data["nativeSessionId"] != "fake-native-fork" {
+		t.Fatalf("fork event = %+v", ev)
+	}
+
+	c.mustResult(c.call(protocol.MethodSessionRollback, protocol.SessionRollbackParams{SessionID: created.SessionID, NumTurns: 2}), nil)
+	fake.mu.Lock()
+	sess := fake.sessions[0]
+	fake.mu.Unlock()
+	sess.mu.Lock()
+	rolled := append([]int(nil), sess.rolled...)
+	sess.mu.Unlock()
+	if len(rolled) != 1 || rolled[0] != 2 {
+		t.Fatalf("rolled = %v", rolled)
+	}
+	if resp := c.call(protocol.MethodSessionRollback, protocol.SessionRollbackParams{SessionID: created.SessionID, NumTurns: 0}); resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams {
+		t.Fatalf("want invalid numTurns, got %+v", resp)
+	}
+
+	target := protocol.ReviewTarget{Type: "branch", Branch: "main"}
+	c.mustResult(c.call(protocol.MethodTaskReview, protocol.TaskReviewParams{SessionID: created.SessionID, Target: target}), nil)
+	sess.mu.Lock()
+	reviewed := append([]protocol.ReviewTarget(nil), sess.reviewed...)
+	sess.mu.Unlock()
+	if len(reviewed) != 1 || reviewed[0] != target {
+		t.Fatalf("reviewed = %+v", reviewed)
+	}
+	c.waitEvent(protocol.EventTaskDone)
 }
 
 func TestSteerAndCancel(t *testing.T) {
@@ -374,6 +449,33 @@ func TestSessionList(t *testing.T) {
 	c.mustResult(c.call(protocol.MethodSessionList, struct{}{}), &list)
 	if list.Sessions[0].State != protocol.SessionStateEnded {
 		t.Fatalf("state after close = %s, want ended", list.Sessions[0].State)
+	}
+}
+
+func TestCloseStoredSession(t *testing.T) {
+	ts, fake := newIntegration(t)
+	c := initialized(t, ts)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake"}), &created)
+	fake.mu.Lock()
+	sess := fake.sessions[0]
+	fake.mu.Unlock()
+	if err := sess.Close(); err != nil {
+		t.Fatal(err)
+	}
+	c.waitEvent(protocol.EventSessionEnded)
+
+	var list protocol.SessionListResult
+	c.mustResult(c.call(protocol.MethodSessionList, struct{}{}), &list)
+	if len(list.Sessions) != 1 || list.Sessions[0].State != protocol.SessionStateStored {
+		t.Fatalf("state after adapter close = %+v, want stored", list.Sessions)
+	}
+
+	c.mustResult(c.call(protocol.MethodSessionClose, protocol.SessionCloseParams{SessionID: created.SessionID}), nil)
+	c.mustResult(c.call(protocol.MethodSessionList, struct{}{}), &list)
+	if len(list.Sessions) != 1 || list.Sessions[0].State != protocol.SessionStateEnded {
+		t.Fatalf("state after stored close = %+v, want ended", list.Sessions)
 	}
 }
 
