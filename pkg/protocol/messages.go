@@ -6,6 +6,7 @@ const (
 	MethodAgentsList    = "agents/list"    // list discovered agent CLIs
 	MethodAgentsUsage   = "agents/usage"   // account usage / rate-limit data for one agent
 	MethodSessionCreate = "session/create" // start an agent session
+	MethodSessionList   = "session/list"   // enumerate sessions and their liveness
 	MethodSessionAttach = "session/attach" // re-attach to a live or persisted session
 	MethodSessionClose  = "session/close"
 	MethodTaskSend      = "task/send"      // send a prompt/task into a session
@@ -87,6 +88,25 @@ type SessionCreateParams struct {
 
 type SessionCreateResult struct {
 	SessionID string `json:"sessionId"`
+}
+
+// Session states reported by session/list.
+const (
+	SessionStateLive   = "live"   // running in this daemon right now
+	SessionStateStored = "stored" // persisted; revives automatically on attach/send
+	SessionStateEnded  = "ended"  // closed for good
+)
+
+type SessionInfo struct {
+	SessionID string `json:"sessionId"`
+	AgentID   string `json:"agentId"`
+	Cwd       string `json:"cwd,omitempty"`
+	State     string `json:"state"` // one of the SessionState* constants
+	CreatedAt int64  `json:"createdAt,omitempty"` // unix seconds
+}
+
+type SessionListResult struct {
+	Sessions []SessionInfo `json:"sessions"`
 }
 
 type SessionAttachParams struct {

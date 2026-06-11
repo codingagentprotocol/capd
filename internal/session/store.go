@@ -61,11 +61,34 @@ func (st *Store) Close() error { return st.db.Close() }
 
 // SessionRecord is the persisted identity of a session.
 type SessionRecord struct {
-	ID       string
-	AgentID  string
-	NativeID string
-	Cwd      string
-	Ended    bool
+	ID        string
+	AgentID   string
+	NativeID  string
+	Cwd       string
+	Ended     bool
+	CreatedAt int64
+}
+
+// LoadSessions returns the most recent sessions, newest first.
+func (st *Store) LoadSessions(limit int) ([]SessionRecord, error) {
+	rows, err := st.db.Query(
+		"SELECT id, agent_id, native_id, cwd, ended, created_at FROM sessions ORDER BY created_at DESC, id DESC LIMIT ?", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []SessionRecord
+	for rows.Next() {
+		var rec SessionRecord
+		var ended int
+		if err := rows.Scan(&rec.ID, &rec.AgentID, &rec.NativeID, &rec.Cwd, &ended, &rec.CreatedAt); err != nil {
+			return nil, err
+		}
+		rec.Ended = ended != 0
+		out = append(out, rec)
+	}
+	return out, rows.Err()
 }
 
 func (st *Store) SaveSession(rec SessionRecord) error {

@@ -352,3 +352,26 @@ func TestApprovalRoundTrip(t *testing.T) {
 		t.Fatal("bogus approval id should error")
 	}
 }
+
+func TestSessionList(t *testing.T) {
+	ts, _ := newIntegration(t)
+	c := initialized(t, ts)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake"}), &created)
+
+	var list protocol.SessionListResult
+	c.mustResult(c.call(protocol.MethodSessionList, struct{}{}), &list)
+	if len(list.Sessions) != 1 || list.Sessions[0].SessionID != created.SessionID {
+		t.Fatalf("list = %+v", list)
+	}
+	if list.Sessions[0].State != protocol.SessionStateLive {
+		t.Fatalf("state = %s, want live", list.Sessions[0].State)
+	}
+
+	c.mustResult(c.call(protocol.MethodSessionClose, protocol.SessionCloseParams{SessionID: created.SessionID}), nil)
+	c.mustResult(c.call(protocol.MethodSessionList, struct{}{}), &list)
+	if list.Sessions[0].State != protocol.SessionStateEnded {
+		t.Fatalf("state after close = %s, want ended", list.Sessions[0].State)
+	}
+}

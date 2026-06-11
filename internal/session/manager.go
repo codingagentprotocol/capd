@@ -129,6 +129,47 @@ func (m *Manager) Resolve(ctx context.Context, id string) (*Session, error) {
 	return s, nil
 }
 
+// List reports sessions and their liveness, newest first: live ones running
+// in this process, stored ones that revive on touch, and ended ones.
+func (m *Manager) List(limit int) []protocol.SessionInfo {
+	m.mu.Lock()
+	live := make(map[string]bool, len(m.sessions))
+	for id := range m.sessions {
+		live[id] = true
+	}
+	m.mu.Unlock()
+
+	var out []protocol.SessionInfo
+	seen := make(map[string]bool)
+	if m.store != nil {
+		if recs, err := m.store.LoadSessions(limit); err == nil {
+			for _, rec := range recs {
+				state := protocol.SessionStateStored
+				if rec.Ended {
+					state = protocol.SessionStateEnded
+				}
+				if live[rec.ID] {
+					state = protocol.SessionStateLive
+				}
+				out = append(out, protocol.SessionInfo{
+					SessionID: rec.ID, AgentID: rec.AgentID, Cwd: rec.Cwd,
+					State: state, CreatedAt: rec.CreatedAt,
+				})
+				seen[rec.ID] = true
+			}
+		}
+	}
+	// In-memory sessions missing from the store (store-less test setups).
+	m.mu.Lock()
+	for id, s := range m.sessions {
+		if !seen[id] {
+			out = append(out, protocol.SessionInfo{SessionID: id, AgentID: s.AgentID, State: protocol.SessionStateLive})
+		}
+	}
+	m.mu.Unlock()
+	return out
+}
+
 // Close terminates a session and removes it from the registry.
 func (m *Manager) Close(id string) error {
 	m.mu.Lock()
