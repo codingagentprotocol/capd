@@ -1,0 +1,38 @@
+version: 2
+project_name: capd
+
+builds:
+  - main: ./cmd/capd
+    binary: capd
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X github.com/codingagentprotocol/capd/internal/daemon.Version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files: [README.md, LICENSE*]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs", "^test", "^chore"]
+
+release:
+  draft: false
+  prerelease: auto
+
+# Homebrew tap lands when the repo goes public:
+# brews:
+#   - repository: {owner: codingagentprotocol, name: homebrew-tap}

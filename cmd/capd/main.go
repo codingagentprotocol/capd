@@ -21,7 +21,7 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newStartCmd(), newAgentsCmd(), newRunCmd(), newSessionsCmd())
+	root.AddCommand(newStartCmd(), newAgentsCmd(), newRunCmd(), newSessionsCmd(), newServiceCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "capd:", err)
