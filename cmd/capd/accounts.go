@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"text/tabwriter"
 
@@ -222,8 +223,88 @@ func newCodexAccountsCmd() *cobra.Command {
 	}
 	quotaCmd.Flags().String("base-url", "", "override ChatGPT base URL for testing")
 
-	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, quotaCmd)
+	smokeCmd := &cobra.Command{
+		Use:   "smoke",
+		Short: "Run a safe local smoke check for imported Codex accounts",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			refreshQuota, _ := cmd.Flags().GetBool("quota")
+			baseURL, _ := cmd.Flags().GetString("base-url")
+			requireMultiple, _ := cmd.Flags().GetBool("require-multiple")
+			accounts, secrets, err := openAccountDeps()
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			list, err := accounts.ListAccounts(codexauth.Provider)
+			if err != nil {
+				return err
+			}
+			if len(list) == 0 {
+				return fmt.Errorf("no imported Codex accounts; run capd accounts codex import first")
+			}
+			if requireMultiple && len(list) < 2 {
+				return fmt.Errorf("expected multiple Codex accounts, found %d", len(list))
+			}
+			home, err := daemon.Home()
+			if err != nil {
+				return err
+			}
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
+			fmt.Fprintln(w, "ID\tEMAIL\tPROJECTED_CODEX_HOME\tAUTH_MODE\tPRIMARY_USED")
+			for _, acc := range list {
+				ref, err := secret.ParseRef(acc.SecretRef)
+				if err != nil {
+					return fmt.Errorf("%s: parse secret ref: %w", acc.ID, err)
+				}
+				bundle, err := secrets.Get(cmd.Context(), ref)
+				if err != nil {
+					return fmt.Errorf("%s: load secret: %w", acc.ID, err)
+				}
+				profile, err := codexauth.RuntimeProjector{
+					Root:    filepath.Join(home, "runtimes"),
+					Secrets: secrets,
+				}.Project(cmd.Context(), acc)
+				if err != nil {
+					return fmt.Errorf("%s: project runtime: %w", acc.ID, err)
+				}
+				if err := verifyProjectedAuth(profile.CodexHome); err != nil {
+					return fmt.Errorf("%s: verify projection: %w", acc.ID, err)
+				}
+				used := "cached-missing"
+				if refreshQuota {
+					result, err := codexquota.Client{BaseURL: baseURL}.Usage(cmd.Context(), acc.ID, bundle)
+					if err != nil {
+						return fmt.Errorf("%s: refresh quota: %w", acc.ID, err)
+					}
+					if err := accounts.SaveQuota(result.Quota); err != nil {
+						return fmt.Errorf("%s: save quota: %w", acc.ID, err)
+					}
+					used = fmt.Sprintf("%.1f%%", result.Quota.PrimaryUsedPercent)
+				} else if q, err := accounts.LoadQuota(acc.ID); err == nil {
+					used = fmt.Sprintf("%.1f%%", q.PrimaryUsedPercent)
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", acc.ID, acc.Email, profile.CodexHome, acc.AuthMode, used)
+			}
+			return w.Flush()
+		},
+	}
+	smokeCmd.Flags().Bool("quota", false, "also refresh ChatGPT backend quota for every imported account")
+	smokeCmd.Flags().String("base-url", "", "override ChatGPT base URL for testing")
+	smokeCmd.Flags().Bool("require-multiple", false, "fail unless at least two Codex accounts are imported")
+
+	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, quotaCmd, smokeCmd)
 	return cmd
+}
+
+func verifyProjectedAuth(codexHome string) error {
+	info, err := os.Stat(filepath.Join(codexHome, "auth.json"))
+	if err != nil {
+		return err
+	}
+	if info.Mode().Perm() != 0o600 {
+		return fmt.Errorf("auth.json mode = %o, want 600", info.Mode().Perm())
+	}
+	return nil
 }
 
 func openAccountDeps() (*account.Store, secret.Store, error) {

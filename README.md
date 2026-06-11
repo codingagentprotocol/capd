@@ -279,6 +279,8 @@ flowchart TB
   `Proxy-Authorization`, …) are rejected at trust boundaries.
 - Header values are checked for newline injection; diagnostics use redacted
   headers so access tokens never land in logs or protocol events.
+- See [docs/testing.md](docs/testing.md) for standard regression, native
+  SecretStore, and live Codex account smoke commands.
 - Codex account support is split into a control plane and a runtime plane:
   SQLite stores account metadata and quota snapshots, while each runtime can
   use its own `CODEX_HOME` and app-server profile.
