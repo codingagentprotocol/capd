@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
@@ -47,5 +48,26 @@ func TestUsageSendsSafeHeadersAndParsesQuota(t *testing.T) {
 func TestUsageRequiresOAuthToken(t *testing.T) {
 	if _, err := (Client{}).Usage(context.Background(), "codex-test", secret.Bundle{}); err == nil {
 		t.Fatal("expected missing token error")
+	}
+}
+
+func TestUsageRejectsOversizedResponseWithoutLeakingToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"padding":"`))
+		w.Write([]byte(strings.Repeat("x", maxUsageResponseBytes)))
+		w.Write([]byte(`"}`))
+	}))
+	defer srv.Close()
+
+	_, err := Client{BaseURL: srv.URL}.Usage(context.Background(), "codex-test", secret.Bundle{
+		AuthMode:    "oauth",
+		AccessToken: "access-secret",
+		AccountID:   "acct_test",
+	})
+	if err == nil || !strings.Contains(err.Error(), "exceeded") {
+		t.Fatalf("err = %v", err)
+	}
+	if strings.Contains(err.Error(), "access-secret") {
+		t.Fatalf("error leaked token: %v", err)
 	}
 }

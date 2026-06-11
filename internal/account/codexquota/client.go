@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -13,7 +14,11 @@ import (
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 )
 
-const DefaultBaseURL = "https://chatgpt.com"
+const (
+	DefaultBaseURL          = "https://chatgpt.com"
+	maxUsageResponseBytes   = 1 << 20
+	usageResponseLimitSlack = 1
+)
 
 type Client struct {
 	BaseURL    string
@@ -61,8 +66,15 @@ func (c Client) Usage(ctx context.Context, accountID string, bundle secret.Bundl
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return Result{}, fmt.Errorf("codex quota: wham usage returned HTTP %d", resp.StatusCode)
 	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxUsageResponseBytes+usageResponseLimitSlack))
+	if err != nil {
+		return Result{}, err
+	}
+	if len(body) > maxUsageResponseBytes {
+		return Result{}, fmt.Errorf("codex quota: wham usage response exceeded %d bytes", maxUsageResponseBytes)
+	}
 	var usage map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&usage); err != nil {
+	if err := json.Unmarshal(body, &usage); err != nil {
 		return Result{}, err
 	}
 	return Result{
