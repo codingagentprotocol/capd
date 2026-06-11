@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"os"
 	"testing"
 
 	"github.com/codingagentprotocol/capd/internal/adapter"
@@ -82,5 +83,17 @@ func TestTranslateCommandExecution(t *testing.T) {
 	}
 	if events[1].data["output"] != "a.txt" || events[1].data["exitCode"] != 0 {
 		t.Fatalf("result data = %+v", events[1].data)
+	}
+}
+
+func TestBuildSpecResolvesCodexBinary(t *testing.T) {
+	spec := buildSpec(adapter.SessionOpts{Cwd: "/tmp"}, "", adapter.Message{Prompt: "hi"})
+	if spec.Bin == "" {
+		t.Fatal("empty binary path")
+	}
+	if spec.Bin != "codex" {
+		if info, err := os.Stat(spec.Bin); err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
+			t.Fatalf("resolved binary %q is not executable", spec.Bin)
+		}
 	}
 }

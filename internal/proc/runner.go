@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 )
 
@@ -75,3 +76,18 @@ func (p *Proc) CloseStdin() error { return p.stdin.Close() }
 
 // Wait blocks until the subprocess exits and releases its resources.
 func (p *Proc) Wait() error { return p.cmd.Wait() }
+
+// ResolveBin returns the executable that should be used for a CLI. PATH wins;
+// fallback absolute paths cover app-bundled CLIs on platforms where service
+// managers start with a sparse PATH.
+func ResolveBin(bin string, fallbacks ...string) string {
+	if path, err := exec.LookPath(bin); err == nil {
+		return path
+	}
+	for _, path := range fallbacks {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			return path
+		}
+	}
+	return bin
+}

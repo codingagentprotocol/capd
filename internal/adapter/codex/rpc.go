@@ -52,7 +52,7 @@ type rpcMessage struct {
 
 func startRPC(onNotify func(string, json.RawMessage), onServerReq func(json.RawMessage, string, json.RawMessage), onDead func()) (*rpcClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	p, err := proc.Start(ctx, proc.Spec{Bin: "codex", Args: []string{"app-server"}})
+	p, err := proc.Start(ctx, proc.Spec{Bin: binPath(), Args: []string{"app-server"}})
 	if err != nil {
 		cancel()
 		return nil, err
