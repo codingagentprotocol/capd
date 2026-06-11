@@ -100,6 +100,11 @@ capd start                                  # foreground
 capd service install && capd service start  # persistent
 ```
 
+The local web console is served by the daemon at
+`http://127.0.0.1:7777/console/`. Pass the daemon token from `~/.capd/token`
+as `?token=...` when opening it in a browser, or print a ready-to-open local
+URL with `capd token --url`.
+
 ## Quick start
 
 ```bash

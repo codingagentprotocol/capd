@@ -23,6 +23,10 @@ environment variable and file. For a guided tour, read the [README](../README.md
 | `--port` | `7777` | listen port |
 | `--origins` | _(empty)_ | extra browser origins allowed for WebSocket, comma-separated or repeated; localhost is always allowed |
 
+The daemon also serves the local web console at `/console/`; it still connects
+back to `/ws` with the daemon token, so opening the page does not bypass CAP
+authentication.
+
 ### `capd run <prompt>` — send one task and stream it
 
 | Flag | Default | Meaning |

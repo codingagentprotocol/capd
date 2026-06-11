@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>CAP Web Client</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background:#0d1117; color:#c9d1d9; max-width:860px; margin:24px auto; padding:0 16px; }
+  h1 { font-size:18px; } h1 .v { color:#3fb950; font-size:12px; margin-left:8px; }
+  #bar { display:flex; gap:8px; margin:12px 0; }
+  select, input, button { background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:6px 10px; font:inherit; }
+  input#prompt { flex:1; }
+  button { cursor:pointer; } button:hover { border-color:#58a6ff; }
+  #log { background:#010409; border:1px solid #30363d; border-radius:8px; padding:12px; height:420px; overflow-y:auto; white-space:pre-wrap; }
+  .ev-text { color:#e6edf3; } .ev-tool { color:#d29922; } .ev-out { color:#8b949e; }
+  .ev-done { color:#3fb950; } .ev-err { color:#f85149; } .ev-sys { color:#58a6ff; }
+  .approval { background:#1c1207; border:1px solid #d29922; border-radius:6px; padding:8px; margin:6px 0; }
+  .approval button { margin-right:6px; }
+  #status { font-size:12px; color:#8b949e; }
+</style>
+</head>
+<body>
+<h1>CAP Web Client <span class="v" id="daemon"></span></h1>
+<div id="status">connecting…</div>
+<div id="bar">
+  <select id="agent"></select>
+  <select id="account"><option value="">默认账号</option></select>
+  <input id="cwd" list="cwds" placeholder="项目目录（留空=主目录）" style="flex:0 0 260px" />
+  <datalist id="cwds"></datalist>
+  <input id="prompt" placeholder="让 agent 干点什么…" />
+  <button id="send">发送</button>
+  <button id="cancel">中断</button>
+</div>
+<div id="log"></div>
+
+<script>
+// token 来自 ~/.capd/token，通过 ?token=... 传入（演示用；产品里应走配对流程）
+const params = new URLSearchParams(location.search);
+const TOKEN = params.get("token") || "";
+const CAPD = params.get("capd") || "127.0.0.1:7777";
+
+const log = document.getElementById("log");
+const statusEl = document.getElementById("status");
+let ws, nextId = 0, pending = {}, sessionId = null;
+
+function line(cls, text) {
+  const el = document.createElement("div");
+  el.className = cls; el.textContent = text;
+  log.appendChild(el); log.scrollTop = log.scrollHeight;
+  return el;
+}
+
+function call(method, p) {
+  return new Promise((resolve, reject) => {
+    const id = ++nextId;
+    pending[id] = { resolve, reject };
+    ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params: p }));
+  });
+}
+
+function onEvent(ev) {
+  const d = ev.data || {};
+  switch (ev.type) {
+    case "session.started": line("ev-sys", `· 会话引擎就绪 (${d.nativeSessionId || ""})`); break;
+    case "output.text":
+      if (d.delta) { appendDelta(d.text); }
+      else if (!d.final) { line("ev-text", d.text); }
+      else { closeDelta(); }
+      break;
+    case "tool.use": line("ev-tool", `⏵ ${d.command || d.kind}`); break;
+    case "tool.result": if (!d.delta && d.output) line("ev-out", String(d.output).trimEnd()); break;
+    case "approval.needed": renderApproval(d); break;
+    case "usage.updated": break;
+    case "task.done": closeDelta(); line(d.ok ? "ev-done" : "ev-err", d.ok ? "✓ 完成" : "✗ 失败/取消"); break;
+    case "error": line("ev-err", `✗ ${d.message}`); break;
+  }
+}
+
+let deltaEl = null;
+function appendDelta(t) {
+  if (!deltaEl) deltaEl = line("ev-text", "");
+  deltaEl.textContent += t; log.scrollTop = log.scrollHeight;
+}
+function closeDelta() { deltaEl = null; }
+
+function renderApproval(d) {
+  const box = document.createElement("div");
+  box.className = "approval";
+  box.textContent = `⚠ 请求批准 [${d.kind}] ${d.command || ""} `;
+  for (const [label, decision] of [["允许", "approve"], ["总是允许", "approveAlways"], ["拒绝", "deny"]]) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.onclick = async () => {
+      await call("approval/reply", { sessionId, approvalId: d.approvalId, decision });
+      box.textContent = `⚠ ${d.command || d.kind} → ${label}`;
+    };
+    box.appendChild(b);
+  }
+  log.appendChild(box); log.scrollTop = log.scrollHeight;
+}
+
+async function connect() {
+  ws = new WebSocket(`ws://${CAPD}/ws?token=${TOKEN}`);
+  ws.onmessage = (m) => {
+    const msg = JSON.parse(m.data);
+    if (msg.method === "event") { onEvent(msg.params); return; }
+    const p = pending[msg.id];
+    if (p) { delete pending[msg.id]; msg.error ? p.reject(msg.error) : p.resolve(msg.result); }
+  };
+  ws.onclose = () => { statusEl.textContent = "连接断开"; };
+  await new Promise(r => ws.onopen = r);
+
+  const init = await call("initialize", { protocolVersion: "0.1", client: { name: "cap-web-demo" } });
+  document.getElementById("daemon").textContent = `${init.daemon.name} ${init.daemon.version} · protocol ${init.protocolVersion}`;
+  statusEl.textContent = "已连接";
+
+  const { agents } = await call("agents/list", {});
+  const sel = document.getElementById("agent");
+  for (const a of agents.filter(a => a.available)) {
+    const o = document.createElement("option");
+    o.value = a.id; o.textContent = `${a.id} (${a.version || "?"})`;
+    sel.appendChild(o);
+  }
+
+  try {
+    const { accounts, currentAccountId } = await call("accounts/list", { provider: "codex" });
+    const accountSel = document.getElementById("account");
+    for (const a of accounts || []) {
+      const o = document.createElement("option");
+      o.value = a.id;
+      const quota = a.quota && a.quota.primaryUsedPercent ? ` · ${a.quota.primaryUsedPercent}%` : "";
+      o.textContent = `${a.email || a.id}${a.plan ? " · " + a.plan : ""}${quota}`;
+      if (a.id === currentAccountId) o.selected = true;
+      accountSel.appendChild(o);
+    }
+  } catch (e) {
+    line("ev-sys", "· accounts/list 不可用");
+  }
+
+  // 最近用过的项目目录 → 输入框的自动补全
+  const { sessions } = await call("session/list", {});
+  const dirs = [...new Set(sessions.map(s => s.cwd).filter(Boolean))];
+  const dl = document.getElementById("cwds");
+  for (const d of dirs) {
+    const o = document.createElement("option");
+    o.value = d; dl.appendChild(o);
+  }
+}
+
+document.getElementById("send").onclick = async () => {
+  const prompt = document.getElementById("prompt").value.trim();
+  if (!prompt) return;
+  document.getElementById("prompt").value = "";
+  if (!sessionId) {
+    const cwd = document.getElementById("cwd").value.trim();
+    const accountId = document.getElementById("account").value;
+    const create = { agentId: document.getElementById("agent").value, cwd };
+    if (accountId) create.accountId = accountId;
+    const res = await call("session/create", create);
+    sessionId = res.sessionId;
+    line("ev-sys", `· 新会话 ${sessionId} @ ${cwd || "~"}`);
+  }
+  line("ev-sys", `» ${prompt}`);
+  await call("task/send", { sessionId, prompt });
+};
+document.getElementById("cancel").onclick = () => sessionId && call("task/cancel", { sessionId });
+document.getElementById("prompt").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("send").click(); });
+
+connect().catch(e => { statusEl.textContent = "连接失败: " + (e.message || JSON.stringify(e)); });
+</script>
+</body>
+</html>

@@ -47,6 +47,10 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprintln(w, "ok")
 	})
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/console/", http.StatusFound)
+	})
+	mux.HandleFunc("GET /console/", s.handleConsole)
 	mux.HandleFunc("GET /ws", s.handleWS)
 
 	addr := net.JoinHostPort(s.opts.Host, fmt.Sprint(s.opts.Port))
@@ -60,6 +64,7 @@ func (s *Server) Run(ctx context.Context) error {
 	errCh := make(chan error, 1)
 	go func() {
 		s.log.Info("capd listening", "addr", "ws://"+addr+"/ws", "version", s.opts.Version)
+		s.log.Info("capd console", "addr", "http://"+addr+"/console/")
 		errCh <- httpSrv.ListenAndServe()
 	}()
 

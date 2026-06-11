@@ -44,6 +44,25 @@ func TestWSRejectsMissingToken(t *testing.T) {
 	}
 }
 
+func TestConsoleServedWithSecurityHeaders(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/console/", nil)
+	rec := httptest.NewRecorder()
+	s.handleConsole(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("nosniff = %q", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("cache = %q", got)
+	}
+	if !strings.Contains(rec.Body.String(), "accounts/list") {
+		t.Fatal("console HTML missing accounts/list integration")
+	}
+}
+
 func TestInitializeHandshake(t *testing.T) {
 	_, ts := newTestServer(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
