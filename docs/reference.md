@@ -98,7 +98,7 @@ boot, restarts on crash, never root.
 | `CAPD_HOST` | same as `--host` |
 | `CAPD_PORT` | same as `--port` |
 | `CAPD_ORIGINS` | comma-separated extra WebSocket origins |
-| `CAPD_SECRET_BACKEND` | secret storage backend; default `file`. `native` uses the OS secret backend where implemented; macOS stores bundles in Keychain, Windows uses Credential Manager, and unsupported platforms fail closed |
+| `CAPD_SECRET_BACKEND` | secret storage backend; default `file`. `native` uses the OS secret backend where implemented; macOS stores bundles in Keychain, Windows uses Credential Manager, Linux uses Secret Service via `secret-tool`, and unsupported platforms fail closed |
 
 Precedence: flags > environment > defaults.
 
