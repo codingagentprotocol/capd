@@ -516,6 +516,11 @@ func TestSessionCreateWithCodexAccountProjectsRuntime(t *testing.T) {
 	if accountID != "codex-test" {
 		t.Fatalf("session account = %q", accountID)
 	}
+	var list protocol.SessionListResult
+	c.mustResult(c.call(protocol.MethodSessionList, struct{}{}), &list)
+	if len(list.Sessions) != 1 || list.Sessions[0].AccountID != "codex-test" {
+		t.Fatalf("sessions = %+v", list.Sessions)
+	}
 }
 
 func TestAgentsUsageWithCodexAccountProjectsRuntimeAndCachesQuota(t *testing.T) {

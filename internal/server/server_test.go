@@ -82,6 +82,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"session/attach",
 		"session/create",
 		"hasNumber(a.quota.primaryUsedPercent)",
+		"s.accountId",
 		"button.disabled = true",
 		`searchParams.delete("token")`,
 		`searchParams.set("token", TOKEN)`,

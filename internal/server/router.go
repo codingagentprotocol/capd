@@ -187,7 +187,7 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		return protocol.SessionCreateResult{SessionID: sess.ID}, nil
 
 	case protocol.MethodSessionList:
-		return protocol.SessionListResult{Sessions: s.opts.Sessions.List(100)}, nil
+		return s.listSessions()
 
 	case protocol.MethodSessionAttach:
 		var params protocol.SessionAttachParams

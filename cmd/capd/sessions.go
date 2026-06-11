@@ -80,13 +80,13 @@ func newSessionsCmd() *cobra.Command {
 			json.Unmarshal(raw, &result)
 
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "SESSION\tAGENT\tSTATE\tCREATED\tCWD")
+			fmt.Fprintln(w, "SESSION\tAGENT\tACCOUNT\tSTATE\tCREATED\tCWD")
 			for _, s := range result.Sessions {
 				created := ""
 				if s.CreatedAt > 0 {
 					created = time.Unix(s.CreatedAt, 0).Format("01-02 15:04")
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", s.SessionID, s.AgentID, s.State, created, s.Cwd)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", s.SessionID, s.AgentID, s.AccountID, s.State, created, s.Cwd)
 			}
 			return w.Flush()
 		},

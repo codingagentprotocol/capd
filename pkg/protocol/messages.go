@@ -190,6 +190,7 @@ const (
 type SessionInfo struct {
 	SessionID string `json:"sessionId"`
 	AgentID   string `json:"agentId"`
+	AccountID string `json:"accountId,omitempty"`
 	Cwd       string `json:"cwd,omitempty"`
 	State     string `json:"state"`               // one of the SessionState* constants
 	CreatedAt int64  `json:"createdAt,omitempty"` // unix seconds

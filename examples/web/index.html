@@ -262,7 +262,7 @@ function renderSessions(sessions, emptyText = "暂无会话") {
     id.textContent = s.sessionId;
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.textContent = `${s.agentId} · ${s.state}${s.cwd ? " · " + s.cwd : ""}`;
+    meta.textContent = `${s.agentId}${s.accountId ? " · " + s.accountId : ""} · ${s.state}${s.cwd ? " · " + s.cwd : ""}`;
     const attach = document.createElement("button");
     attach.textContent = "接管";
     attach.disabled = s.state === "ended";

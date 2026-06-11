@@ -198,8 +198,10 @@ attachment paths, non-HTTP(S) attachment URLs, and more than 16 attachments.
 
 ### `session/list`
 
-No params. → `{"sessions": [{"sessionId", "agentId", "cwd", "state", "createdAt"}]}`
-with `state` ∈ `live` | `stored` | `ended`.
+No params. → `{"sessions": [{"sessionId", "agentId", "accountId", "cwd", "state", "createdAt"}]}`
+with `state` ∈ `live` | `stored` | `ended`. `accountId` is present only for
+sessions created with an imported account; it is a safe local account id, never
+token material.
 
 ### `session/attach`
 
