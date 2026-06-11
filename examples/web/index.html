@@ -24,6 +24,7 @@
 <div id="status">connecting…</div>
 <div id="bar">
   <select id="agent"></select>
+  <select id="account"><option value="">默认账号</option></select>
   <input id="cwd" list="cwds" placeholder="项目目录（留空=主目录）" style="flex:0 0 260px" />
   <datalist id="cwds"></datalist>
   <input id="prompt" placeholder="让 agent 干点什么…" />
@@ -121,6 +122,21 @@ async function connect() {
     sel.appendChild(o);
   }
 
+  try {
+    const { accounts, currentAccountId } = await call("accounts/list", { provider: "codex" });
+    const accountSel = document.getElementById("account");
+    for (const a of accounts || []) {
+      const o = document.createElement("option");
+      o.value = a.id;
+      const quota = a.quota && a.quota.primaryUsedPercent ? ` · ${a.quota.primaryUsedPercent}%` : "";
+      o.textContent = `${a.email || a.id}${a.plan ? " · " + a.plan : ""}${quota}`;
+      if (a.id === currentAccountId) o.selected = true;
+      accountSel.appendChild(o);
+    }
+  } catch (e) {
+    line("ev-sys", "· accounts/list 不可用");
+  }
+
   // 最近用过的项目目录 → 输入框的自动补全
   const { sessions } = await call("session/list", {});
   const dirs = [...new Set(sessions.map(s => s.cwd).filter(Boolean))];
@@ -137,7 +153,10 @@ document.getElementById("send").onclick = async () => {
   document.getElementById("prompt").value = "";
   if (!sessionId) {
     const cwd = document.getElementById("cwd").value.trim();
-    const res = await call("session/create", { agentId: document.getElementById("agent").value, cwd });
+    const accountId = document.getElementById("account").value;
+    const create = { agentId: document.getElementById("agent").value, cwd };
+    if (accountId) create.accountId = accountId;
+    const res = await call("session/create", create);
     sessionId = res.sessionId;
     line("ev-sys", `· 新会话 ${sessionId} @ ${cwd || "~"}`);
   }

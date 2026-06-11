@@ -34,6 +34,7 @@ type scriptedAdapter struct {
 	mu       sync.Mutex
 	id       string
 	sessions []*scriptedSession
+	usageEnv []string
 }
 
 func (f *scriptedAdapter) ID() string {
@@ -68,6 +69,22 @@ func (f *scriptedAdapter) StartSession(_ context.Context, opts adapter.SessionOp
 	return s, nil
 }
 
+func (f *scriptedAdapter) Usage(context.Context) (map[string]any, error) {
+	return map[string]any{"planType": "default"}, nil
+}
+
+func (f *scriptedAdapter) UsageFor(_ context.Context, opts adapter.SessionOpts) (map[string]any, error) {
+	f.mu.Lock()
+	f.usageEnv = append([]string(nil), opts.Env...)
+	f.mu.Unlock()
+	return map[string]any{
+		"planType": "pro",
+		"rateLimits": map[string]any{
+			"primary": map[string]any{"usedPercent": 25.0, "resetsAt": "2026-06-11T20:00:00Z"},
+		},
+	}, nil
+}
+
 func (f *scriptedAdapter) lastOpts() adapter.SessionOpts {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -75,6 +92,12 @@ func (f *scriptedAdapter) lastOpts() adapter.SessionOpts {
 		return adapter.SessionOpts{}
 	}
 	return f.sessions[len(f.sessions)-1].opts
+}
+
+func (f *scriptedAdapter) lastUsageEnv() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.usageEnv...)
 }
 
 type scriptedSession struct {
@@ -326,6 +349,9 @@ func newCodexAccountIntegration(t *testing.T) (*httptest.Server, *scriptedAdapte
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if err := accounts.SetCurrentAccount(codexauth.Provider, "codex-test"); err != nil {
+		t.Fatal(err)
+	}
 
 	s := New(Options{
 		Token: "it-token", Version: "it",
@@ -453,6 +479,77 @@ func TestSessionCreateWithCodexAccountProjectsRuntime(t *testing.T) {
 	}
 	if accountID != "codex-test" {
 		t.Fatalf("session account = %q", accountID)
+	}
+}
+
+func TestAgentsUsageWithCodexAccountProjectsRuntimeAndCachesQuota(t *testing.T) {
+	ts, fake, accounts := newCodexAccountIntegration(t)
+	c := initialized(t, ts)
+
+	var result protocol.AgentsUsageResult
+	c.mustResult(c.call(protocol.MethodAgentsUsage, protocol.AgentsUsageParams{
+		AgentID:   "codex",
+		AccountID: "codex-test",
+	}), &result)
+	if result.Usage["planType"] != "pro" {
+		t.Fatalf("usage = %+v", result.Usage)
+	}
+	env := fake.lastUsageEnv()
+	if len(env) != 1 || !strings.HasPrefix(env[0], "CODEX_HOME=") {
+		t.Fatalf("usage env = %#v", env)
+	}
+	q, err := accounts.LoadQuota("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Plan != "pro" || q.PrimaryUsedPercent != 25 {
+		t.Fatalf("quota = %+v", q)
+	}
+}
+
+func TestAgentsRouteWithAccountRequiresCodex(t *testing.T) {
+	ts, _, _ := newCodexAccountIntegration(t)
+	c := initialized(t, ts)
+
+	var routed protocol.AgentRouteResult
+	c.mustResult(c.call(protocol.MethodAgentsRoute, protocol.AgentRouteParams{
+		AccountID: "codex-test",
+	}), &routed)
+	if routed.Agent.ID != "codex" || !strings.Contains(routed.Reason, "accountId") {
+		t.Fatalf("route = %+v", routed)
+	}
+}
+
+func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	if err := accounts.SaveQuota(account.QuotaSnapshot{
+		AccountID:          "codex-test",
+		Plan:               "pro",
+		PrimaryUsedPercent: 25,
+		PrimaryResetAt:     "2026-06-11T20:00:00Z",
+		RawJSON:            `{"token":"must-not-return"}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var result protocol.AccountsListResult
+	c.mustResult(c.call(protocol.MethodAccountsList, protocol.AccountsListParams{
+		Provider: codexauth.Provider,
+	}), &result)
+	if result.CurrentAccountID != "codex-test" || len(result.Accounts) != 1 {
+		t.Fatalf("accounts = %+v", result)
+	}
+	acc := result.Accounts[0]
+	if acc.ID != "codex-test" || acc.Email != "codex@example.com" || acc.Quota == nil {
+		t.Fatalf("account = %+v", acc)
+	}
+	if acc.Quota.PrimaryUsedPercent != 25 || acc.Quota.PrimaryResetAt == "" {
+		t.Fatalf("quota = %+v", acc.Quota)
+	}
+	data, _ := json.Marshal(result)
+	if strings.Contains(string(data), "test-token") || strings.Contains(string(data), "secret") || strings.Contains(string(data), "must-not-return") {
+		t.Fatalf("accounts/list leaked sensitive data: %s", data)
 	}
 }
 

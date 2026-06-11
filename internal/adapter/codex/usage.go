@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/proc"
 )
 
@@ -15,16 +16,20 @@ import (
 // through `codex app-server`: a short-lived stdio JSON-RPC conversation —
 // initialize, then account/rateLimits/read.
 func (a *Adapter) Usage(ctx context.Context) (map[string]any, error) {
+	return a.UsageFor(ctx, adapter.SessionOpts{})
+}
+
+func (a *Adapter) UsageFor(ctx context.Context, opts adapter.SessionOpts) (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	p, err := proc.Start(ctx, proc.Spec{Bin: "codex", Args: []string{"app-server"}})
+	p, err := proc.Start(ctx, proc.Spec{Bin: binPath(), Args: []string{"app-server"}, Env: opts.Env})
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
-		cancel()     // kills the app-server
-		go p.Wait()  // reap it
+		cancel()    // kills the app-server
+		go p.Wait() // reap it
 	}()
 
 	if err := p.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"capd","title":"capd","version":"0.1"}}}` + "\n")); err != nil {

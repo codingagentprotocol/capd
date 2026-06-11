@@ -59,6 +59,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 |---------|--------|
 | `capd agents list` | table: id, available/not installed, version, binary path |
 | `capd agents usage <id>` | account snapshot JSON: plan, 5h/weekly window used %, reset timestamps, credits (codex) |
+| `capd agents usage codex --account <id>` | usage for an imported Codex account; also refreshes the local quota snapshot |
 
 ### `capd accounts codex` — local Codex account control plane
 
@@ -129,16 +130,27 @@ No params. → `{"agents": [{"id", "name", "bin", "version", "available", "capab
 ### `agents/route`
 
 Ask capd to pick an installed agent. Params mirror route signals:
-`{"prompt", "attachments", "model", "effort", "capabilities", "prefer"}`.
+`{"prompt", "attachments", "accountId", "model", "effort", "capabilities", "prefer"}`.
 
 → `{"agent": {...}, "reason": "matched capabilities: effort, review"}`
 
+When `accountId` is present, routing is account-aware and currently selects
+Codex only, because imported account runtimes are Codex-specific.
+
 ### `agents/usage`
 
-`{"agentId": "codex"}` → `{"agentId", "usage": {...}}` — agent-specific
+`{"agentId": "codex", "accountId": "codex-acct"}` → `{"agentId", "usage": {...}}` — agent-specific
 shape; codex: `rateLimits.primary/secondary {usedPercent, windowDurationMins,
 resetsAt}`, `planType`, `credits`, plus per-model buckets in
 `rateLimitsByLimitId`.
+
+### `accounts/list`
+
+`{"provider": "codex"}` → `{"currentAccountId", "accounts": [...]}`.
+
+Returns imported account metadata and cached quota snapshots only. It never
+returns `secret_ref`, access tokens, refresh tokens, ID tokens, API keys, or
+raw quota JSON.
 
 ### `session/create`
 

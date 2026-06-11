@@ -79,6 +79,13 @@ type UsageProvider interface {
 	Usage(ctx context.Context) (map[string]any, error)
 }
 
+// AccountUsageProvider is an optional extension for adapters whose usage data
+// depends on the same runtime environment used to start sessions, such as
+// Codex's per-account CODEX_HOME projection.
+type AccountUsageProvider interface {
+	UsageFor(ctx context.Context, opts SessionOpts) (map[string]any, error)
+}
+
 // CapabilityProvider describes stable daemon-known adapter behavior. It lets
 // clients and schedulers choose agents without probing by trial and error.
 type CapabilityProvider interface {

@@ -29,6 +29,7 @@ func routeParamsForCreate(params protocol.SessionCreateParams) protocol.AgentRou
 	return protocol.AgentRouteParams{
 		Model:        params.Model,
 		Effort:       params.Effort,
+		AccountID:    params.AccountID,
 		Capabilities: required,
 	}
 }
@@ -39,10 +40,18 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 	if len(prefer) == 0 {
 		prefer = defaultRoutePreference
 	}
+	if params.AccountID != "" {
+		prefer = []string{codexAgentID}
+		required.Usage = true
+		required.Resume = true
+	}
 
 	var best protocol.AgentInfo
 	bestScore := -1
 	for _, agent := range discovery.Discover(ctx, s.opts.Registry) {
+		if params.AccountID != "" && agent.ID != codexAgentID {
+			continue
+		}
 		if !agent.Available || !hasCapabilities(agent.Capabilities, required) {
 			continue
 		}
@@ -56,10 +65,11 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 		return protocol.AgentRouteResult{}, protocol.NewError(
 			protocol.CodeAgentUnavailable, "no available agent satisfies requested capabilities")
 	}
-	return protocol.AgentRouteResult{
-		Agent:  best,
-		Reason: fmt.Sprintf("matched capabilities%s", routeReasonSuffix(required)),
-	}, nil
+	reason := fmt.Sprintf("matched capabilities%s", routeReasonSuffix(required))
+	if params.AccountID != "" {
+		reason += "; accountId requires codex account runtime"
+	}
+	return protocol.AgentRouteResult{Agent: best, Reason: reason}, nil
 }
 
 func routeRequirements(params protocol.AgentRouteParams) protocol.AgentCapabilities {

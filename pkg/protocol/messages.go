@@ -6,6 +6,7 @@ const (
 	MethodAgentsList      = "agents/list"      // list discovered agent CLIs
 	MethodAgentsRoute     = "agents/route"     // choose an agent for requested capabilities
 	MethodAgentsUsage     = "agents/usage"     // account usage / rate-limit data for one agent
+	MethodAccountsList    = "accounts/list"    // list imported agent accounts, without secrets
 	MethodSessionCreate   = "session/create"   // start an agent session
 	MethodSessionList     = "session/list"     // enumerate sessions and their liveness
 	MethodSessionAttach   = "session/attach"   // re-attach to a live or persisted session
@@ -84,6 +85,7 @@ const AgentAuto = "auto"
 type AgentRouteParams struct {
 	Prompt       string            `json:"prompt,omitempty"`
 	Attachments  []Attachment      `json:"attachments,omitempty"`
+	AccountID    string            `json:"accountId,omitempty"`
 	Model        string            `json:"model,omitempty"`
 	Effort       string            `json:"effort,omitempty"`
 	Capabilities AgentCapabilities `json:"capabilities,omitempty"`
@@ -96,7 +98,8 @@ type AgentRouteResult struct {
 }
 
 type AgentsUsageParams struct {
-	AgentID string `json:"agentId"`
+	AgentID   string `json:"agentId"`
+	AccountID string `json:"accountId,omitempty"`
 }
 
 // AgentsUsageResult carries the agent's account usage snapshot. The shape is
@@ -105,6 +108,35 @@ type AgentsUsageParams struct {
 type AgentsUsageResult struct {
 	AgentID string         `json:"agentId"`
 	Usage   map[string]any `json:"usage"`
+}
+
+type AccountsListParams struct {
+	Provider string `json:"provider,omitempty"` // empty = all providers
+}
+
+type AccountsListResult struct {
+	CurrentAccountID string           `json:"currentAccountId,omitempty"`
+	Accounts         []AccountSummary `json:"accounts"`
+}
+
+type AccountSummary struct {
+	ID        string                `json:"id"`
+	Provider  string                `json:"provider"`
+	AuthMode  string                `json:"authMode,omitempty"`
+	Email     string                `json:"email,omitempty"`
+	AccountID string                `json:"accountId,omitempty"`
+	Plan      string                `json:"plan,omitempty"`
+	Quota     *AccountQuotaSnapshot `json:"quota,omitempty"`
+}
+
+type AccountQuotaSnapshot struct {
+	Plan                  string  `json:"plan,omitempty"`
+	PrimaryUsedPercent    float64 `json:"primaryUsedPercent,omitempty"`
+	PrimaryResetAt        string  `json:"primaryResetAt,omitempty"`
+	SecondaryUsedPercent  float64 `json:"secondaryUsedPercent,omitempty"`
+	SecondaryResetAt      string  `json:"secondaryResetAt,omitempty"`
+	CodeReviewUsedPercent float64 `json:"codeReviewUsedPercent,omitempty"`
+	CheckedAt             int64   `json:"checkedAt,omitempty"`
 }
 
 // Permission modes, mapped by each adapter onto the agent's native flags.

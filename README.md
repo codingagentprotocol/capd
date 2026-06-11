@@ -134,6 +134,7 @@ capd run --session s_xxx "follow-up..."     # multi-turn, survives restarts
 capd sessions             # all sessions: live / stored / ended
 capd watch s_xxx          # re-join a long-running task: replay + follow
 capd agents usage codex   # plan, rate-limit windows, reset times
+capd agents usage codex --account codex-acct
 
 capd accounts codex import   # import local ~/.codex/auth.json into capd
 capd accounts codex list     # imported Codex accounts, current account marked
@@ -177,7 +178,8 @@ must be `initialize` (version negotiation).
 
 | Group | Methods |
 |-------|---------|
-| agents | `agents/list`, `agents/usage` |
+| agents | `agents/list`, `agents/route`, `agents/usage` |
+| accounts | `accounts/list` |
 | session | `session/create`, `session/list`, `session/attach`, `session/history`, `session/fork`, `session/rollback`, `session/close` |
 | task | `task/send` (text + image attachments), `task/steer`, `task/cancel`, `task/review` |
 | approval | `approval/reply` (`approve` / `approveAlways` / `deny`) |

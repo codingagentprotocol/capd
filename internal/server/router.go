@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 
+	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/discovery"
 	"github.com/codingagentprotocol/capd/internal/session"
@@ -70,11 +71,35 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if !ok {
 			return nil, protocol.NewError(protocol.CodeMethodNotFound, "agent %q does not report usage", params.AgentID)
 		}
-		usage, err := up.Usage(ctx)
+		var usage map[string]any
+		var err error
+		if params.AccountID != "" {
+			env, perr := s.runtimeEnvForAccount(ctx, params.AgentID, params.AccountID)
+			if perr != nil {
+				return nil, perr
+			}
+			accountUp, ok := a.(adapter.AccountUsageProvider)
+			if !ok {
+				return nil, protocol.NewError(protocol.CodeMethodNotFound, "agent %q does not report account-specific usage", params.AgentID)
+			}
+			usage, err = accountUp.UsageFor(ctx, adapter.SessionOpts{Env: env})
+		} else {
+			usage, err = up.Usage(ctx)
+		}
 		if err != nil {
 			return nil, protocol.NewError(protocol.CodeAgentUnavailable, "usage: %v", err)
 		}
+		if params.AccountID != "" && s.opts.Accounts != nil {
+			_ = s.opts.Accounts.SaveQuota(account.QuotaFromUsage(params.AccountID, usage))
+		}
 		return protocol.AgentsUsageResult{AgentID: params.AgentID, Usage: usage}, nil
+
+	case protocol.MethodAccountsList:
+		var params protocol.AccountsListParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		return s.listAccounts(params)
 
 	case protocol.MethodSessionCreate:
 		var params protocol.SessionCreateParams
