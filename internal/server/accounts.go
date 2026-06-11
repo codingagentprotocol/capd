@@ -64,12 +64,13 @@ func (s *Server) listAccounts(params protocol.AccountsListParams) (protocol.Acco
 		return protocol.AccountsListResult{Accounts: []protocol.AccountSummary{}}, nil
 	}
 	provider := params.Provider
-	if provider == "" {
-		provider = codexauth.Provider
-	}
-	current, err := s.opts.Accounts.CurrentAccount(provider)
-	if err != nil {
-		return protocol.AccountsListResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
+	var current string
+	if provider != "" {
+		var err error
+		current, err = s.opts.Accounts.CurrentAccount(provider)
+		if err != nil {
+			return protocol.AccountsListResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
+		}
 	}
 	accounts, err := s.opts.Accounts.ListAccounts(provider)
 	if err != nil {

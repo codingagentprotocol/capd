@@ -62,6 +62,25 @@ func TestAccountStoreUpsertListAndCurrent(t *testing.T) {
 	}
 }
 
+func TestAccountStoreListAccountsAllProviders(t *testing.T) {
+	st := newStore(t)
+	for _, acc := range []Account{
+		{ID: "codex-local", Provider: "codex", AuthMode: "oauth"},
+		{ID: "gemini-local", Provider: "gemini", AuthMode: "oauth"},
+	} {
+		if err := st.UpsertAccount(acc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := st.ListAccounts("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 || list[0].Provider != "codex" || list[1].Provider != "gemini" {
+		t.Fatalf("list = %+v", list)
+	}
+}
+
 func TestAccountStoreTightensFilePermissions(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "accounts.db")

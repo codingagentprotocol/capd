@@ -165,6 +165,8 @@ resetsAt}`, `planType`, `credits`, plus per-model buckets in
 ### `accounts/list`
 
 `{"provider": "codex"}` → `{"currentAccountId", "accounts": [...]}`.
+Omit `provider` to list imported accounts across all providers; in that case
+`currentAccountId` is omitted because current account is provider-scoped.
 
 Returns imported account metadata and cached quota snapshots only. It never
 returns `secret_ref`, access tokens, refresh tokens, ID tokens, API keys, or

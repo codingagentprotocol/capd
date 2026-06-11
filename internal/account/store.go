@@ -134,9 +134,16 @@ FROM accounts WHERE id = ?`, id).Scan(
 }
 
 func (st *Store) ListAccounts(provider string) ([]Account, error) {
-	rows, err := st.db.Query(`
+	query := `
 SELECT id, provider, auth_mode, email, account_id, plan, secret_ref, created_at, updated_at
-FROM accounts WHERE provider = ? ORDER BY updated_at DESC, id`, provider)
+FROM accounts`
+	var args []any
+	if provider != "" {
+		query += " WHERE provider = ?"
+		args = append(args, provider)
+	}
+	query += " ORDER BY provider, updated_at DESC, id"
+	rows, err := st.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}

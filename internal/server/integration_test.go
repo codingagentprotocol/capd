@@ -736,6 +736,40 @@ func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 	}
 }
 
+func TestAccountsListWithoutProviderReturnsAllProviders(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "gemini-test",
+		Provider:  "gemini",
+		AuthMode:  "oauth",
+		Email:     "gemini@example.com",
+		SecretRef: "file:gemini-test",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var result protocol.AccountsListResult
+	c.mustResult(c.call(protocol.MethodAccountsList, protocol.AccountsListParams{}), &result)
+	if result.CurrentAccountID != "" {
+		t.Fatalf("current account for all providers = %q", result.CurrentAccountID)
+	}
+	if len(result.Accounts) != 2 {
+		t.Fatalf("accounts = %+v", result.Accounts)
+	}
+	seen := map[string]bool{}
+	for _, acc := range result.Accounts {
+		seen[acc.Provider] = true
+	}
+	if !seen[codexauth.Provider] || !seen["gemini"] {
+		t.Fatalf("providers = %+v accounts=%+v", seen, result.Accounts)
+	}
+	data, _ := json.Marshal(result)
+	if strings.Contains(string(data), "secret") || strings.Contains(string(data), "secretRef") {
+		t.Fatalf("accounts/list leaked sensitive data: %s", data)
+	}
+}
+
 func TestAccountsListJSONIncludesZeroQuota(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
 	if err := accounts.SaveQuota(account.QuotaSnapshot{
