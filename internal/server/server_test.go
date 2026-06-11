@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -26,7 +27,7 @@ func newTestServer(t *testing.T) (*Server, *httptest.Server) {
 		Version:  "test",
 		Registry: reg,
 		Sessions: session.NewManager(reg, nil),
-		Log:      slog.New(slog.NewTextHandler(testWriter{t}, nil)),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	ts := httptest.NewServer(http.HandlerFunc(s.handleWS))
 	t.Cleanup(ts.Close)
@@ -158,11 +159,4 @@ func TestInitializeHandshake(t *testing.T) {
 	if result.ProtocolVersion != protocol.Version || result.Daemon.Name != "capd" {
 		t.Fatalf("unexpected result: %+v", result)
 	}
-}
-
-type testWriter struct{ t *testing.T }
-
-func (w testWriter) Write(p []byte) (int, error) {
-	w.t.Log(strings.TrimSpace(string(p)))
-	return len(p), nil
 }

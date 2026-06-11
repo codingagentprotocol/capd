@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -307,7 +308,7 @@ func newIntegration(t *testing.T) (*httptest.Server, *scriptedAdapter) {
 	s := New(Options{
 		Token: "it-token", Version: "it",
 		Registry: reg, Sessions: session.NewManager(reg, st),
-		Log: slog.New(slog.NewTextHandler(testWriter{t}, nil)),
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	ts := httptest.NewServer(http.HandlerFunc(s.handleWS))
 	t.Cleanup(ts.Close)
@@ -364,7 +365,7 @@ func newCodexAccountIntegrationServer(t *testing.T) (*Server, *httptest.Server, 
 		Token: "it-token", Version: "it",
 		Registry: reg, Sessions: session.NewManager(reg, st),
 		Accounts: accounts, Secrets: secrets, RuntimeRoot: filepath.Join(dir, "runtimes"),
-		Log: slog.New(slog.NewTextHandler(testWriter{t}, nil)),
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	ts := httptest.NewServer(http.HandlerFunc(s.handleWS))
 	t.Cleanup(ts.Close)

@@ -82,6 +82,9 @@ func (st *FileStore) Put(_ context.Context, id string, bundle Bundle) (Ref, erro
 	if err := os.MkdirAll(st.root, 0o700); err != nil {
 		return Ref{}, err
 	}
+	if err := os.Chmod(st.root, 0o700); err != nil {
+		return Ref{}, err
+	}
 	ref := Ref{Backend: st.Backend(), ID: cleanID(id)}
 	data, err := json.MarshalIndent(bundle, "", "  ")
 	if err != nil {

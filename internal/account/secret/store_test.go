@@ -30,12 +30,40 @@ func TestFileStoreRoundTripAndPermissions(t *testing.T) {
 	if got.AccessToken != "access-secret" || got.RefreshToken != "refresh-secret" {
 		t.Fatalf("bundle = %+v", got)
 	}
+	rootInfo, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rootInfo.Mode().Perm() != 0o700 {
+		t.Fatalf("root mode = %o", rootInfo.Mode().Perm())
+	}
 	info, err := os.Stat(filepath.Join(root, ref.ID+".json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("mode = %o", info.Mode().Perm())
+	}
+}
+
+func TestFileStoreTightensExistingRootPermissions(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "secrets")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st := NewFileStore(root)
+	if _, err := st.Put(context.Background(), "codex-a", Bundle{Provider: "codex", AccessToken: "access-secret"}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o700 {
+		t.Fatalf("root mode = %o", info.Mode().Perm())
 	}
 }
 
