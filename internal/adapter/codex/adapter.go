@@ -20,6 +20,20 @@ func New() *Adapter { return &Adapter{} }
 
 func (a *Adapter) ID() string { return ID }
 
+func (a *Adapter) Capabilities() protocol.AgentCapabilities {
+	return protocol.AgentCapabilities{
+		Streaming: true,
+		Approvals: true,
+		Steer:     true,
+		Fork:      true,
+		Rollback:  true,
+		Review:    true,
+		Images:    true,
+		Usage:     true,
+		Resume:    true,
+	}
+}
+
 func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
 	return adapter.ProbeCLI(ctx, ID, "Codex CLI", "codex", "--version")
 }

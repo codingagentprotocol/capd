@@ -29,6 +29,9 @@ func Discover(ctx context.Context, reg *adapter.Registry) []protocol.AgentInfo {
 			if err != nil {
 				info = protocol.AgentInfo{ID: a.ID(), Available: false}
 			}
+			if cp, ok := a.(adapter.CapabilityProvider); ok {
+				info.Capabilities = cp.Capabilities()
+			}
 			infos[i] = info
 		}()
 	}

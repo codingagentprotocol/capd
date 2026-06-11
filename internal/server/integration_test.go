@@ -34,6 +34,19 @@ func (f *scriptedAdapter) ID() string { return "fake" }
 func (f *scriptedAdapter) Probe(context.Context) (protocol.AgentInfo, error) {
 	return protocol.AgentInfo{ID: "fake", Name: "Fake", Available: true}, nil
 }
+func (f *scriptedAdapter) Capabilities() protocol.AgentCapabilities {
+	return protocol.AgentCapabilities{
+		Streaming: true,
+		Approvals: true,
+		Steer:     true,
+		Fork:      true,
+		Rollback:  true,
+		Review:    true,
+		Images:    true,
+		Usage:     true,
+		Resume:    true,
+	}
+}
 func (f *scriptedAdapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
 	s := &scriptedSession{opts: opts, events: make(chan protocol.Event, 64)}
 	f.mu.Lock()
@@ -304,6 +317,21 @@ func TestUnknownMethodAndSession(t *testing.T) {
 	}
 	if resp := c.call(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: "s_nope", Prompt: "x"}); resp.Error == nil || resp.Error.Code != protocol.CodeSessionNotFound {
 		t.Fatalf("want session-not-found, got %+v", resp)
+	}
+}
+
+func TestAgentsListReportsCapabilities(t *testing.T) {
+	ts, _ := newIntegration(t)
+	c := initialized(t, ts)
+
+	var list protocol.AgentsListResult
+	c.mustResult(c.call(protocol.MethodAgentsList, struct{}{}), &list)
+	if len(list.Agents) != 1 {
+		t.Fatalf("agents = %+v", list.Agents)
+	}
+	got := list.Agents[0].Capabilities
+	if !got.Streaming || !got.Approvals || !got.Steer || !got.Fork || !got.Rollback || !got.Review || !got.Images || !got.Usage || !got.Resume {
+		t.Fatalf("capabilities = %+v", got)
 	}
 }
 

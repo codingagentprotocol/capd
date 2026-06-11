@@ -102,7 +102,11 @@ Mismatched versions are rejected with code `-32005`.
 
 ### `agents/list`
 
-No params. → `{"agents": [{"id", "name", "bin", "version", "available"}]}`
+No params. → `{"agents": [{"id", "name", "bin", "version", "available", "capabilities"}]}`
+
+`capabilities` is daemon-known behavior clients can use for routing and UI:
+`streaming`, `approvals`, `steer`, `fork`, `rollback`, `review`, `images`,
+`usage`, `resume`.
 
 ### `agents/usage`
 

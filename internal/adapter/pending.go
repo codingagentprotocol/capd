@@ -26,6 +26,10 @@ func (p *PendingCLI) Probe(ctx context.Context) (protocol.AgentInfo, error) {
 	return ProbeCLI(ctx, p.id, p.name, p.bin, p.versionArgs...)
 }
 
+func (p *PendingCLI) Capabilities() protocol.AgentCapabilities {
+	return protocol.AgentCapabilities{}
+}
+
 func (p *PendingCLI) StartSession(context.Context, SessionOpts) (Session, error) {
 	return nil, fmt.Errorf("adapter %q is discovery-only for now: its headless interface has not been calibrated yet", p.id)
 }

@@ -29,6 +29,12 @@ func NewWithCLI(id, name, bin string) *Adapter {
 
 func (a *Adapter) ID() string { return a.id }
 
+func (a *Adapter) Capabilities() protocol.AgentCapabilities {
+	return protocol.AgentCapabilities{
+		Resume: true,
+	}
+}
+
 func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
 	return adapter.ProbeCLI(ctx, a.id, a.name, a.bin, "--version")
 }

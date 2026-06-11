@@ -78,6 +78,12 @@ type UsageProvider interface {
 	Usage(ctx context.Context) (map[string]any, error)
 }
 
+// CapabilityProvider describes stable daemon-known adapter behavior. It lets
+// clients and schedulers choose agents without probing by trial and error.
+type CapabilityProvider interface {
+	Capabilities() protocol.AgentCapabilities
+}
+
 // Session is one running conversation with an agent.
 type Session interface {
 	// Send starts a new turn. It returns an error if a turn is already

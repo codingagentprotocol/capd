@@ -25,6 +25,12 @@ func New() *Adapter { return &Adapter{} }
 
 func (a *Adapter) ID() string { return ID }
 
+func (a *Adapter) Capabilities() protocol.AgentCapabilities {
+	return protocol.AgentCapabilities{
+		Resume: true,
+	}
+}
+
 func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
 	return adapter.ProbeCLI(ctx, ID, "Cursor CLI", "cursor-agent", "--version")
 }

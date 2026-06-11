@@ -51,11 +51,24 @@ type InitializeResult struct {
 
 // AgentInfo describes one coding agent CLI discovered on this machine.
 type AgentInfo struct {
-	ID        string `json:"id"`                // stable identifier, e.g. "claude-code"
-	Name      string `json:"name"`              // human-readable, e.g. "Claude Code"
-	Bin       string `json:"bin,omitempty"`     // resolved binary path
-	Version   string `json:"version,omitempty"` // reported by the CLI itself
-	Available bool   `json:"available"`
+	ID           string            `json:"id"`                // stable identifier, e.g. "claude-code"
+	Name         string            `json:"name"`              // human-readable, e.g. "Claude Code"
+	Bin          string            `json:"bin,omitempty"`     // resolved binary path
+	Version      string            `json:"version,omitempty"` // reported by the CLI itself
+	Available    bool              `json:"available"`
+	Capabilities AgentCapabilities `json:"capabilities,omitempty"` // daemon-known agent behavior
+}
+
+type AgentCapabilities struct {
+	Streaming bool `json:"streaming,omitempty"`
+	Approvals bool `json:"approvals,omitempty"`
+	Steer     bool `json:"steer,omitempty"`
+	Fork      bool `json:"fork,omitempty"`
+	Rollback  bool `json:"rollback,omitempty"`
+	Review    bool `json:"review,omitempty"`
+	Images    bool `json:"images,omitempty"`
+	Usage     bool `json:"usage,omitempty"`
+	Resume    bool `json:"resume,omitempty"`
 }
 
 type AgentsListResult struct {
