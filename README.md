@@ -133,6 +133,10 @@ capd run --session s_xxx "follow-up..."     # multi-turn, survives restarts
 capd sessions             # all sessions: live / stored / ended
 capd watch s_xxx          # re-join a long-running task: replay + follow
 capd agents usage codex   # plan, rate-limit windows, reset times
+
+capd accounts codex import   # import local ~/.codex/auth.json into capd
+capd accounts codex list     # imported Codex accounts, current account marked
+capd accounts codex project  # create a per-account CODEX_HOME projection
 ```
 
 Every flag, protocol field, and event is documented in
@@ -269,6 +273,9 @@ flowchart TB
 - Codex account support is split into a control plane and a runtime plane:
   SQLite stores account metadata and quota snapshots, while each runtime can
   use its own `CODEX_HOME` and app-server profile.
+- `capd accounts codex import` copies token material into capd's secret
+  store, records only metadata in SQLite, and never writes back to the user's
+  original `~/.codex`.
 
 ## Repository layout
 

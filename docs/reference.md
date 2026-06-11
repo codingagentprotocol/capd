@@ -59,6 +59,20 @@ running in the daemon), find it with `capd sessions`, re-join with
 | `capd agents list` | table: id, available/not installed, version, binary path |
 | `capd agents usage <id>` | account snapshot JSON: plan, 5h/weekly window used %, reset timestamps, credits (codex) |
 
+### `capd accounts codex` — local Codex account control plane
+
+| Command | Meaning |
+|---------|---------|
+| `capd accounts codex import [--auth path]` | Import a Codex `auth.json` into capd. Defaults to `~/.codex/auth.json`. |
+| `capd accounts codex list` | List imported Codex account metadata; the current account is marked with `*`. |
+| `capd accounts codex current [account-id]` | Show or set the current Codex account. |
+| `capd accounts codex project [account-id]` | Create or refresh a capd-managed per-account `CODEX_HOME`; prints the path. |
+
+The import stores token material in `~/.capd/secrets/codex/*.json` with mode
+0600. SQLite stores only account metadata plus a `secret_ref`; access tokens,
+refresh tokens, ID tokens, and API keys are intentionally kept out of the
+database, protocol responses, and logs.
+
 ### `capd sessions` — session inventory
 
 Table: session id, agent, state (`live`/`stored`/`ended`), created, project
@@ -86,6 +100,9 @@ Precedence: flags > environment > defaults.
 |------|----------|
 | `~/.capd/token` | connection token, 0600, generated on first run |
 | `~/.capd/capd.db` | SQLite: session identities + full event log |
+| `~/.capd/accounts.db` | SQLite: account metadata, current account, quota snapshots, session-account binding |
+| `~/.capd/secrets/codex/*.json` | file secret backend for imported Codex token material, 0600 |
+| `~/.capd/runtimes/codex/<account-id>/` | capd-managed per-account `CODEX_HOME` projection |
 
 ## Protocol reference
 
