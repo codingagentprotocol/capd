@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const maxQuotaRawJSONBytes = 1 << 20
+
 // QuotaFromUsage converts adapter-specific usage payloads into the small
 // scheduler-facing cache stored in SQLite. Unknown shapes are preserved as
 // RawJSON; known Codex rate-limit shapes fill the common fields.
@@ -15,6 +17,9 @@ func QuotaFromUsage(accountID string, usage map[string]any) QuotaSnapshot {
 		Plan:      stringFrom(usage, "planType", "plan_type", "plan"),
 		CheckedAt: time.Now().Unix(),
 		RawJSON:   string(raw),
+	}
+	if len(raw) > maxQuotaRawJSONBytes {
+		q.RawJSON = ""
 	}
 	if rl, ok := usage["rateLimits"].(map[string]any); ok {
 		readWindow(rl["primary"], &q.PrimaryUsedPercent, &q.PrimaryResetAt)
