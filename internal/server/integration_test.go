@@ -710,6 +710,39 @@ func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 	}
 }
 
+func TestAccountsListJSONIncludesZeroQuota(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	if err := accounts.SaveQuota(account.QuotaSnapshot{
+		AccountID:          "codex-test",
+		Plan:               "pro",
+		PrimaryUsedPercent: 0,
+		CheckedAt:          1781170000,
+		RawJSON:            `{"token":"must-not-return"}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var result protocol.AccountsListResult
+	c.mustResult(c.call(protocol.MethodAccountsList, protocol.AccountsListParams{
+		Provider: codexauth.Provider,
+	}), &result)
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, `"primaryUsedPercent":0`) {
+		t.Fatalf("zero quota missing from JSON: %s", text)
+	}
+	if !strings.Contains(text, `"checkedAt":1781170000`) {
+		t.Fatalf("checkedAt missing from JSON: %s", text)
+	}
+	if strings.Contains(text, "test-token") || strings.Contains(text, "secret") || strings.Contains(text, "must-not-return") {
+		t.Fatalf("accounts/list leaked sensitive data: %s", text)
+	}
+}
+
 func addCodexAccountForTest(t *testing.T, accounts *account.Store, id, email string) {
 	t.Helper()
 	if err := accounts.UpsertAccount(account.Account{

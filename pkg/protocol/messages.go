@@ -145,12 +145,12 @@ type AccountSummary struct {
 
 type AccountQuotaSnapshot struct {
 	Plan                  string  `json:"plan,omitempty"`
-	PrimaryUsedPercent    float64 `json:"primaryUsedPercent,omitempty"`
+	PrimaryUsedPercent    float64 `json:"primaryUsedPercent"`
 	PrimaryResetAt        string  `json:"primaryResetAt,omitempty"`
-	SecondaryUsedPercent  float64 `json:"secondaryUsedPercent,omitempty"`
+	SecondaryUsedPercent  float64 `json:"secondaryUsedPercent"`
 	SecondaryResetAt      string  `json:"secondaryResetAt,omitempty"`
-	CodeReviewUsedPercent float64 `json:"codeReviewUsedPercent,omitempty"`
-	CheckedAt             int64   `json:"checkedAt,omitempty"`
+	CodeReviewUsedPercent float64 `json:"codeReviewUsedPercent"`
+	CheckedAt             int64   `json:"checkedAt"`
 }
 
 // Permission modes, mapped by each adapter onto the agent's native flags.
