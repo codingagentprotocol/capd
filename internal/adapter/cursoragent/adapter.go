@@ -41,7 +41,8 @@ func (a *Adapter) StartSession(_ context.Context, opts adapter.SessionOpts) (ada
 
 var turnConfig = adapter.TurnConfig{BuildSpec: buildSpec, Translate: translate}
 
-func buildSpec(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
+func buildSpec(opts adapter.SessionOpts, nativeID string, msg adapter.Message) proc.Spec {
+	prompt := msg.Prompt
 	args := []string{"-p", prompt, "--output-format", "stream-json"}
 	if opts.PermissionMode == protocol.PermissionFull {
 		args = append(args, "--force")

@@ -11,7 +11,8 @@ import (
 
 // buildSpec assembles one `claude -p` turn. Continuity uses --resume with the
 // session_id captured from the init event.
-func buildSpec(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
+func buildSpec(opts adapter.SessionOpts, nativeID string, msg adapter.Message) proc.Spec {
+	prompt := msg.Prompt
 	args := []string{"-p", prompt, "--output-format", "stream-json", "--verbose"}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)

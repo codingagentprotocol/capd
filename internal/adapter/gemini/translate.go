@@ -16,7 +16,8 @@ import (
 // TODO: verify the stream-json shape against a live gemini login; the
 // translator below targets the documented Claude-compatible format and
 // falls back to plain text for anything it does not recognize.
-func buildSpec(opts adapter.SessionOpts, _ string, prompt string) proc.Spec {
+func buildSpec(opts adapter.SessionOpts, _ string, msg adapter.Message) proc.Spec {
+	prompt := msg.Prompt
 	args := []string{"-p", prompt, "--output-format", "stream-json"}
 	if opts.Model != "" {
 		args = append(args, "-m", opts.Model)

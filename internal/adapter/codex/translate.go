@@ -12,10 +12,16 @@ import (
 // buildSpec assembles one `codex exec --json` turn. Conversation continuity
 // uses `codex exec resume <thread_id>` with the id captured from
 // thread.started.
-func buildSpec(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
+func buildSpec(opts adapter.SessionOpts, nativeID string, msg adapter.Message) proc.Spec {
+	prompt := msg.Prompt
 	args := []string{"exec", "--json", "--skip-git-repo-check"}
 	if opts.Model != "" {
 		args = append(args, "-m", opts.Model)
+	}
+	for _, img := range msg.Images {
+		if img.Path != "" {
+			args = append(args, "-i", img.Path)
+		}
 	}
 	switch opts.PermissionMode {
 	case protocol.PermissionAcceptEdits, protocol.PermissionFull:

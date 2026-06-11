@@ -36,12 +36,18 @@ func (a *Adapter) StartSession(_ context.Context, opts adapter.SessionOpts) (ada
 	return adapter.NewTurnSession(turnConfig, opts), nil
 }
 
-var turnConfig = adapter.TurnConfig{BuildSpec: buildSpec, Translate: translate}
+var turnConfig = adapter.TurnConfig{BuildSpec: buildSpec, Translate: translate, SupportsImages: true}
 
-func buildSpec(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
+func buildSpec(opts adapter.SessionOpts, nativeID string, msg adapter.Message) proc.Spec {
+	prompt := msg.Prompt
 	args := []string{"run", prompt, "--format", "json"}
 	if opts.Model != "" {
 		args = append(args, "-m", opts.Model)
+	}
+	for _, img := range msg.Images {
+		if img.Path != "" {
+			args = append(args, "-f", img.Path)
+		}
 	}
 	if nativeID != "" {
 		args = append(args, "--session", nativeID)

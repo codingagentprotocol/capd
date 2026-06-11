@@ -40,6 +40,7 @@ func (a *Adapter) StartSession(ctx context.Context, opts adapter.SessionOpts) (a
 }
 
 var turnConfig = adapter.TurnConfig{
-	BuildSpec: buildSpec,
-	Translate: translate,
+	BuildSpec:      buildSpec,
+	Translate:      translate,
+	SupportsImages: true,
 }

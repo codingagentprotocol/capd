@@ -170,6 +170,43 @@ func (m *Manager) List(limit int) []protocol.SessionInfo {
 	return out
 }
 
+// Fork branches an existing session into a new, independent one that shares
+// conversation history up to this point.
+func (m *Manager) Fork(ctx context.Context, id string) (*Session, error) {
+	parent, err := m.Resolve(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	forker, ok := parent.inner.(adapter.Forker)
+	if !ok {
+		return nil, protocol.NewError(protocol.CodeMethodNotFound, "agent %q does not support forking", parent.AgentID)
+	}
+	inner, nativeID, err := forker.Fork(ctx)
+	if err != nil {
+		return nil, protocol.NewError(protocol.CodeAgentUnavailable, "fork: %v", err)
+	}
+
+	s := &Session{
+		ID:      newID(),
+		AgentID: parent.AgentID,
+		inner:   inner,
+		store:   m.store,
+		subs:    make(map[int]chan protocol.Event),
+	}
+	if m.store != nil {
+		cwd := ""
+		if rec, err := m.store.LoadSession(parent.ID); err == nil {
+			cwd = rec.Cwd
+		}
+		m.store.SaveSession(SessionRecord{ID: s.ID, AgentID: s.AgentID, NativeID: nativeID, Cwd: cwd})
+	}
+	m.mu.Lock()
+	m.sessions[s.ID] = s
+	m.mu.Unlock()
+	go s.pump()
+	return s, nil
+}
+
 // Close terminates a session and removes it from the registry.
 func (m *Manager) Close(id string) error {
 	m.mu.Lock()
@@ -276,8 +313,24 @@ func (s *Session) Subscribe(fromSeq uint64) (<-chan protocol.Event, uint64, func
 }
 
 // Send starts a new turn.
-func (s *Session) Send(ctx context.Context, prompt string) error {
-	return s.inner.Send(ctx, prompt)
+func (s *Session) Send(ctx context.Context, msg adapter.Message) error {
+	return s.inner.Send(ctx, msg)
+}
+
+// Rollback drops the last numTurns turns, when the agent supports it.
+func (s *Session) Rollback(ctx context.Context, numTurns int) error {
+	if rb, ok := s.inner.(adapter.Rollbacker); ok {
+		return rb.Rollback(ctx, numTurns)
+	}
+	return protocol.NewError(protocol.CodeMethodNotFound, "agent %q does not support rollback", s.AgentID)
+}
+
+// Review starts a code-review turn, when the agent supports it.
+func (s *Session) Review(ctx context.Context, target protocol.ReviewTarget) error {
+	if rv, ok := s.inner.(adapter.Reviewer); ok {
+		return rv.Review(ctx, target)
+	}
+	return protocol.NewError(protocol.CodeMethodNotFound, "agent %q does not support review", s.AgentID)
 }
 
 // Cancel interrupts the running turn.

@@ -107,6 +107,49 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		nextSeq := s.subscribe(ctx, client, sess, params.FromSeq)
 		return protocol.SessionAttachResult{SessionID: sess.ID, NextSeq: nextSeq}, nil
 
+	case protocol.MethodSessionFork:
+		var params protocol.SessionForkParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		forked, err := s.opts.Sessions.Fork(ctx, params.SessionID)
+		if err != nil {
+			return nil, asProtocolError(err)
+		}
+		s.subscribe(ctx, client, forked, 0)
+		return protocol.SessionForkResult{SessionID: forked.ID}, nil
+
+	case protocol.MethodSessionRollback:
+		var params protocol.SessionRollbackParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		if params.NumTurns < 1 {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "numTurns must be >= 1")
+		}
+		sess, err := s.opts.Sessions.Resolve(ctx, params.SessionID)
+		if err != nil {
+			return nil, asProtocolError(err)
+		}
+		if err := sess.Rollback(ctx, params.NumTurns); err != nil {
+			return nil, asProtocolError(err)
+		}
+		return protocol.OKResult{OK: true}, nil
+
+	case protocol.MethodTaskReview:
+		var params protocol.TaskReviewParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		sess, err := s.opts.Sessions.Resolve(ctx, params.SessionID)
+		if err != nil {
+			return nil, asProtocolError(err)
+		}
+		if err := sess.Review(ctx, params.Target); err != nil {
+			return nil, asProtocolError(err)
+		}
+		return protocol.OKResult{OK: true}, nil
+
 	case protocol.MethodSessionClose:
 		var params protocol.SessionCloseParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
@@ -126,7 +169,8 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if err != nil {
 			return nil, asProtocolError(err)
 		}
-		if err := sess.Send(ctx, params.Prompt); err != nil {
+		msg := adapter.Message{Prompt: params.Prompt, Images: params.Attachments}
+		if err := sess.Send(ctx, msg); err != nil {
 			return nil, protocol.NewError(protocol.CodeInternalError, "%v", err)
 		}
 		return protocol.OKResult{OK: true}, nil

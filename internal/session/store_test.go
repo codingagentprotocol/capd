@@ -70,7 +70,7 @@ func (f *fakeAdapter) StartSession(_ context.Context, opts adapter.SessionOpts) 
 
 type fakeSession struct{ events chan protocol.Event }
 
-func (s *fakeSession) Send(_ context.Context, _ string) error {
+func (s *fakeSession) Send(_ context.Context, _ adapter.Message) error {
 	s.events <- protocol.Event{Type: protocol.EventSessionStarted, Data: map[string]any{"nativeSessionId": "native-7"}}
 	s.events <- protocol.Event{Type: protocol.EventTaskDone, Data: map[string]any{"ok": true}}
 	return nil
@@ -95,7 +95,7 @@ func TestReviveAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sess.Send(context.Background(), "hello"); err != nil {
+	if err := sess.Send(context.Background(), adapter.Message{Prompt: "hello"}); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, func() bool {

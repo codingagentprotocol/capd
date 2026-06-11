@@ -28,6 +28,7 @@ func newRunCmd() *cobra.Command {
 		sessionID  string
 		model      string
 		effort     string
+		images     []string
 		showJSON   bool
 	)
 
@@ -43,7 +44,7 @@ func newRunCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTask(cmd, runOpts{agent: agentID, cwd: cwd, permission: permission,
-				session: sessionID, model: model, effort: effort, json: showJSON, prompt: args[0]})
+				session: sessionID, model: model, effort: effort, images: images, json: showJSON, prompt: args[0]})
 		},
 	}
 	cmd.Flags().StringVar(&agentID, "agent", "codex", "agent to drive")
@@ -52,12 +53,14 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&sessionID, "session", "", "continue an existing capd session instead of creating one")
 	cmd.Flags().StringVar(&model, "model", "", "agent-native model id (empty = agent default)")
 	cmd.Flags().StringVar(&effort, "effort", "", "reasoning effort where supported (codex: minimal..xhigh)")
+	cmd.Flags().StringSliceVar(&images, "image", nil, "image file(s) to attach (agents that support it)")
 	cmd.Flags().BoolVar(&showJSON, "json", false, "print raw event JSON instead of formatted output")
 	return cmd
 }
 
 type runOpts struct {
 	agent, cwd, permission, session, model, effort, prompt string
+	images                                                 []string
 	json                                                   bool
 }
 
@@ -153,7 +156,15 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 		}
 	}
 
-	if _, err := call(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: sessionID, Prompt: prompt}); err != nil {
+	var atts []protocol.Attachment
+	for _, img := range o.images {
+		abs, err := filepath.Abs(img)
+		if err != nil {
+			return err
+		}
+		atts = append(atts, protocol.Attachment{Type: "image", Path: abs})
+	}
+	if _, err := call(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: sessionID, Prompt: prompt, Attachments: atts}); err != nil {
 		return err
 	}
 

@@ -52,7 +52,8 @@ type scriptedSession struct {
 	closed   bool
 }
 
-func (s *scriptedSession) Send(_ context.Context, prompt string) error {
+func (s *scriptedSession) Send(_ context.Context, msg adapter.Message) error {
+	prompt := msg.Prompt
 	s.events <- protocol.Event{Type: protocol.EventSessionStarted, Data: map[string]any{"nativeSessionId": "fake-native-1"}}
 	if strings.Contains(prompt, "need-approval") {
 		s.events <- protocol.Event{Type: protocol.EventApprovalNeeded, Data: map[string]any{"approvalId": "ap_1", "kind": "command"}}

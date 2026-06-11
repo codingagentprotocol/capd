@@ -23,7 +23,9 @@ type EmitFunc func(t protocol.EventType, data map[string]any)
 type TurnConfig struct {
 	// BuildSpec returns the command for one turn. nativeID is empty on the
 	// first turn, afterwards it carries the id captured by Translate.
-	BuildSpec func(opts SessionOpts, nativeID, prompt string) proc.Spec
+	BuildSpec func(opts SessionOpts, nativeID string, msg Message) proc.Spec
+	// SupportsImages gates image attachments; Send rejects them otherwise.
+	SupportsImages bool
 	// Translate parses one stdout line and emits zero or more events.
 	// Non-JSON lines (CLIs leak logs into stdout) must be tolerated.
 	// It returns the agent-native session id when the line carries one,
@@ -64,7 +66,10 @@ func NewTurnSessionResumed(cfg TurnConfig, opts SessionOpts, nativeID string) *T
 
 func (s *TurnSession) Events() <-chan protocol.Event { return s.events }
 
-func (s *TurnSession) Send(_ context.Context, prompt string) error {
+func (s *TurnSession) Send(_ context.Context, msg Message) error {
+	if len(msg.Images) > 0 && !s.cfg.SupportsImages {
+		return errors.New("adapter: this agent does not accept image attachments")
+	}
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -83,11 +88,11 @@ func (s *TurnSession) Send(_ context.Context, prompt string) error {
 	s.mu.Unlock()
 
 	s.wg.Add(1)
-	go s.runTurn(ctx, nativeID, prompt)
+	go s.runTurn(ctx, nativeID, msg)
 	return nil
 }
 
-func (s *TurnSession) runTurn(ctx context.Context, nativeID, prompt string) {
+func (s *TurnSession) runTurn(ctx context.Context, nativeID string, msg Message) {
 	defer s.wg.Done()
 
 	// task.done is withheld until the turn slot is released: a client that
@@ -104,7 +109,7 @@ func (s *TurnSession) runTurn(ctx context.Context, nativeID, prompt string) {
 		}
 	}
 
-	spec := s.cfg.BuildSpec(s.opts, nativeID, prompt)
+	spec := s.cfg.BuildSpec(s.opts, nativeID, msg)
 	if p, err := proc.Start(ctx, spec); err != nil {
 		emit(protocol.EventError, map[string]any{"message": err.Error()})
 	} else {

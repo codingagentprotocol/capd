@@ -204,7 +204,17 @@ func (s *appSession) emit(t protocol.EventType, data map[string]any) {
 	}
 }
 
-func (s *appSession) Send(ctx context.Context, prompt string) error {
+func (s *appSession) Send(ctx context.Context, msg adapter.Message) error {
+	input := []map[string]any{{"type": "text", "text": msg.Prompt}}
+	for _, img := range msg.Images {
+		switch {
+		case img.Path != "":
+			input = append(input, map[string]any{"type": "localImage", "path": img.Path})
+		case img.URL != "":
+			input = append(input, map[string]any{"type": "image", "url": img.URL})
+		}
+	}
+
 	var result struct {
 		Turn struct {
 			ID string `json:"id"`
@@ -212,7 +222,7 @@ func (s *appSession) Send(ctx context.Context, prompt string) error {
 	}
 	turnParams := map[string]any{
 		"threadId": s.threadID,
-		"input":    []map[string]any{{"type": "text", "text": prompt}},
+		"input":    input,
 	}
 	if s.effort != "" {
 		turnParams["effort"] = s.effort
@@ -225,6 +235,53 @@ func (s *appSession) Send(ctx context.Context, prompt string) error {
 	s.turnID = result.Turn.ID
 	s.mu.Unlock()
 	return nil
+}
+
+// Fork branches the thread into an independent one sharing history so far.
+func (s *appSession) Fork(ctx context.Context) (adapter.Session, string, error) {
+	var result struct {
+		Thread struct {
+			ID string `json:"id"`
+		} `json:"thread"`
+	}
+	if err := s.client.Call(ctx, "thread/fork", map[string]any{"threadId": s.threadID}, &result); err != nil {
+		return nil, "", err
+	}
+	forked := &appSession{
+		owner:    s.owner,
+		client:   s.client,
+		threadID: result.Thread.ID,
+		effort:   s.effort,
+		events:   make(chan protocol.Event, 256),
+	}
+	s.owner.register(forked.threadID, forked)
+	forked.emit(protocol.EventSessionStarted, map[string]any{
+		"nativeSessionId": forked.threadID, "threadId": forked.threadID, "forkedFrom": s.threadID,
+	})
+	return forked, forked.threadID, nil
+}
+
+// Rollback drops the last numTurns turns from the conversation.
+func (s *appSession) Rollback(ctx context.Context, numTurns int) error {
+	return s.client.Call(ctx, "thread/rollback", map[string]any{
+		"threadId": s.threadID, "numTurns": numTurns,
+	}, nil)
+}
+
+// Review starts a code-review turn; findings stream as ordinary events.
+func (s *appSession) Review(ctx context.Context, target protocol.ReviewTarget) error {
+	var t map[string]any
+	switch target.Type {
+	case "branch":
+		t = map[string]any{"type": "baseBranch", "branch": target.Branch}
+	case "commit":
+		t = map[string]any{"type": "commit", "commit": target.Commit}
+	default:
+		t = map[string]any{"type": "uncommittedChanges"}
+	}
+	return s.client.Call(ctx, "review/start", map[string]any{
+		"threadId": s.threadID, "target": t, "delivery": "inline",
+	}, nil)
 }
 
 func (s *appSession) Steer(ctx context.Context, prompt string) error {

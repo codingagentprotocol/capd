@@ -34,6 +34,31 @@ type SessionOpts struct {
 	Effort         string // agent-native reasoning effort; empty = default
 }
 
+// Message is one user turn: a prompt plus optional attachments. Adapters
+// that cannot handle an attachment type must reject the Send, not drop data.
+type Message struct {
+	Prompt string
+	Images []protocol.Attachment
+}
+
+// Forker is an optional session capability: branch the conversation into an
+// independent session that shares history up to this point. Returns the new
+// inner session and its agent-native id (for persistence).
+type Forker interface {
+	Fork(ctx context.Context) (Session, string, error)
+}
+
+// Rollbacker is an optional session capability: drop the last numTurns turns.
+type Rollbacker interface {
+	Rollback(ctx context.Context, numTurns int) error
+}
+
+// Reviewer is an optional session capability: run a code-review turn against
+// the target; results stream as ordinary session events.
+type Reviewer interface {
+	Review(ctx context.Context, target protocol.ReviewTarget) error
+}
+
 // Steerer is an optional session capability: inject guidance into the
 // running turn without interrupting it.
 type Steerer interface {
@@ -55,9 +80,9 @@ type UsageProvider interface {
 
 // Session is one running conversation with an agent.
 type Session interface {
-	// Send starts a new turn with the given prompt. It returns an error if a
-	// turn is already running.
-	Send(ctx context.Context, prompt string) error
+	// Send starts a new turn. It returns an error if a turn is already
+	// running or the message carries attachments the agent cannot handle.
+	Send(ctx context.Context, msg Message) error
 	// Cancel interrupts the running turn, if any. The session stays usable.
 	Cancel()
 	// Events streams unified protocol events until the session ends.

@@ -38,8 +38,8 @@ func (a *Adapter) StartSession(_ context.Context, opts adapter.SessionOpts) (ada
 		return nil, err
 	}
 	cfg := adapter.TurnConfig{
-		BuildSpec: func(opts adapter.SessionOpts, nativeID, prompt string) proc.Spec {
-			spec := buildSpec(opts, nativeID, prompt)
+		BuildSpec: func(opts adapter.SessionOpts, nativeID string, msg adapter.Message) proc.Spec {
+			spec := buildSpec(opts, nativeID, msg)
 			spec.Bin = a.bin
 			return spec
 		},

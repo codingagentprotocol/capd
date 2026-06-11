@@ -2,17 +2,20 @@ package protocol
 
 // Client → daemon methods.
 const (
-	MethodInitialize    = "initialize"     // version negotiation, must be the first call
-	MethodAgentsList    = "agents/list"    // list discovered agent CLIs
-	MethodAgentsUsage   = "agents/usage"   // account usage / rate-limit data for one agent
-	MethodSessionCreate = "session/create" // start an agent session
-	MethodSessionList   = "session/list"   // enumerate sessions and their liveness
-	MethodSessionAttach = "session/attach" // re-attach to a live or persisted session
-	MethodSessionClose  = "session/close"
-	MethodTaskSend      = "task/send"      // send a prompt/task into a session
-	MethodTaskSteer     = "task/steer"     // inject guidance into the RUNNING turn
-	MethodTaskCancel    = "task/cancel"    // interrupt the running task
-	MethodApprovalReply = "approval/reply" // answer a pending tool-use approval
+	MethodInitialize      = "initialize"       // version negotiation, must be the first call
+	MethodAgentsList      = "agents/list"      // list discovered agent CLIs
+	MethodAgentsUsage     = "agents/usage"     // account usage / rate-limit data for one agent
+	MethodSessionCreate   = "session/create"   // start an agent session
+	MethodSessionList     = "session/list"     // enumerate sessions and their liveness
+	MethodSessionAttach   = "session/attach"   // re-attach to a live or persisted session
+	MethodSessionFork     = "session/fork"     // branch a session into an independent copy
+	MethodSessionRollback = "session/rollback" // drop the last N turns of the conversation
+	MethodSessionClose    = "session/close"
+	MethodTaskSend        = "task/send"      // send a prompt/task into a session
+	MethodTaskSteer       = "task/steer"     // inject guidance into the RUNNING turn
+	MethodTaskCancel      = "task/cancel"    // interrupt the running task
+	MethodTaskReview      = "task/review"    // start a code-review turn
+	MethodApprovalReply   = "approval/reply" // answer a pending tool-use approval
 )
 
 // Approval decisions, translated by each adapter to its agent's vocabulary.
@@ -47,8 +50,8 @@ type InitializeResult struct {
 
 // AgentInfo describes one coding agent CLI discovered on this machine.
 type AgentInfo struct {
-	ID        string `json:"id"`   // stable identifier, e.g. "claude-code"
-	Name      string `json:"name"` // human-readable, e.g. "Claude Code"
+	ID        string `json:"id"`                // stable identifier, e.g. "claude-code"
+	Name      string `json:"name"`              // human-readable, e.g. "Claude Code"
 	Bin       string `json:"bin,omitempty"`     // resolved binary path
 	Version   string `json:"version,omitempty"` // reported by the CLI itself
 	Available bool   `json:"available"`
@@ -107,7 +110,7 @@ type SessionInfo struct {
 	SessionID string `json:"sessionId"`
 	AgentID   string `json:"agentId"`
 	Cwd       string `json:"cwd,omitempty"`
-	State     string `json:"state"` // one of the SessionState* constants
+	State     string `json:"state"`               // one of the SessionState* constants
 	CreatedAt int64  `json:"createdAt,omitempty"` // unix seconds
 }
 
@@ -129,9 +132,44 @@ type SessionCloseParams struct {
 	SessionID string `json:"sessionId"`
 }
 
+// Attachment is an extra input riding along with a prompt. Path points to a
+// file on the machine the daemon runs on; URL references a remote image —
+// web clients should prefer URL.
+type Attachment struct {
+	Type string `json:"type"` // "image"
+	Path string `json:"path,omitempty"`
+	URL  string `json:"url,omitempty"`
+}
+
 type TaskSendParams struct {
+	SessionID   string       `json:"sessionId"`
+	Prompt      string       `json:"prompt"`
+	Attachments []Attachment `json:"attachments,omitempty"`
+}
+
+type SessionForkParams struct {
 	SessionID string `json:"sessionId"`
-	Prompt    string `json:"prompt"`
+}
+
+type SessionForkResult struct {
+	SessionID string `json:"sessionId"` // the new, independent session
+}
+
+type SessionRollbackParams struct {
+	SessionID string `json:"sessionId"`
+	NumTurns  int    `json:"numTurns"` // how many trailing turns to drop
+}
+
+// ReviewTarget selects what a task/review run examines.
+type ReviewTarget struct {
+	Type   string `json:"type"`             // "uncommitted" | "branch" | "commit"
+	Branch string `json:"branch,omitempty"` // base branch, for type "branch"
+	Commit string `json:"commit,omitempty"` // sha, for type "commit"
+}
+
+type TaskReviewParams struct {
+	SessionID string       `json:"sessionId"`
+	Target    ReviewTarget `json:"target"`
 }
 
 type TaskCancelParams struct {
