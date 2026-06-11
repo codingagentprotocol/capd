@@ -82,7 +82,9 @@ func newAgentsCmd() *cobra.Command {
 				}
 				usage, err = accountUp.UsageFor(cmd.Context(), adapter.SessionOpts{Env: profile.Env})
 				if err == nil {
-					_ = accounts.SaveQuota(account.QuotaFromUsage(acc.ID, usage))
+					if err := accounts.SaveQuota(account.QuotaFromUsage(acc.ID, usage)); err != nil {
+						return err
+					}
 				}
 			} else {
 				usage, err = up.Usage(cmd.Context())

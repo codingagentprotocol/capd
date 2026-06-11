@@ -98,7 +98,9 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 			return nil, protocol.NewError(protocol.CodeAgentUnavailable, "usage: %v", err)
 		}
 		if effectiveAccountID != "" && s.opts.Accounts != nil {
-			_ = s.opts.Accounts.SaveQuota(account.QuotaFromUsage(effectiveAccountID, usage))
+			if err := s.opts.Accounts.SaveQuota(account.QuotaFromUsage(effectiveAccountID, usage)); err != nil {
+				return nil, protocol.NewError(protocol.CodeInternalError, "save usage quota: %v", err)
+			}
 		}
 		return protocol.AgentsUsageResult{AgentID: params.AgentID, AccountID: effectiveAccountID, Usage: usage}, nil
 

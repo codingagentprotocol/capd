@@ -33,10 +33,11 @@ import (
 // ---- scripted fake adapter ----
 
 type scriptedAdapter struct {
-	mu       sync.Mutex
-	id       string
-	sessions []*scriptedSession
-	usageEnv []string
+	mu        sync.Mutex
+	id        string
+	sessions  []*scriptedSession
+	usageEnv  []string
+	usageHook func()
 }
 
 func (f *scriptedAdapter) ID() string {
@@ -78,7 +79,11 @@ func (f *scriptedAdapter) Usage(context.Context) (map[string]any, error) {
 func (f *scriptedAdapter) UsageFor(_ context.Context, opts adapter.SessionOpts) (map[string]any, error) {
 	f.mu.Lock()
 	f.usageEnv = append([]string(nil), opts.Env...)
+	hook := f.usageHook
 	f.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	return map[string]any{
 		"planType": "pro",
 		"rateLimits": map[string]any{
@@ -545,6 +550,22 @@ func TestAgentsUsageWithCodexAccountProjectsRuntimeAndCachesQuota(t *testing.T) 
 	}
 	if q.Plan != "pro" || q.PrimaryUsedPercent != 25 {
 		t.Fatalf("quota = %+v", q)
+	}
+}
+
+func TestAgentsUsageReportsQuotaCacheSaveFailure(t *testing.T) {
+	ts, fake, accounts := newCodexAccountIntegration(t)
+	fake.usageHook = func() {
+		_ = accounts.Close()
+	}
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAgentsUsage, protocol.AgentsUsageParams{
+		AgentID:   "codex",
+		AccountID: "codex-test",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInternalError || !strings.Contains(resp.Error.Message, "save usage quota") {
+		t.Fatalf("response = %+v", resp)
 	}
 }
 
