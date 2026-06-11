@@ -82,6 +82,8 @@ func TestConsoleStaticContract(t *testing.T) {
 		"session/create",
 		"hasNumber(a.quota.primaryUsedPercent)",
 		"button.disabled = true",
+		`searchParams.delete("token")`,
+		"history.replaceState",
 	}
 	for _, needle := range required {
 		if !strings.Contains(html, needle) {

@@ -64,6 +64,11 @@
 const params = new URLSearchParams(location.search);
 const TOKEN = params.get("token") || "";
 const CAPD = params.get("capd") || "127.0.0.1:7777";
+if (TOKEN) {
+  const cleanURL = new URL(location.href);
+  cleanURL.searchParams.delete("token");
+  history.replaceState(null, "", cleanURL.pathname + cleanURL.search + cleanURL.hash);
+}
 
 const log = document.getElementById("log");
 const sessionsEl = document.getElementById("sessions");
