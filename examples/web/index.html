@@ -43,7 +43,7 @@
 <div id="status">connecting…</div>
 <div id="bar">
   <select id="agent"></select>
-  <select id="account"><option value="">默认账号</option></select>
+  <select id="account"><option value="">不用账号</option><option value="auto">自动账号</option></select>
   <input id="cwd" list="cwds" placeholder="项目目录（留空=主目录）" style="flex:0 0 260px" />
   <datalist id="cwds"></datalist>
   <input id="prompt" placeholder="让 agent 干点什么…" />
@@ -157,7 +157,10 @@ function renderAccounts(accounts, currentAccountId) {
   const accountSel = document.getElementById("account");
   const selected = accountSel.value;
   accountSel.textContent = "";
-  accountSel.appendChild(new Option("默认账号", ""));
+  accountSel.appendChild(new Option("不用账号", ""));
+  const autoOption = new Option("自动账号", "auto");
+  if (selected === "auto") autoOption.selected = true;
+  accountSel.appendChild(autoOption);
   for (const a of accounts) {
     const option = new Option(accountLabel(a), a.id);
     if ((selected && a.id === selected) || (!selected && a.id === currentAccountId)) option.selected = true;

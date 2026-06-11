@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/codingagentprotocol/capd/internal/account"
+	"github.com/codingagentprotocol/capd/internal/account/codexauth"
 	"github.com/codingagentprotocol/capd/internal/discovery"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
@@ -40,16 +42,33 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 	if len(prefer) == 0 {
 		prefer = defaultRoutePreference
 	}
-	if params.AccountID != "" {
+	accountID := strings.TrimSpace(params.AccountID)
+	var selectedAccountID string
+	var accountReason string
+	if accountID != "" {
 		prefer = []string{codexAgentID}
 		required.Usage = true
 		required.Resume = true
+		if accountID == protocol.AccountAuto {
+			account, reason, perr := s.selectCodexAccountForRoute()
+			if perr != nil {
+				return protocol.AgentRouteResult{}, perr
+			}
+			selectedAccountID = account.ID
+			accountReason = reason
+		} else {
+			if _, perr := s.loadCodexAccountForRoute(accountID); perr != nil {
+				return protocol.AgentRouteResult{}, perr
+			}
+			selectedAccountID = accountID
+			accountReason = "explicit accountId"
+		}
 	}
 
 	var best protocol.AgentInfo
 	bestScore := -1
 	for _, agent := range discovery.Discover(ctx, s.opts.Registry) {
-		if params.AccountID != "" && agent.ID != codexAgentID {
+		if accountID != "" && agent.ID != codexAgentID {
 			continue
 		}
 		if !agent.Available || !hasCapabilities(agent.Capabilities, required) {
@@ -66,10 +85,65 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 			protocol.CodeAgentUnavailable, "no available agent satisfies requested capabilities")
 	}
 	reason := fmt.Sprintf("matched capabilities%s", routeReasonSuffix(required))
-	if params.AccountID != "" {
+	if accountID != "" {
 		reason += "; accountId requires codex account runtime"
+		if accountReason != "" {
+			reason += "; " + accountReason
+		}
 	}
-	return protocol.AgentRouteResult{Agent: best, Reason: reason}, nil
+	return protocol.AgentRouteResult{Agent: best, AccountID: selectedAccountID, Reason: reason}, nil
+}
+
+func (s *Server) loadCodexAccountForRoute(accountID string) (account.Account, *protocol.Error) {
+	if s.opts.Accounts == nil {
+		return account.Account{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
+	}
+	acc, err := s.opts.Accounts.LoadAccount(accountID)
+	if err != nil {
+		return account.Account{}, protocol.NewError(protocol.CodeInvalidParams, "unknown accountId %q", accountID)
+	}
+	if acc.Provider != codexauth.Provider {
+		return account.Account{}, protocol.NewError(protocol.CodeInvalidParams, "accountId %q is not a Codex account", accountID)
+	}
+	return acc, nil
+}
+
+func (s *Server) selectCodexAccountForRoute() (account.Account, string, *protocol.Error) {
+	if s.opts.Accounts == nil {
+		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
+	}
+	accounts, err := s.opts.Accounts.ListAccounts(codexauth.Provider)
+	if err != nil {
+		return account.Account{}, "", protocol.NewError(protocol.CodeInternalError, "list accounts: %v", err)
+	}
+	if len(accounts) == 0 {
+		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
+	}
+	current, _ := s.opts.Accounts.CurrentAccount(codexauth.Provider)
+	best := accounts[0]
+	bestScore := quotaRouteScore(s.opts.Accounts, best, current)
+	for _, acc := range accounts[1:] {
+		score := quotaRouteScore(s.opts.Accounts, acc, current)
+		if score < bestScore || (score == bestScore && acc.ID == current) {
+			best = acc
+			bestScore = score
+		}
+	}
+	if q, err := s.opts.Accounts.LoadQuota(best.ID); err == nil {
+		return best, fmt.Sprintf("auto account %s primary %.0f%%", best.ID, q.PrimaryUsedPercent), nil
+	}
+	return best, fmt.Sprintf("auto account %s without cached quota", best.ID), nil
+}
+
+func quotaRouteScore(st *account.Store, acc account.Account, current string) float64 {
+	score := 75.0
+	if q, err := st.LoadQuota(acc.ID); err == nil {
+		score = q.PrimaryUsedPercent
+	}
+	if acc.ID == current {
+		score -= 0.01
+	}
+	return score
 }
 
 func routeRequirements(params protocol.AgentRouteParams) protocol.AgentCapabilities {

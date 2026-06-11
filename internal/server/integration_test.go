@@ -527,6 +527,75 @@ func TestAgentsRouteWithAccountRequiresCodex(t *testing.T) {
 	}
 }
 
+func TestAgentsRouteAutoAccountChoosesLowestCachedQuota(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	addCodexAccountForTest(t, accounts, "codex-low", "low@example.com")
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 90}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", Plan: "pro", PrimaryUsedPercent: 10}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var routed protocol.AgentRouteResult
+	c.mustResult(c.call(protocol.MethodAgentsRoute, protocol.AgentRouteParams{
+		AccountID: protocol.AccountAuto,
+	}), &routed)
+	if routed.Agent.ID != "codex" || routed.AccountID != "codex-low" {
+		t.Fatalf("route = %+v", routed)
+	}
+	if !strings.Contains(routed.Reason, "auto account codex-low") {
+		t.Fatalf("reason = %q", routed.Reason)
+	}
+}
+
+func TestSessionCreateAutoAccountBindsLowestCachedQuota(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	addCodexAccountForTest(t, accounts, "codex-high", "high@example.com")
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-high", PrimaryUsedPercent: 90}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:   protocol.AgentAuto,
+		AccountID: protocol.AccountAuto,
+	}), &created)
+	accountID, err := accounts.SessionAccount(created.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accountID != "codex-test" {
+		t.Fatalf("session account = %q", accountID)
+	}
+}
+
+func TestSessionCreateCodexWithAutoAccount(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 5}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:   "codex",
+		AccountID: protocol.AccountAuto,
+	}), &created)
+	accountID, err := accounts.SessionAccount(created.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accountID != "codex-test" {
+		t.Fatalf("session account = %q", accountID)
+	}
+}
+
 func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
 	if err := accounts.SaveQuota(account.QuotaSnapshot{
@@ -557,6 +626,20 @@ func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 	data, _ := json.Marshal(result)
 	if strings.Contains(string(data), "test-token") || strings.Contains(string(data), "secret") || strings.Contains(string(data), "must-not-return") {
 		t.Fatalf("accounts/list leaked sensitive data: %s", data)
+	}
+}
+
+func addCodexAccountForTest(t *testing.T, accounts *account.Store, id, email string) {
+	t.Helper()
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        id,
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     email,
+		AccountID: "acct_" + id,
+		SecretRef: "file:" + id,
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -83,6 +83,8 @@ type AgentsListResult struct {
 
 const AgentAuto = "auto"
 
+const AccountAuto = "auto"
+
 type AgentRouteParams struct {
 	Prompt       string            `json:"prompt,omitempty"`
 	Attachments  []Attachment      `json:"attachments,omitempty"`
@@ -94,8 +96,9 @@ type AgentRouteParams struct {
 }
 
 type AgentRouteResult struct {
-	Agent  AgentInfo `json:"agent"`
-	Reason string    `json:"reason"`
+	Agent     AgentInfo `json:"agent"`
+	AccountID string    `json:"accountId,omitempty"`
+	Reason    string    `json:"reason"`
 }
 
 type AgentsUsageParams struct {

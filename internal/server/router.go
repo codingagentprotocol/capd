@@ -133,6 +133,24 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 				return nil, perr
 			}
 			agentID = routed.Agent.ID
+			if params.AccountID == protocol.AccountAuto {
+				params.AccountID = routed.AccountID
+			}
+		} else if params.AccountID == protocol.AccountAuto {
+			routed, perr := s.routeAgent(ctx, protocol.AgentRouteParams{
+				AccountID:    protocol.AccountAuto,
+				Model:        params.Model,
+				Effort:       params.Effort,
+				Capabilities: routeRequirements(routeParamsForCreate(params)),
+				Prefer:       []string{agentID},
+			})
+			if perr != nil {
+				return nil, perr
+			}
+			if routed.Agent.ID != agentID {
+				return nil, protocol.NewError(protocol.CodeInvalidParams, "accountId auto is currently supported only for agent %q", codexAgentID)
+			}
+			params.AccountID = routed.AccountID
 		}
 		opts := adapter.SessionOpts{
 			Cwd:            params.Cwd,

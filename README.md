@@ -290,9 +290,10 @@ flowchart TB
   macOS stores bundles in the user Keychain, Windows uses Credential Manager,
   and unsupported platforms fail closed instead of silently falling back.
 - New Codex sessions can opt into an imported account with `--account` or
-  protocol `session/create.accountId`; the daemon projects that account into
-  a dedicated `CODEX_HOME` and the Codex app-server profile pool keeps it
-  isolated from other accounts.
+  protocol `session/create.accountId`; `accountId:"auto"` picks the imported
+  Codex account with the lowest cached primary quota usage. The daemon projects
+  that account into a dedicated `CODEX_HOME` and the Codex app-server profile
+  pool keeps it isolated from other accounts.
 
 ## Repository layout
 
