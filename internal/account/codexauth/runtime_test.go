@@ -62,6 +62,38 @@ func TestRuntimeProjectorWritesIsolatedCodexHome(t *testing.T) {
 	}
 }
 
+func TestRuntimeProjectorTightensExistingCodexHomePermissions(t *testing.T) {
+	dir := t.TempDir()
+	secrets := secret.NewFileStore(filepath.Join(dir, "secrets"))
+	ref, err := secrets.Put(context.Background(), "codex-acct", secret.Bundle{
+		Provider:    Provider,
+		AuthMode:    "oauth",
+		AccessToken: "access-secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, "runtimes")
+	codexHome := filepath.Join(root, Provider, "codex-acct")
+	if err := os.MkdirAll(codexHome, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(codexHome, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	acc := account.Account{ID: "codex-acct", Provider: Provider, SecretRef: ref.String()}
+
+	profile, err := RuntimeProjector{Root: root, Secrets: secrets}.Project(context.Background(), acc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.CodexHome != codexHome {
+		t.Fatalf("CodexHome = %q, want %q", profile.CodexHome, codexHome)
+	}
+	assertMode(t, codexHome, 0o700)
+	assertMode(t, filepath.Join(codexHome, "auth.json"), 0o600)
+}
+
 func TestRuntimeProjectorSanitizesAccountDirectory(t *testing.T) {
 	dir := t.TempDir()
 	secrets := secret.NewFileStore(filepath.Join(dir, "secrets"))
@@ -125,5 +157,16 @@ func TestRuntimeProjectorSyncsRefreshedProjectedAuth(t *testing.T) {
 	}
 	if !strings.Contains(string(bundle.RawAuthJSON), "new-access") {
 		t.Fatalf("raw auth was not refreshed: %s", bundle.RawAuthJSON)
+	}
+}
+
+func assertMode(t *testing.T, path string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Fatalf("%s mode = %o, want %o", path, got, want)
 	}
 }

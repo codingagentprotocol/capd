@@ -46,6 +46,9 @@ func (rp RuntimeProjector) Project(ctx context.Context, acc account.Account) (Ru
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return RuntimeProfile{}, err
 	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		return RuntimeProfile{}, err
+	}
 	authJSON := bundle.RawAuthJSON
 	if len(authJSON) == 0 {
 		authJSON, err = buildAuthJSON(bundle)
