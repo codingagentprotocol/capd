@@ -170,6 +170,43 @@ func (m *Manager) List(limit int) []protocol.SessionInfo {
 	return out
 }
 
+// History returns stored events without touching the session's liveness —
+// pure read, no revival.
+func (m *Manager) History(id string, fromSeq uint64, limit int) ([]protocol.Event, error) {
+	if m.store != nil {
+		evs, err := m.store.LoadEvents(id, fromSeq, limit)
+		if err == nil && len(evs) > 0 {
+			return evs, nil
+		}
+		// Unknown id should error rather than return an empty page.
+		if _, lerr := m.store.LoadSession(id); lerr != nil {
+			m.mu.Lock()
+			_, inMem := m.sessions[id]
+			m.mu.Unlock()
+			if !inMem {
+				return nil, protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
+			}
+		}
+		return evs, err
+	}
+
+	m.mu.Lock()
+	s, ok := m.sessions[id]
+	m.mu.Unlock()
+	if !ok {
+		return nil, protocol.NewError(protocol.CodeSessionNotFound, "unknown session %q", id)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []protocol.Event
+	for _, ev := range s.buf {
+		if ev.Seq >= fromSeq && len(out) < limit {
+			out = append(out, ev)
+		}
+	}
+	return out, nil
+}
+
 // Fork branches an existing session into a new, independent one that shares
 // conversation history up to this point.
 func (m *Manager) Fork(ctx context.Context, id string) (*Session, error) {

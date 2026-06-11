@@ -107,6 +107,31 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		nextSeq := s.subscribe(ctx, client, sess, params.FromSeq)
 		return protocol.SessionAttachResult{SessionID: sess.ID, NextSeq: nextSeq}, nil
 
+	case protocol.MethodSessionHistory:
+		var params protocol.SessionHistoryParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		limit := params.Limit
+		if limit <= 0 {
+			limit = 500
+		}
+		if limit > 5000 {
+			limit = 5000
+		}
+		events, err := s.opts.Sessions.History(params.SessionID, params.FromSeq, limit)
+		if err != nil {
+			return nil, asProtocolError(err)
+		}
+		next := params.FromSeq
+		if n := len(events); n > 0 {
+			next = events[n-1].Seq + 1
+		}
+		if events == nil {
+			events = []protocol.Event{}
+		}
+		return protocol.SessionHistoryResult{SessionID: params.SessionID, Events: events, NextSeq: next}, nil
+
 	case protocol.MethodSessionFork:
 		var params protocol.SessionForkParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {

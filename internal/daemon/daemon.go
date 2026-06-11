@@ -6,7 +6,11 @@ package daemon
 import (
 	"context"
 	"log/slog"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/adapter/claudecode"
@@ -43,8 +47,42 @@ func Registry() *adapter.Registry {
 	)
 }
 
+// enrichPATH merges the user's login-shell PATH into the process PATH.
+// Service managers (launchd, systemd) start capd with a minimal PATH that
+// misses nvm/homebrew/user-local bins — exactly where agent CLIs live.
+func enrichPATH(log *slog.Logger) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	out, err := exec.Command(shell, "-lc", "echo $PATH").Output()
+	if err != nil {
+		log.Warn("could not read login-shell PATH", "err", err)
+		return
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	loginPath := strings.TrimSpace(lines[len(lines)-1]) // rc files may echo noise above
+	if loginPath == "" {
+		return
+	}
+
+	seen := map[string]bool{}
+	var merged []string
+	for _, p := range append(strings.Split(loginPath, ":"), strings.Split(os.Getenv("PATH"), ":")...) {
+		if p != "" && !seen[p] {
+			seen[p] = true
+			merged = append(merged, p)
+		}
+	}
+	os.Setenv("PATH", strings.Join(merged, ":"))
+}
+
 // Run assembles and starts the daemon, blocking until ctx is cancelled.
 func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
+	enrichPATH(log)
 	token, err := EnsureToken()
 	if err != nil {
 		return err

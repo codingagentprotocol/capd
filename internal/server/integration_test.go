@@ -376,3 +376,34 @@ func TestSessionList(t *testing.T) {
 		t.Fatalf("state after close = %s, want ended", list.Sessions[0].State)
 	}
 }
+
+func TestSessionHistory(t *testing.T) {
+	ts, _ := newIntegration(t)
+	c := initialized(t, ts)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake"}), &created)
+	c.mustResult(c.call(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: created.SessionID, Prompt: "hello"}), nil)
+	c.waitEvent(protocol.EventTaskDone)
+
+	var hist protocol.SessionHistoryResult
+	c.mustResult(c.call(protocol.MethodSessionHistory, protocol.SessionHistoryParams{SessionID: created.SessionID}), &hist)
+	if len(hist.Events) < 3 {
+		t.Fatalf("history too short: %+v", hist)
+	}
+	if hist.Events[1].Type != protocol.EventOutputText || hist.Events[1].Data["text"] != "echo:hello" {
+		t.Fatalf("event[1] = %+v", hist.Events[1])
+	}
+	if hist.NextSeq != hist.Events[len(hist.Events)-1].Seq+1 {
+		t.Fatalf("nextSeq = %d", hist.NextSeq)
+	}
+	// Paging: fromSeq = nextSeq returns empty, same cursor.
+	var page2 protocol.SessionHistoryResult
+	c.mustResult(c.call(protocol.MethodSessionHistory, protocol.SessionHistoryParams{SessionID: created.SessionID, FromSeq: hist.NextSeq}), &page2)
+	if len(page2.Events) != 0 {
+		t.Fatalf("page2 should be empty: %+v", page2.Events)
+	}
+	if resp := c.call(protocol.MethodSessionHistory, protocol.SessionHistoryParams{SessionID: "s_nope"}); resp.Error == nil {
+		t.Fatal("unknown session should error")
+	}
+}

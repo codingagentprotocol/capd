@@ -184,6 +184,7 @@ type appSession struct {
 
 	mu        sync.Mutex
 	turnID    string // current/last turn
+	lastText  string // final agent message of the turn, for task.done result
 	lastUsage map[string]any
 	approvals map[string]json.RawMessage // approvalId → rpc request id
 	closed    bool
@@ -451,8 +452,13 @@ func (s *appSession) handleNotification(method string, params json.RawMessage) {
 		json.Unmarshal(params, &p)
 		s.mu.Lock()
 		usage := s.lastUsage
+		result := s.lastText
+		s.lastText = ""
 		s.mu.Unlock()
 		data := map[string]any{"ok": p.Turn.Status == "completed"}
+		if result != "" {
+			data["result"] = result
+		}
 		if usage != nil {
 			data["usage"] = usage
 		}
@@ -487,6 +493,9 @@ func (s *appSession) handleItem(method string, params json.RawMessage) {
 	case "agentMessage":
 		if method == "item/completed" {
 			text, _ := p.Item["text"].(string)
+			s.mu.Lock()
+			s.lastText = text
+			s.mu.Unlock()
 			s.emit(protocol.EventOutputText, map[string]any{"text": text, "final": true, "itemId": p.Item["id"]})
 		}
 	case "reasoning", "userMessage":

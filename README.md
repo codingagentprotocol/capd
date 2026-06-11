@@ -136,7 +136,7 @@ must be `initialize` (version negotiation).
 | Group | Methods |
 |-------|---------|
 | agents | `agents/list`, `agents/usage` |
-| session | `session/create`, `session/list`, `session/attach`, `session/fork`, `session/rollback`, `session/close` |
+| session | `session/create`, `session/list`, `session/attach`, `session/history`, `session/fork`, `session/rollback`, `session/close` |
 | task | `task/send` (text + image attachments), `task/steer`, `task/cancel`, `task/review` |
 | approval | `approval/reply` (`approve` / `approveAlways` / `deny`) |
 

@@ -8,6 +8,7 @@ const (
 	MethodSessionCreate   = "session/create"   // start an agent session
 	MethodSessionList     = "session/list"     // enumerate sessions and their liveness
 	MethodSessionAttach   = "session/attach"   // re-attach to a live or persisted session
+	MethodSessionHistory  = "session/history"  // pull past events without subscribing
 	MethodSessionFork     = "session/fork"     // branch a session into an independent copy
 	MethodSessionRollback = "session/rollback" // drop the last N turns of the conversation
 	MethodSessionClose    = "session/close"
@@ -145,6 +146,20 @@ type TaskSendParams struct {
 	SessionID   string       `json:"sessionId"`
 	Prompt      string       `json:"prompt"`
 	Attachments []Attachment `json:"attachments,omitempty"`
+}
+
+// SessionHistoryParams pulls stored events synchronously — for rendering a
+// past conversation without attaching to the live stream.
+type SessionHistoryParams struct {
+	SessionID string `json:"sessionId"`
+	FromSeq   uint64 `json:"fromSeq"`
+	Limit     int    `json:"limit,omitempty"` // default 500, max 5000
+}
+
+type SessionHistoryResult struct {
+	SessionID string  `json:"sessionId"`
+	Events    []Event `json:"events"`
+	NextSeq   uint64  `json:"nextSeq"` // pass back as fromSeq to page forward
 }
 
 type SessionForkParams struct {

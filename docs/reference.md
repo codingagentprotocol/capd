@@ -136,6 +136,18 @@ buffered events with `seq >= fromSeq` as notifications, then follows live.
 Use the last `seq` you saw + 1 to resume without duplicates; use a huge
 `fromSeq` for live-tail only. Touching a `stored` session revives it.
 
+### `session/history`
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `sessionId` | string | required | which session |
+| `fromSeq` | uint | `0` | first sequence number to return |
+| `limit` | int | 500 (max 5000) | page size |
+
+-> `{"sessionId", "events": [...], "nextSeq"}` — a synchronous pull of past
+events, no subscription, no session revival. Page forward by passing
+`nextSeq` back as `fromSeq`; an empty page means you are caught up.
+
 ### `session/fork`
 
 `{"sessionId"}` → `{"sessionId": "<new>"}` — an independent session sharing
@@ -201,7 +213,7 @@ monotonic, gap-free.
 | `tool.result` | `output`, `exitCode`, `delta:true` for live command output |
 | `approval.needed` | `approvalId`, `kind` (`command`/`fileChange`/`permissions`), `command`, `cwd`, `reason` |
 | `usage.updated` | agent-pushed rate-limit snapshot |
-| `task.done` | `ok`, `usage` (tokens), `costUSD` where known, `canceled`/`engineDied` flags |
+| `task.done` | `ok`, `result` (final agent text, where known), `usage` (tokens), `costUSD` where known, `canceled`/`engineDied` flags |
 | `error` | `message` |
 
 ### Error codes
