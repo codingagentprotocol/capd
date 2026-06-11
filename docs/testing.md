@@ -36,6 +36,7 @@ Import at least one Codex `auth.json`, then run the local smoke check:
 ```bash
 capd accounts codex import
 capd accounts codex smoke
+capd accounts codex smoke --json
 ```
 
 For real quota validation:
@@ -54,4 +55,5 @@ capd agents usage codex --account auto
 The smoke command verifies imported account metadata, SecretStore readability,
 per-account `CODEX_HOME` projection, private `auth.json` permissions, and
 optionally ChatGPT backend quota refresh. It prints only account metadata,
-projection paths, and quota percentages; token material is never printed.
+projection paths, and quota percentages; token material is never printed. Use
+`--json` to capture machine-readable smoke evidence in long tasks or CI logs.

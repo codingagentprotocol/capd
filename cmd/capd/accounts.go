@@ -230,6 +230,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			refreshQuota, _ := cmd.Flags().GetBool("quota")
 			baseURL, _ := cmd.Flags().GetString("base-url")
 			requireMultiple, _ := cmd.Flags().GetBool("require-multiple")
+			jsonOut, _ := cmd.Flags().GetBool("json")
 			accounts, secrets, err := openAccountDeps()
 			if err != nil {
 				return err
@@ -249,8 +250,12 @@ func newCodexAccountsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tEMAIL\tPROJECTED_CODEX_HOME\tAUTH_MODE\tPRIMARY_USED")
+			result := codexSmokeResult{
+				OK:              true,
+				CheckedAccounts: len(list),
+				QuotaRefreshed:  refreshQuota,
+				Accounts:        make([]codexSmokeAccount, 0, len(list)),
+			}
 			for _, acc := range list {
 				ref, err := secret.ParseRef(acc.SecretRef)
 				if err != nil {
@@ -270,20 +275,40 @@ func newCodexAccountsCmd() *cobra.Command {
 				if err := verifyProjectedAuth(profile.CodexHome); err != nil {
 					return fmt.Errorf("%s: verify projection: %w", acc.ID, err)
 				}
+				row := codexSmokeAccount{
+					ID:                 acc.ID,
+					Email:              acc.Email,
+					AuthMode:           acc.AuthMode,
+					ProjectedCodexHome: profile.CodexHome,
+					ProjectionOK:       true,
+				}
 				used := "cached-missing"
 				if refreshQuota {
-					result, err := codexquota.Client{BaseURL: baseURL}.Usage(cmd.Context(), acc.ID, bundle)
+					quotaResult, err := codexquota.Client{BaseURL: baseURL}.Usage(cmd.Context(), acc.ID, bundle)
 					if err != nil {
 						return fmt.Errorf("%s: refresh quota: %w", acc.ID, err)
 					}
-					if err := accounts.SaveQuota(result.Quota); err != nil {
+					if err := accounts.SaveQuota(quotaResult.Quota); err != nil {
 						return fmt.Errorf("%s: save quota: %w", acc.ID, err)
 					}
-					used = fmt.Sprintf("%.1f%%", result.Quota.PrimaryUsedPercent)
+					row.PrimaryUsedPercent = &quotaResult.Quota.PrimaryUsedPercent
+					used = formatPercent(quotaResult.Quota.PrimaryUsedPercent)
 				} else if q, err := accounts.LoadQuota(acc.ID); err == nil {
-					used = fmt.Sprintf("%.1f%%", q.PrimaryUsedPercent)
+					row.PrimaryUsedPercent = &q.PrimaryUsedPercent
+					used = formatPercent(q.PrimaryUsedPercent)
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", acc.ID, acc.Email, profile.CodexHome, acc.AuthMode, used)
+				row.PrimaryUsed = used
+				result.Accounts = append(result.Accounts, row)
+			}
+			if jsonOut {
+				out, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+				return nil
+			}
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
+			fmt.Fprintln(w, "ID\tEMAIL\tPROJECTED_CODEX_HOME\tAUTH_MODE\tPRIMARY_USED")
+			for _, row := range result.Accounts {
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", row.ID, row.Email, row.ProjectedCodexHome, row.AuthMode, row.PrimaryUsed)
 			}
 			return w.Flush()
 		},
@@ -291,6 +316,7 @@ func newCodexAccountsCmd() *cobra.Command {
 	smokeCmd.Flags().Bool("quota", false, "also refresh ChatGPT backend quota for every imported account")
 	smokeCmd.Flags().String("base-url", "", "override ChatGPT base URL for testing")
 	smokeCmd.Flags().Bool("require-multiple", false, "fail unless at least two Codex accounts are imported")
+	smokeCmd.Flags().Bool("json", false, "print machine-readable smoke evidence without token material")
 
 	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, quotaCmd, smokeCmd)
 	return cmd
@@ -305,6 +331,27 @@ func verifyProjectedAuth(codexHome string) error {
 		return fmt.Errorf("auth.json mode = %o, want 600", info.Mode().Perm())
 	}
 	return nil
+}
+
+type codexSmokeResult struct {
+	OK              bool                `json:"ok"`
+	CheckedAccounts int                 `json:"checkedAccounts"`
+	QuotaRefreshed  bool                `json:"quotaRefreshed"`
+	Accounts        []codexSmokeAccount `json:"accounts"`
+}
+
+type codexSmokeAccount struct {
+	ID                 string   `json:"id"`
+	Email              string   `json:"email,omitempty"`
+	AuthMode           string   `json:"authMode,omitempty"`
+	ProjectedCodexHome string   `json:"projectedCodexHome"`
+	ProjectionOK       bool     `json:"projectionOk"`
+	PrimaryUsed        string   `json:"primaryUsed"`
+	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
+}
+
+func formatPercent(value float64) string {
+	return fmt.Sprintf("%.1f%%", value)
 }
 
 func openAccountDeps() (*account.Store, secret.Store, error) {

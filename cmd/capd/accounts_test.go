@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -45,6 +46,39 @@ func TestCodexAccountsSmokeProjectsWithoutLeakingSecrets(t *testing.T) {
 	}
 	if _, err := secrets.Get(context.Background(), secret.Ref{Backend: secret.BackendFile, ID: "codex-test"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCodexAccountsSmokeJSONWithoutLeakingSecrets(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 0}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if strings.Contains(text, "access-secret") || strings.Contains(text, "refresh-secret") || strings.Contains(text, "secretRef") {
+		t.Fatalf("smoke json leaked sensitive data: %s", text)
+	}
+	var result codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK || result.CheckedAccounts != 1 || len(result.Accounts) != 1 {
+		t.Fatalf("result = %+v", result)
+	}
+	acc := result.Accounts[0]
+	if acc.ID != "codex-test" || !acc.ProjectionOK || acc.PrimaryUsed != "0.0%" || acc.PrimaryUsedPercent == nil || *acc.PrimaryUsedPercent != 0 {
+		t.Fatalf("account = %+v", acc)
 	}
 }
 
