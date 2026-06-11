@@ -188,6 +188,9 @@ func (st *Store) SaveQuota(q QuotaSnapshot) error {
 	if q.AccountID == "" {
 		return fmt.Errorf("account id is required")
 	}
+	if _, err := st.LoadAccount(q.AccountID); err != nil {
+		return err
+	}
 	if q.CheckedAt == 0 {
 		q.CheckedAt = time.Now().Unix()
 	}

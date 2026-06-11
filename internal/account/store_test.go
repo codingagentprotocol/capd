@@ -137,6 +137,19 @@ func TestAccountStoreQuotaAndSessionBinding(t *testing.T) {
 	}
 }
 
+func TestSaveQuotaValidatesAccount(t *testing.T) {
+	st := newStore(t)
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: ""}); err == nil || !strings.Contains(err.Error(), "account id is required") {
+		t.Fatalf("empty account err = %v", err)
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "missing", PrimaryUsedPercent: 1}); !errors.Is(err, ErrUnknownAccount) {
+		t.Fatalf("missing account err = %v", err)
+	}
+	if _, err := st.LoadQuota("missing"); !errors.Is(err, ErrUnknownAccount) {
+		t.Fatalf("quota err = %v", err)
+	}
+}
+
 func assertAccountStoreFileMode(t *testing.T, path string) {
 	t.Helper()
 	info, err := os.Stat(path)
