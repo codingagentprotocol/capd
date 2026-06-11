@@ -25,7 +25,7 @@ func (as *appServer) ensureClient() (*rpcClient, error) {
 	if as.client != nil && as.client.Alive() {
 		return as.client, nil
 	}
-	c, err := startRPC(as.routeNotification, as.routeServerRequest)
+	c, err := startRPC(as.routeNotification, as.routeServerRequest, as.handleEngineDeath)
 	if err != nil {
 		return nil, err
 	}
@@ -67,6 +67,26 @@ func (as *appServer) lookup(params json.RawMessage) *appSession {
 func (as *appServer) routeNotification(method string, params json.RawMessage) {
 	if s := as.lookup(params); s != nil {
 		s.handleNotification(method, params)
+	}
+}
+
+// handleEngineDeath fires when the app-server process exits: every live
+// session gets an error event and is closed, which makes the manager mark it
+// ended and lets the next touch revive it (fresh app-server, native resume).
+func (as *appServer) handleEngineDeath() {
+	as.mu.Lock()
+	sessions := make([]*appSession, 0, len(as.sessions))
+	for _, s := range as.sessions {
+		sessions = append(sessions, s)
+	}
+	as.sessions = make(map[string]*appSession)
+	as.client = nil
+	as.mu.Unlock()
+
+	for _, s := range sessions {
+		s.emit(protocol.EventError, map[string]any{"message": "codex app-server exited; session will revive on next use"})
+		s.emit(protocol.EventTaskDone, map[string]any{"ok": false, "engineDied": true})
+		s.Close()
 	}
 }
 

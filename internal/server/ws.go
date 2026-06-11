@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/coder/websocket"
 
@@ -65,6 +66,25 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			select {
 			case data := <-client.out:
 				if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+					cancel()
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	go func() { // heartbeat: reap connections whose peer is gone
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				pingCtx, pingCancel := context.WithTimeout(ctx, 10*time.Second)
+				err := conn.Ping(pingCtx)
+				pingCancel()
+				if err != nil {
+					s.log.Info("client heartbeat failed, dropping", "remote", r.RemoteAddr)
 					cancel()
 					return
 				}

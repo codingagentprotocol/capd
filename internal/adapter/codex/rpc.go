@@ -27,10 +27,12 @@ type rpcClient struct {
 	dead    bool
 
 	// onNotify receives server notifications; onServerReq receives
-	// server-initiated requests (approvals). Both are called from the read
-	// loop — handlers must not block.
+	// server-initiated requests (approvals). onDead fires once when the
+	// subprocess exits. All are called from the read loop — handlers must
+	// not block.
 	onNotify    func(method string, params json.RawMessage)
 	onServerReq func(id json.RawMessage, method string, params json.RawMessage)
+	onDead      func()
 }
 
 type rpcResult struct {
@@ -48,7 +50,7 @@ type rpcMessage struct {
 	} `json:"error,omitempty"`
 }
 
-func startRPC(onNotify func(string, json.RawMessage), onServerReq func(json.RawMessage, string, json.RawMessage)) (*rpcClient, error) {
+func startRPC(onNotify func(string, json.RawMessage), onServerReq func(json.RawMessage, string, json.RawMessage), onDead func()) (*rpcClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p, err := proc.Start(ctx, proc.Spec{Bin: "codex", Args: []string{"app-server"}})
 	if err != nil {
@@ -61,6 +63,7 @@ func startRPC(onNotify func(string, json.RawMessage), onServerReq func(json.RawM
 		pending:     make(map[int64]chan rpcResult),
 		onNotify:    onNotify,
 		onServerReq: onServerReq,
+		onDead:      onDead,
 	}
 	go c.readLoop()
 	return c, nil
@@ -103,7 +106,7 @@ func (c *rpcClient) readLoop() {
 			}
 		}
 	}
-	// Process gone: fail everything in flight.
+	// Process gone: fail everything in flight, then announce the death.
 	c.mu.Lock()
 	c.dead = true
 	for id, ch := range c.pending {
@@ -112,6 +115,9 @@ func (c *rpcClient) readLoop() {
 	}
 	c.mu.Unlock()
 	go c.proc.Wait()
+	if c.onDead != nil {
+		c.onDead()
+	}
 }
 
 // Call issues a request and waits for its response.
