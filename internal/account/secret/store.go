@@ -28,10 +28,22 @@ func ParseRef(value string) (Ref, error) {
 	}
 	for i, r := range value {
 		if r == ':' {
-			return Ref{Backend: value[:i], ID: value[i+1:]}, nil
+			backend := strings.TrimSpace(value[:i])
+			id := strings.TrimSpace(value[i+1:])
+			if backend == "" {
+				return Ref{}, fmt.Errorf("secret backend is empty")
+			}
+			if id == "" {
+				return Ref{}, fmt.Errorf("secret id is empty")
+			}
+			return Ref{Backend: backend, ID: id}, nil
 		}
 	}
-	return Ref{ID: value}, nil
+	id := strings.TrimSpace(value)
+	if id == "" {
+		return Ref{}, fmt.Errorf("secret id is empty")
+	}
+	return Ref{ID: id}, nil
 }
 
 type Bundle struct {

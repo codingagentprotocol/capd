@@ -40,14 +40,35 @@ func TestFileStoreRoundTripAndPermissions(t *testing.T) {
 }
 
 func TestParseRef(t *testing.T) {
-	ref, err := ParseRef("file:codex-a")
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name    string
+		value   string
+		want    Ref
+		wantErr bool
+	}{
+		{name: "backend and id", value: "file:codex-a", want: Ref{Backend: "file", ID: "codex-a"}},
+		{name: "plain id", value: "codex-a", want: Ref{ID: "codex-a"}},
+		{name: "trim parts", value: " native : codex-a ", want: Ref{Backend: "native", ID: "codex-a"}},
+		{name: "empty ref", value: "", wantErr: true},
+		{name: "empty backend", value: ":codex-a", wantErr: true},
+		{name: "empty id", value: "file:", wantErr: true},
+		{name: "space id", value: "file:  ", wantErr: true},
 	}
-	if ref.Backend != "file" || ref.ID != "codex-a" {
-		t.Fatalf("ref = %+v", ref)
-	}
-	if _, err := ParseRef(""); err == nil {
-		t.Fatal("expected empty ref error")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ref, err := ParseRef(tt.value)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ref != tt.want {
+				t.Fatalf("ref = %+v, want %+v", ref, tt.want)
+			}
+		})
 	}
 }

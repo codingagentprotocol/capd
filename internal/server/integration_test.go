@@ -746,6 +746,29 @@ func TestAccountsQuotaRefreshesBackendQuotaSafely(t *testing.T) {
 	}
 }
 
+func TestAccountsQuotaRejectsMalformedSecretRef(t *testing.T) {
+	_, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-test",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "codex@example.com",
+		AccountID: "acct_test",
+		SecretRef: "file:",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsQuota, protocol.AccountsQuotaParams{
+		Provider:  codexauth.Provider,
+		AccountID: "codex-test",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInternalError || !strings.Contains(resp.Error.Message, "secret id is empty") {
+		t.Fatalf("response = %+v", resp)
+	}
+}
+
 func TestSessionCreateRejectsAccountForNonCodexAgent(t *testing.T) {
 	ts, _ := newIntegration(t)
 	c := initialized(t, ts)
