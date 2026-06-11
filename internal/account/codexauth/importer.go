@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,8 @@ import (
 )
 
 const Provider = "codex"
+
+const maxAuthJSONBytes = 1 << 20
 
 type Importer struct {
 	Accounts *account.Store
@@ -45,7 +48,7 @@ func (im Importer) ImportAuthJSON(ctx context.Context, path string) (ImportResul
 	if im.Secrets == nil {
 		return ImportResult{}, fmt.Errorf("secret store is required")
 	}
-	data, err := os.ReadFile(path)
+	data, err := readAuthJSON(path)
 	if err != nil {
 		return ImportResult{}, err
 	}
@@ -83,6 +86,23 @@ func (im Importer) ImportAuthJSON(ctx context.Context, path string) (ImportResul
 		}
 	}
 	return ImportResult{Account: acc, Secret: ref}, nil
+}
+
+func readAuthJSON(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(io.LimitReader(f, maxAuthJSONBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxAuthJSONBytes {
+		return nil, fmt.Errorf("codex auth json exceeded %d bytes", maxAuthJSONBytes)
+	}
+	return data, nil
 }
 
 func bundleFromAuthJSON(root any, data []byte) secret.Bundle {

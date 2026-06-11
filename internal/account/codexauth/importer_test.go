@@ -82,6 +82,34 @@ func TestImportAuthJSONRejectsNoToken(t *testing.T) {
 	}
 }
 
+func TestImportAuthJSONRejectsOversizedFile(t *testing.T) {
+	dir := t.TempDir()
+	authPath := filepath.Join(dir, "auth.json")
+	if err := os.WriteFile(authPath, []byte(strings.Repeat(" ", maxAuthJSONBytes+1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := account.OpenStore(filepath.Join(dir, "accounts.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer accounts.Close()
+
+	_, err = Importer{
+		Accounts: accounts,
+		Secrets:  secret.NewFileStore(filepath.Join(dir, "secrets")),
+	}.ImportAuthJSON(context.Background(), authPath)
+	if err == nil || !strings.Contains(err.Error(), "codex auth json exceeded") {
+		t.Fatalf("err = %v", err)
+	}
+	list, err := accounts.ListAccounts(Provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("accounts = %+v", list)
+	}
+}
+
 func jwt(t *testing.T, claims map[string]any) string {
 	t.Helper()
 	header, _ := json.Marshal(map[string]any{"alg": "none"})
