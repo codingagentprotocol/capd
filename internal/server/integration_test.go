@@ -377,6 +377,33 @@ func TestRejectsInvalidPermissionMode(t *testing.T) {
 	}
 }
 
+func TestPolicyRejectsUnsafeInputs(t *testing.T) {
+	ts, _ := newIntegration(t)
+	c := initialized(t, ts)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake"}), &created)
+
+	if resp := c.call(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: created.SessionID}); resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams {
+		t.Fatalf("want empty task invalid params, got %+v", resp)
+	}
+	if resp := c.call(protocol.MethodTaskSend, protocol.TaskSendParams{
+		SessionID: created.SessionID,
+		Prompt:    "x",
+		Attachments: []protocol.Attachment{{
+			Type: "image",
+			URL:  "file:///tmp/not-remote.png",
+		}},
+	}); resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams {
+		t.Fatalf("want unsafe attachment invalid params, got %+v", resp)
+	}
+	if resp := c.call(protocol.MethodApprovalReply, protocol.ApprovalReplyParams{
+		SessionID: created.SessionID, ApprovalID: "ap_1", Decision: "maybe",
+	}); resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams {
+		t.Fatalf("want invalid approval decision, got %+v", resp)
+	}
+}
+
 func TestForkRollbackAndReview(t *testing.T) {
 	ts, fake := newIntegration(t)
 	c := initialized(t, ts)

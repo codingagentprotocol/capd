@@ -84,8 +84,8 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if info, err := os.Stat(params.Cwd); err != nil || !info.IsDir() {
 			return nil, protocol.NewError(protocol.CodeInvalidParams, "cwd %q is not a directory", params.Cwd)
 		}
-		if !validPermissionMode(params.PermissionMode) {
-			return nil, protocol.NewError(protocol.CodeInvalidParams, "unknown permissionMode %q", params.PermissionMode)
+		if perr := s.policy.validateSessionCreate(params); perr != nil {
+			return nil, perr
 		}
 		sess, err := s.opts.Sessions.Create(ctx, params.AgentID, adapter.SessionOpts{
 			Cwd:            params.Cwd,
@@ -198,6 +198,9 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
 		}
+		if perr := s.policy.validateTaskSend(params); perr != nil {
+			return nil, perr
+		}
 		sess, err := s.opts.Sessions.Resolve(ctx, params.SessionID)
 		if err != nil {
 			return nil, asProtocolError(err)
@@ -226,6 +229,9 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		var params protocol.ApprovalReplyParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		if perr := s.policy.validateApprovalReply(params); perr != nil {
+			return nil, perr
 		}
 		sess, err := s.opts.Sessions.Resolve(ctx, params.SessionID)
 		if err != nil {
@@ -293,13 +299,4 @@ func asProtocolError(err error) *protocol.Error {
 		return perr
 	}
 	return protocol.NewError(protocol.CodeInternalError, "%v", err)
-}
-
-func validPermissionMode(mode string) bool {
-	switch mode {
-	case protocol.PermissionDefault, protocol.PermissionAcceptEdits, protocol.PermissionFull:
-		return true
-	default:
-		return false
-	}
 }

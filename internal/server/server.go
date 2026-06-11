@@ -27,12 +27,13 @@ type Options struct {
 }
 
 type Server struct {
-	opts Options
-	log  *slog.Logger
+	opts   Options
+	log    *slog.Logger
+	policy *policyEngine
 }
 
 func New(opts Options) *Server {
-	return &Server{opts: opts, log: opts.Log}
+	return &Server{opts: opts, log: opts.Log, policy: newPolicyEngine()}
 }
 
 // Run serves until ctx is cancelled.

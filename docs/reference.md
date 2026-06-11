@@ -121,12 +121,15 @@ resetsAt}`, `planType`, `credits`, plus per-model buckets in
 |-------|------|---------|---------|
 | `agentId` | string | required | agent to drive |
 | `cwd` | string | user home | project directory; must exist |
-| `permissionMode` | string | `""` (default) | `acceptEdits` · `full` |
+| `permissionMode` | string | `""` (default) | `acceptEdits` · `full`; `full` is rejected at filesystem root |
 | `model` | string | agent default | agent-native model id |
 | `effort` | string | agent default | reasoning effort (codex) |
 | `resume` | string | — | agent-native session id to resume |
 
 → `{"sessionId": "s_..."}`; the connection is auto-subscribed to its events.
+
+`task/send` rejects empty work items, non-image attachments, non-absolute local
+attachment paths, non-HTTP(S) attachment URLs, and more than 16 attachments.
 
 ### `session/list`
 
