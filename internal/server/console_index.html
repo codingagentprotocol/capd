@@ -56,6 +56,7 @@
   <button id="checkReady">就绪门禁</button>
   <label><input id="requireNativeSecret" type="checkbox" /> native secret</label>
   <button id="refreshSelectedQuota">刷新所选 quota</button>
+  <button id="refreshAllQuota">刷新全部 quota</button>
   <button id="send">发送</button>
   <button id="cancel">中断</button>
 </div>
@@ -401,6 +402,32 @@ async function refreshSelectedQuota() {
   await refreshQuota(accountId, button);
 }
 
+async function refreshAllQuota() {
+  const button = document.getElementById("refreshAllQuota");
+  button.disabled = true;
+  try {
+    const { accounts } = await call("accounts/list", { provider: "codex" });
+    const codexAccounts = (accounts || []).filter(a => a.provider === "codex");
+    if (!codexAccounts.length) {
+      line("ev-err", "✗ 没有可刷新的 Codex 账号");
+      return;
+    }
+    let ok = 0;
+    for (const account of codexAccounts) {
+      try {
+        await call("accounts/quota", { provider: "codex", accountId: account.id });
+        ok++;
+      } catch (e) {
+        line("ev-err", `✗ quota 刷新失败 ${account.email || account.id}: ${e.message || JSON.stringify(e)}`);
+      }
+    }
+    line("ev-sys", `· quota 批量刷新完成 ${ok}/${codexAccounts.length}`);
+    await loadAccounts();
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function updateCwdOptions(sessions) {
   const dirs = [...new Set((sessions || []).map(s => s.cwd).filter(Boolean))];
   const dl = document.getElementById("cwds");
@@ -511,6 +538,7 @@ document.getElementById("importCodex").onclick = importCodexAccount;
 document.getElementById("checkAccounts").onclick = () => checkAccounts(false);
 document.getElementById("checkReady").onclick = () => checkAccounts(true);
 document.getElementById("refreshSelectedQuota").onclick = refreshSelectedQuota;
+document.getElementById("refreshAllQuota").onclick = refreshAllQuota;
 document.getElementById("account").onchange = () => { markActiveAccount(); previewRoute(); };
 document.getElementById("requireFreshQuota").onchange = previewRoute;
 document.getElementById("prompt").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("send").click(); });

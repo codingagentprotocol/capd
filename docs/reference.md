@@ -27,7 +27,9 @@ The daemon also serves the local web console at `/console/`; it still connects
 back to `/ws` with the daemon token, so opening the page does not bypass CAP
 authentication. Console responses are `no-store` and include CSP, referrer,
 permissions, and frame-deny headers because the token may be supplied once in
-the URL.
+the URL. The console exposes account import, current-account selection,
+runtime projection, selected or all-account quota refresh, safe account checks,
+and readiness gates over the same CAP RPC methods used by CLI clients.
 
 ### `capd run <prompt>` — send one task and stream it
 
