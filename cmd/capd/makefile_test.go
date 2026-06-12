@@ -108,6 +108,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"DoctorChecksDaemonAccountsThroughCAP",
 		"CodexAccountsSmokeRequireAllFreshQuota",
 		"CodexAccountsSmokeRequireMultipleReturnsPartialAccountEvidence",
+		"CodexAccountsSmokeSecretNextStepsPreserveSecretBackend",
 		"CodexAccountsSmokeTextIncludesAutoRouteEvidence",
 		"RouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing",
 		"RouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache",

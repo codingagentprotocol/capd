@@ -2369,6 +2369,18 @@ func TestCodexAccountsSmokeNativeImportNextStep(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsSmokeSecretNextStepsPreserveSecretBackend(t *testing.T) {
+	if got := codexSmokeSecretNextStep(protocol.AccountSecretStateTimeout, secret.BackendNative); got != "unlock or approve OS SecretStore access, then rerun: capd accounts --secret-backend native codex smoke --json --timeout 2m" {
+		t.Fatalf("timeout next step = %q", got)
+	}
+	if got := codexSmokeSecretNextStep(protocol.AccountSecretStateUnreadable, secret.BackendNative); got != "re-import the failing Codex account with: capd accounts --secret-backend native codex import --auth /path/to/auth.json" {
+		t.Fatalf("unreadable next step = %q", got)
+	}
+	if got := codexSmokeSecretNextStep(protocol.AccountSecretStateTimeout, secret.BackendFile); got != "unlock or approve OS SecretStore access, then rerun: capd accounts codex smoke --json --timeout 2m" {
+		t.Fatalf("file timeout next step = %q", got)
+	}
+}
+
 func TestCodexAccountsSmokeRequireSecretBackend(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)

@@ -1036,11 +1036,11 @@ func codexSmokeSecretNextStep(state, backend string) string {
 	case protocol.AccountSecretStateAccessDenied:
 		return "approve macOS Keychain access, or avoid native prompts by restarting with: capd start --secret-backend file and re-importing accounts with: capd accounts --secret-backend file codex import --auth /path/to/auth.json"
 	case protocol.AccountSecretStateTimeout:
-		return "unlock or approve OS SecretStore access, then rerun: capd accounts codex smoke --json --timeout 2m"
+		return "unlock or approve OS SecretStore access, then rerun: " + codexAccountsCommand(backend, "codex smoke --json --timeout 2m")
 	case protocol.AccountSecretStateMissing:
 		return codexLocalImportNextStep(backend, false)
 	default:
-		return "re-import the failing Codex account with: capd accounts codex import --auth /path/to/auth.json"
+		return "re-import the failing Codex account with: " + codexAccountsCommand(backend, "codex import --auth /path/to/auth.json")
 	}
 }
 
