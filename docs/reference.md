@@ -295,6 +295,10 @@ quota on every checked account, and a specific SecretStore backend.
 `refreshQuota:true`, `requireMultiple:true`, `requireFreshQuota:true`,
 `requireAllFreshQuota:true`, and `requireSecretBackend:"native"` unless a
 different `--require-secret-backend` is supplied.
+With `--json`, a failing readiness or smoke gate still exits non-zero but prints
+`{"ok":false,"error":{...},"data":{...}}` when the daemon returned safe partial
+evidence in JSON-RPC error `data`. The partial evidence follows the same
+redaction contract as a successful `accounts/check` response.
 `quotaRefreshed:true` means the returned evidence follows a successful quota
 refresh in this same call. The response never returns token material,
 `secret_ref`, raw auth JSON, or local filesystem paths.

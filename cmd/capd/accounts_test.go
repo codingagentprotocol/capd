@@ -453,6 +453,35 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 			t.Fatalf("accounts check gate leaked %q: err=%v out=%s", leaked, err, out.String())
 		}
 	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--json", "--require-secret-backend", secret.BackendNative})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `want "native"`) {
+		t.Fatalf("json err = %v", err)
+	}
+	var failure accountsCheckJSONError
+	if unmarshalErr := json.Unmarshal(out.Bytes(), &failure); unmarshalErr != nil {
+		t.Fatalf("json error output = %q: %v", out.String(), unmarshalErr)
+	}
+	if failure.OK || failure.Error.Code != protocol.CodeInvalidParams || !strings.Contains(failure.Error.Message, `want "native"`) || len(failure.Data) == 0 {
+		t.Fatalf("json failure = %+v", failure)
+	}
+	var partial protocol.AccountsCheckResult
+	if unmarshalErr := json.Unmarshal(failure.Data, &partial); unmarshalErr != nil {
+		t.Fatal(unmarshalErr)
+	}
+	if partial.CheckedAccounts != 1 || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 0 {
+		t.Fatalf("partial = %+v", partial)
+	}
+	for _, leaked := range []string{token, "access-secret", "refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts check json gate leaked %q: %s", leaked, out.String())
+		}
+	}
 }
 
 func TestAccountsImportCallsDaemonRPCWithRepeatedAuthFlags(t *testing.T) {

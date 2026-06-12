@@ -196,6 +196,11 @@ SecretStore smoke check that does not require the daemon, use
 				RequireSecretBackend: requireSecretBackend,
 			})
 			if err != nil {
+				if jsonOut {
+					cmd.SilenceUsage = true
+					cmd.SilenceErrors = true
+					printAccountsCheckJSONError(cmd, err)
+				}
 				return err
 			}
 			var result protocol.AccountsCheckResult
@@ -248,6 +253,36 @@ SecretStore smoke check that does not require the daemon, use
 
 	cmd.AddCommand(listCmd, importCmd, checkCmd, newCodexAccountsCmd())
 	return cmd
+}
+
+type accountsCheckJSONError struct {
+	OK    bool            `json:"ok"`
+	Error protocol.Error  `json:"error"`
+	Data  json.RawMessage `json:"data,omitempty"`
+}
+
+func printAccountsCheckJSONError(cmd *cobra.Command, err error) {
+	perr, ok := err.(*protocol.Error)
+	if !ok {
+		return
+	}
+	payload := accountsCheckJSONError{
+		OK: false,
+		Error: protocol.Error{
+			Code:    perr.Code,
+			Message: perr.Message,
+		},
+	}
+	if perr.Data != nil {
+		if data, marshalErr := json.Marshal(perr.Data); marshalErr == nil && string(data) != "null" {
+			payload.Data = data
+		}
+	}
+	out, marshalErr := json.MarshalIndent(payload, "", "  ")
+	if marshalErr != nil {
+		return
+	}
+	fmt.Fprintln(cmd.OutOrStdout(), string(out))
 }
 
 func newCodexAccountsCmd() *cobra.Command {
