@@ -221,7 +221,7 @@ func TestSetCurrentAccountValidatesAccount(t *testing.T) {
 	}
 }
 
-func TestSelectLowestQuotaAccount(t *testing.T) {
+func TestSelectQuotaRouteAccount(t *testing.T) {
 	st := newStore(t)
 	for _, acc := range []Account{
 		{ID: "high", Provider: "codex", AuthMode: "oauth"},
@@ -238,7 +238,7 @@ func TestSelectLowestQuotaAccount(t *testing.T) {
 	if err := st.SaveQuota(QuotaSnapshot{AccountID: "low", PrimaryUsedPercent: 10}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := SelectLowestQuotaAccount(st, "codex")
+	got, err := SelectQuotaRouteAccount(st, "codex")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestSelectLowestQuotaAccount(t *testing.T) {
 	}
 }
 
-func TestSelectLowestQuotaAccountIgnoresStaleQuota(t *testing.T) {
+func TestSelectQuotaRouteAccountIgnoresStaleQuota(t *testing.T) {
 	st := newStore(t)
 	for _, acc := range []Account{
 		{ID: "stale-low", Provider: "codex", AuthMode: "oauth"},
@@ -264,7 +264,7 @@ func TestSelectLowestQuotaAccountIgnoresStaleQuota(t *testing.T) {
 	if err := st.SaveQuota(QuotaSnapshot{AccountID: "fresh-mid", PrimaryUsedPercent: 20}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := SelectLowestQuotaAccount(st, "codex")
+	got, err := SelectQuotaRouteAccount(st, "codex")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func TestSelectLowestQuotaAccountIgnoresStaleQuota(t *testing.T) {
 	}
 }
 
-func TestSelectLowestQuotaAccountTiePrefersCurrent(t *testing.T) {
+func TestSelectQuotaRouteAccountTiePrefersCurrent(t *testing.T) {
 	st := newStore(t)
 	for _, id := range []string{"a", "b"} {
 		if err := st.UpsertAccount(Account{ID: id, Provider: "codex", AuthMode: "oauth"}); err != nil {
@@ -283,7 +283,7 @@ func TestSelectLowestQuotaAccountTiePrefersCurrent(t *testing.T) {
 	if err := st.SetCurrentAccount("codex", "b"); err != nil {
 		t.Fatal(err)
 	}
-	got, err := SelectLowestQuotaAccount(st, "codex")
+	got, err := SelectQuotaRouteAccount(st, "codex")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -62,9 +62,9 @@ running in the daemon), find it with `capd sessions`, re-join with
 | Command | Output |
 |---------|--------|
 | `capd agents list` | table: id, available/not installed, version, binary path |
-| `capd agents route [--account <id\|auto>] [--capability name] [--require-fresh-quota] [--json]` | preview local routing without starting a session; with `--account auto`, shows the Codex account selected from cached quota. `--require-fresh-quota` fails unless that auto selection is backed by fresh cached quota |
+| `capd agents route [--account <id\|auto>] [--capability name] [--require-fresh-quota] [--json]` | preview local routing without starting a session; with `--account auto`, shows the Codex account selected by conservative quota scoring. `--require-fresh-quota` fails unless that auto selection is backed by fresh cached quota |
 | `capd agents usage <id>` | account snapshot JSON: plan, 5h/weekly window used %, reset timestamps, credits (codex) |
-| `capd agents usage codex --account <id\|auto>` | usage for an imported Codex account, or the lowest fresh cached-quota Codex account with `auto`; also refreshes the local quota snapshot |
+| `capd agents usage codex --account <id\|auto>` | usage for an imported Codex account, or the account selected by conservative quota scoring with `auto`; also refreshes the local quota snapshot |
 
 ### `capd accounts` — local account control plane
 
@@ -84,7 +84,7 @@ the file backend.
 | `capd accounts codex list` | List imported Codex account metadata; the current account is marked with `*`. |
 | `capd accounts codex current [account-id]` | Show or set the current Codex account. |
 | `capd accounts codex project [account-id]` | Create or refresh a capd-managed per-account `CODEX_HOME`; prints the path. |
-| `capd accounts codex quota [account-id\|auto] [--raw]` | Fetch ChatGPT backend quota for an imported Codex account and update the local quota snapshot. `auto` selects the Codex account with the lowest fresh cached primary quota. Defaults to a safe summary; `--raw` prints backend usage JSON for debugging. |
+| `capd accounts codex quota [account-id\|auto] [--raw]` | Fetch ChatGPT backend quota for an imported Codex account and update the local quota snapshot. `auto` uses the same conservative quota scoring rule as account-aware routing. Defaults to a safe summary; `--raw` prints backend usage JSON for debugging. |
 | `capd accounts codex smoke [--json] [--quota] [--require-fresh-quota] [--require-secret-backend <file\|native>]` | Verify imported accounts, SecretStore readability, per-account projection, auth file permissions, auto-route account selection, and optionally quota refresh without printing token material. `--require-fresh-quota` fails unless auto-route selection is backed by fresh cached quota; `--require-secret-backend` fails unless the active SecretStore backend matches. |
 
 The import stores token material in `~/.capd/secrets/codex/*.json` with mode
@@ -161,10 +161,10 @@ Ask capd to pick an installed agent. Params mirror route signals:
 
 When `accountId` is present, routing is account-aware and currently selects
 Codex only, because imported account runtimes are Codex-specific. Use
-`accountId:"auto"` to choose the imported Codex account with the lowest fresh
-cached primary quota usage. Accounts without cached quota, or with quota rows
-older than 30 minutes, are treated conservatively until `accounts/quota` or
-`agents/usage` refreshes them.
+`accountId:"auto"` to choose an imported Codex account by conservative quota
+scoring: fresh cached primary quota uses the actual usage percent, while missing
+quota or rows older than 30 minutes receive a conservative unknown score until
+`accounts/quota` or `agents/usage` refreshes them.
 
 ### `agents/usage`
 
@@ -199,7 +199,7 @@ The response never returns token material, `secret_ref`, or raw backend JSON.
 | Field | Type | Default | Meaning |
 |-------|------|---------|---------|
 | `agentId` | string | required | agent to drive, or `auto` to route |
-| `accountId` | string | — | imported account id, or `auto` to choose the lowest fresh cached Codex quota; currently supported for Codex sessions |
+| `accountId` | string | — | imported account id, or `auto` to choose by conservative Codex quota scoring; currently supported for Codex sessions |
 | `cwd` | string | user home | project directory; must exist |
 | `permissionMode` | string | `""` (default) | `acceptEdits` · `full`; `full` is rejected at filesystem root |
 | `model` | string | agent default | agent-native model id |

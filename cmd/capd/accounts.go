@@ -561,7 +561,7 @@ type accountListRow struct {
 }
 
 func codexSmokeAutoRouteEvidence(accounts *account.Store) (*codexSmokeAutoRoute, error) {
-	acc, err := account.SelectLowestQuotaAccount(accounts, codexauth.Provider)
+	acc, err := account.SelectQuotaRouteAccount(accounts, codexauth.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -573,9 +573,9 @@ func codexSmokeAutoRouteEvidence(accounts *account.Store) (*codexSmokeAutoRoute,
 	if q, err := accounts.LoadQuota(acc.ID); err == nil && account.QuotaSnapshotFresh(q, time.Now()) {
 		route.Fresh = true
 		route.Primary = &q.PrimaryUsedPercent
-		route.Reason = fmt.Sprintf("lowest fresh cached primary quota %.1f%%", q.PrimaryUsedPercent)
+		route.Reason = fmt.Sprintf("fresh primary quota %.1f%%", q.PrimaryUsedPercent)
 	} else {
-		route.Reason = "selected without fresh cached quota"
+		route.Reason = "conservative score without fresh cached quota"
 	}
 	return route, nil
 }

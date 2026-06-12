@@ -300,12 +300,12 @@ flowchart TB
   Linux uses Secret Service via `secret-tool`, and unsupported platforms fail
   closed instead of silently falling back.
 - New Codex sessions can opt into an imported account with `--account` or
-  protocol `session/create.accountId`; `accountId:"auto"` picks the imported
-  Codex account with the lowest fresh cached primary quota usage. Quota cache
-  rows older than 30 minutes are treated like unknown usage so stale low-usage
-  snapshots do not dominate routing. The daemon projects that account into a
-  dedicated `CODEX_HOME` and the Codex app-server profile pool keeps it
-  isolated from other accounts.
+  protocol `session/create.accountId`; `accountId:"auto"` uses conservative
+  quota scoring. Fresh cached primary quota uses the actual usage percent, while
+  rows older than 30 minutes or missing quota are treated like unknown usage so
+  stale low-usage snapshots do not dominate routing. The daemon projects that
+  account into a dedicated `CODEX_HOME` and the Codex app-server profile pool
+  keeps it isolated from other accounts.
 
 ## Repository layout
 

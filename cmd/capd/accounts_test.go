@@ -398,7 +398,7 @@ func TestCodexAccountsSmokeJSONIncludesAutoRouteEvidence(t *testing.T) {
 	if result.AutoRoute.AccountID != "codex-low" || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 4 {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
-	if !strings.Contains(result.AutoRoute.Reason, "lowest fresh cached primary quota") {
+	if !strings.Contains(result.AutoRoute.Reason, "fresh primary quota") {
 		t.Fatalf("auto route reason = %q", result.AutoRoute.Reason)
 	}
 }

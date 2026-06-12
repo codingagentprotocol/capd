@@ -75,7 +75,7 @@ func newAgentsCmd() *cobra.Command {
 			return nil
 		},
 	}
-	routeCmd.Flags().String("account", "", "imported account id, or auto for lowest fresh cached Codex quota")
+	routeCmd.Flags().String("account", "", "imported account id, or auto for conservative Codex quota scoring")
 	routeCmd.Flags().String("model", "", "model requirement; routes to agents with model support")
 	routeCmd.Flags().String("effort", "", "effort requirement; routes to agents with effort support")
 	routeCmd.Flags().StringSlice("capability", nil, "required capability name; repeat or comma-separate")
@@ -248,7 +248,7 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 			return protocol.AgentRouteResult{}, fmt.Errorf("account support is not configured")
 		}
 		if accountID == protocol.AccountAuto {
-			acc, err := account.SelectLowestQuotaAccount(accounts, codexauth.Provider)
+			acc, err := account.SelectQuotaRouteAccount(accounts, codexauth.Provider)
 			if errors.Is(err, account.ErrUnknownAccount) {
 				return protocol.AgentRouteResult{}, fmt.Errorf("no imported Codex accounts; run capd accounts codex import first")
 			}
@@ -385,7 +385,7 @@ func routeCLICapabilitySuffix(required protocol.AgentCapabilities) string {
 
 func resolveUsageAccount(accounts *account.Store, accountID string) (account.Account, error) {
 	if accountID == protocol.AccountAuto {
-		acc, err := account.SelectLowestQuotaAccount(accounts, codexauth.Provider)
+		acc, err := account.SelectQuotaRouteAccount(accounts, codexauth.Provider)
 		if errors.Is(err, account.ErrUnknownAccount) {
 			return account.Account{}, fmt.Errorf("no imported Codex accounts; run capd accounts codex import first")
 		}

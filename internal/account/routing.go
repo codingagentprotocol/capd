@@ -13,11 +13,11 @@ const (
 	quotaUnknownScore  = 75.0
 )
 
-// SelectLowestQuotaAccount picks the provider account with the lowest fresh
-// cached primary quota usage. Accounts without fresh quota are treated
-// conservatively, and the current account wins exact ties to avoid needless
-// runtime churn.
-func SelectLowestQuotaAccount(st *Store, provider string) (Account, error) {
+// SelectQuotaRouteAccount picks the provider account with the lowest routing
+// score. Fresh quota uses primary usage percent directly; missing or stale
+// quota is assigned a conservative unknown score, and the current account wins
+// exact ties to avoid needless runtime churn.
+func SelectQuotaRouteAccount(st *Store, provider string) (Account, error) {
 	if st == nil {
 		return Account{}, fmt.Errorf("account store is required")
 	}
@@ -40,6 +40,12 @@ func SelectLowestQuotaAccount(st *Store, provider string) (Account, error) {
 		}
 	}
 	return best, nil
+}
+
+// SelectLowestQuotaAccount is kept for older callers; new code should use
+// SelectQuotaRouteAccount to reflect the conservative score semantics.
+func SelectLowestQuotaAccount(st *Store, provider string) (Account, error) {
+	return SelectQuotaRouteAccount(st, provider)
 }
 
 // QuotaRouteScore is intentionally small and stable: lower is better.

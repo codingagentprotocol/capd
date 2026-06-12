@@ -113,7 +113,7 @@ func (s *Server) selectCodexAccountForRoute() (account.Account, string, *protoco
 	if s.opts.Accounts == nil {
 		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
 	}
-	best, err := account.SelectLowestQuotaAccount(s.opts.Accounts, codexauth.Provider)
+	best, err := account.SelectQuotaRouteAccount(s.opts.Accounts, codexauth.Provider)
 	if err != nil {
 		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
 	}
