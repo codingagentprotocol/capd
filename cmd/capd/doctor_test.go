@@ -10,6 +10,7 @@ import (
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
+	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
 func TestDoctorJSONReportsMissingReadinessWithoutSecrets(t *testing.T) {
@@ -178,6 +179,15 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	if report.Codex.ImportedAccounts != 2 || report.Codex.FreshQuotaAccounts != 2 || report.Codex.StaleQuotaAccounts != 0 || report.Codex.MissingQuotaAccounts != 0 {
 		t.Fatalf("codex quota summary = %+v", report.Codex)
 	}
+	if len(report.Codex.Accounts) != 2 {
+		t.Fatalf("codex accounts = %+v", report.Codex.Accounts)
+	}
+	if report.Codex.Accounts[0].ID != "codex-low" || report.Codex.Accounts[0].QuotaState != protocol.AccountQuotaStateFresh || report.Codex.Accounts[0].PrimaryUsedPercent == nil || *report.Codex.Accounts[0].PrimaryUsedPercent != 5 {
+		t.Fatalf("first account evidence = %+v", report.Codex.Accounts[0])
+	}
+	if report.Codex.Accounts[1].ID != "codex-test" || !report.Codex.Accounts[1].Current || report.Codex.Accounts[1].PrimaryUsedPercent == nil || *report.Codex.Accounts[1].PrimaryUsedPercent != 80 {
+		t.Fatalf("second account evidence = %+v", report.Codex.Accounts[1])
+	}
 	if report.Codex.CurrentAccountID != "codex-test" || report.Codex.AutoRouteAccountID != "codex-low" || !report.Codex.AutoRouteFresh {
 		t.Fatalf("codex route summary = %+v", report.Codex)
 	}
@@ -186,6 +196,15 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	}
 	if report.Codex.AutoRouteReason != "auto account codex-low primary 5%" {
 		t.Fatalf("codex route reason = %q", report.Codex.AutoRouteReason)
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leaked := range []string{"secretRef", "file:codex", "access-secret", "refresh-secret"} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("doctor report leaked %q: %s", leaked, data)
+		}
 	}
 	for _, forbidden := range []string{
 		"no imported Codex accounts",

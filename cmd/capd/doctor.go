@@ -88,20 +88,32 @@ type doctorAgentReport struct {
 }
 
 type doctorCodexReport struct {
-	CLIAvailable         bool     `json:"cliAvailable"`
-	ImportedAccounts     int      `json:"importedAccounts"`
-	CurrentAccountID     string   `json:"currentAccountId,omitempty"`
-	SecretBackend        string   `json:"secretBackend,omitempty"`
-	FreshQuotaAccounts   int      `json:"freshQuotaAccounts"`
-	StaleQuotaAccounts   int      `json:"staleQuotaAccounts"`
-	MissingQuotaAccounts int      `json:"missingQuotaAccounts"`
-	AutoRouteAccountID   string   `json:"autoRouteAccountId,omitempty"`
-	AutoRouteQuotaState  string   `json:"autoRouteQuotaState,omitempty"`
-	AutoRouteFresh       bool     `json:"autoRouteFresh"`
-	AutoRouteScore       float64  `json:"autoRouteScore,omitempty"`
-	AutoRouteReason      string   `json:"autoRouteReason,omitempty"`
-	AutoRouteCheckedAt   int64    `json:"autoRouteCheckedAt,omitempty"`
-	AutoRoutePrimary     *float64 `json:"autoRoutePrimaryUsedPercent,omitempty"`
+	CLIAvailable         bool                       `json:"cliAvailable"`
+	ImportedAccounts     int                        `json:"importedAccounts"`
+	CurrentAccountID     string                     `json:"currentAccountId,omitempty"`
+	SecretBackend        string                     `json:"secretBackend,omitempty"`
+	FreshQuotaAccounts   int                        `json:"freshQuotaAccounts"`
+	StaleQuotaAccounts   int                        `json:"staleQuotaAccounts"`
+	MissingQuotaAccounts int                        `json:"missingQuotaAccounts"`
+	Accounts             []doctorCodexAccountReport `json:"accounts,omitempty"`
+	AutoRouteAccountID   string                     `json:"autoRouteAccountId,omitempty"`
+	AutoRouteQuotaState  string                     `json:"autoRouteQuotaState,omitempty"`
+	AutoRouteFresh       bool                       `json:"autoRouteFresh"`
+	AutoRouteScore       float64                    `json:"autoRouteScore,omitempty"`
+	AutoRouteReason      string                     `json:"autoRouteReason,omitempty"`
+	AutoRouteCheckedAt   int64                      `json:"autoRouteCheckedAt,omitempty"`
+	AutoRoutePrimary     *float64                   `json:"autoRoutePrimaryUsedPercent,omitempty"`
+}
+
+type doctorCodexAccountReport struct {
+	ID                 string   `json:"id"`
+	Email              string   `json:"email,omitempty"`
+	Current            bool     `json:"current,omitempty"`
+	Plan               string   `json:"plan,omitempty"`
+	QuotaState         string   `json:"quotaState"`
+	QuotaFresh         bool     `json:"quotaFresh"`
+	QuotaCheckedAt     int64    `json:"quotaCheckedAt,omitempty"`
+	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
 }
 
 func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, error) {
@@ -174,12 +186,27 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	}
 
 	for _, acc := range list {
+		row := doctorCodexAccountReport{
+			ID:         acc.ID,
+			Email:      acc.Email,
+			Current:    acc.ID == current,
+			Plan:       acc.Plan,
+			QuotaState: protocol.AccountQuotaStateMissing,
+		}
 		q, err := accounts.LoadQuota(acc.ID)
 		if err != nil {
 			report.Codex.MissingQuotaAccounts++
+			report.Codex.Accounts = append(report.Codex.Accounts, row)
 			continue
 		}
-		switch accountQuotaState(q) {
+		if row.Plan == "" {
+			row.Plan = q.Plan
+		}
+		row.QuotaState = accountQuotaState(q)
+		row.QuotaFresh = row.QuotaState == protocol.AccountQuotaStateFresh
+		row.QuotaCheckedAt = q.CheckedAt
+		row.PrimaryUsedPercent = &q.PrimaryUsedPercent
+		switch row.QuotaState {
 		case protocol.AccountQuotaStateFresh:
 			report.Codex.FreshQuotaAccounts++
 		case protocol.AccountQuotaStateStale:
@@ -187,6 +214,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		default:
 			report.Codex.MissingQuotaAccounts++
 		}
+		report.Codex.Accounts = append(report.Codex.Accounts, row)
 	}
 	if len(list) > 0 && report.Codex.FreshQuotaAccounts < len(list) {
 		report.Issues = append(report.Issues, "not every imported Codex account has fresh quota evidence")
@@ -245,6 +273,26 @@ func printDoctorReport(cmd *cobra.Command, report doctorReport) {
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s quota=%s fresh=%t score=%.2f%s %s\n",
 			report.Codex.AutoRouteAccountID, report.Codex.AutoRouteQuotaState, report.Codex.AutoRouteFresh, report.Codex.AutoRouteScore, primary, report.Codex.AutoRouteReason)
+	}
+	if len(report.Codex.Accounts) > 0 {
+		w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
+		fmt.Fprintln(w, "CODEX_ACCOUNT\tCURRENT\tEMAIL\tPLAN\tQUOTA\tFRESH\tPRIMARY\tCHECKED_AT")
+		for _, a := range report.Codex.Accounts {
+			current := ""
+			if a.Current {
+				current = "*"
+			}
+			primary := ""
+			if a.PrimaryUsedPercent != nil {
+				primary = formatPercent(*a.PrimaryUsedPercent)
+			}
+			checkedAt := ""
+			if a.QuotaCheckedAt > 0 {
+				checkedAt = time.Unix(a.QuotaCheckedAt, 0).Format(time.RFC3339)
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%t\t%s\t%s\n", a.ID, current, a.Email, a.Plan, a.QuotaState, a.QuotaFresh, primary, checkedAt)
+		}
+		_ = w.Flush()
 	}
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "AGENT\tSTATUS\tVERSION\tBIN")

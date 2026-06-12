@@ -48,7 +48,10 @@ are found. `--json` prints safe machine-readable evidence and next steps without
 token material or local secret paths; add `--fail` when JSON output should also
 return non-zero on readiness issues. Auto-route evidence includes the selected
 account id, quota state, freshness, primary quota usage, routing score, checked
-time, and the same human-readable reason used by routing previews.
+time, and the same human-readable reason used by routing previews. The
+`codex.accounts` JSON array lists safe per-account quota evidence (id, email,
+current marker, plan, quota state, freshness, primary usage, checked time) and
+never includes SecretStore refs, token material, runtime paths, or raw auth JSON.
 
 ### `capd run <prompt>` — send one task and stream it
 
