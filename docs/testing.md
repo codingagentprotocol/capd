@@ -152,7 +152,7 @@ make verify-codex-readiness-sim
 
 It exercises multi-account quota refresh, conservative auto-route selection,
 fresh-quota enforcement, concurrent quota refresh with route-candidate reads,
-concurrent CAP `accounts/quota all` plus fresh auto-route calls with secret-leak
+route-candidate reason evidence, concurrent CAP `accounts/quota all` plus fresh auto-route calls with secret-leak
 guards, quota RawJSON redaction, invalid quota percent hardening, daemon-side
 `accounts/check` readiness, doctor CAP/WebSocket account checks, WebSocket
 disconnect/reconnect session continuity, Web probe readiness summaries, probe native SecretStore defaults,

@@ -83,6 +83,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"QuotaSnapshotFreshRejectsInvalidPrimaryPercent",
 		"SelectQuotaRouteAccountTreatsInvalidQuotaAsUnknown",
 		"ConcurrentQuotaRefreshAndRouting",
+		"QuotaRouteEvidenceAndReason",
 		"AgentsRouteAutoAccountChoosesLowestCachedQuota",
 		"AgentsRouteAutoAccountRequireFreshQuota",
 		"AgentsRouteAutoAccountIgnoresStaleLowQuota",
