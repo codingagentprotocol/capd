@@ -197,8 +197,9 @@ temporary foreground daemon in the background, waits for health with the
 requested SecretStore backend, and cleans up that temporary process on exit.
 If the live preflight fails, the selftest prints prompt-free diagnostics:
 daemon health, safe `capd accounts codex list --json` metadata, and the
-multi-account smoke gate. Set `LIVE_DIAGNOSE_SECRETSTORE=1` when you want
-failure diagnostics to also run SecretStore-reading checks such as
+multi-account smoke gate; by default it does not run SecretStore-reading
+checks. Set `LIVE_DIAGNOSE_SECRETSTORE=1` when you want failure diagnostics to
+also run SecretStore-reading checks such as
 `capd doctor --json --fail --verify-secretstore` and authenticated
 `/probe/data` readiness.
 If a daemon is already healthy on the target port but reports a different

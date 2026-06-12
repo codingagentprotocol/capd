@@ -188,6 +188,16 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 	if strings.Index(script, optionalDoctor) < gate || strings.Index(script, optionalProbe) < gate {
 		t.Fatal("live selftest must keep prompt-prone diagnostics behind optional SecretStore gate")
 	}
+	failureStart := strings.Index(script, "live-codex-preflight failed; safe diagnostics follow")
+	if failureStart < 0 || gate < failureStart {
+		t.Fatal("live selftest failure block must exist before optional SecretStore gate")
+	}
+	defaultFailureBlock := script[failureStart:gate]
+	for _, forbidden := range []string{`"$bin" doctor `, `"$bin" probe data --json --readiness`} {
+		if strings.Contains(defaultFailureBlock, forbidden) {
+			t.Fatalf("live selftest default failure diagnostics must stay prompt-free, found %q", forbidden)
+		}
+	}
 }
 
 func TestVerifySecretStoreTargetCoversNativeBackends(t *testing.T) {

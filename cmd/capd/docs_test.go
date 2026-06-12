@@ -175,6 +175,7 @@ func TestTestingDocsCoverLiveSelftestDaemonSafety(t *testing.T) {
 		"prints prompt-free diagnostics",
 		"daemon health, safe `capd accounts codex list --json` metadata",
 		"multi-account smoke gate",
+		"by default it does not run SecretStore-reading\nchecks",
 		"`LIVE_DIAGNOSE_SECRETSTORE=1`",
 		"SecretStore-reading checks",
 		"`capd doctor --json --fail --verify-secretstore`",
