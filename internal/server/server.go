@@ -57,6 +57,7 @@ func (s *Server) Run(ctx context.Context) error {
 		http.Redirect(w, r, "/console/", http.StatusFound)
 	})
 	mux.HandleFunc("GET /console/", s.handleConsole)
+	mux.HandleFunc("GET /probe/", s.handleProbe)
 	mux.HandleFunc("GET /ws", s.handleWS)
 
 	addr := net.JoinHostPort(s.opts.Host, fmt.Sprint(s.opts.Port))

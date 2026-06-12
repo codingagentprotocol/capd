@@ -86,6 +86,36 @@ func TestConsoleServedWithSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestProbeServedWithSecurityHeaders(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/probe/", nil)
+	rec := httptest.NewRecorder()
+	s.handleProbe(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("nosniff = %q", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("cache = %q", got)
+	}
+	if got := rec.Header().Get("Content-Security-Policy"); !strings.Contains(got, "default-src 'none'") || !strings.Contains(got, "connect-src 'self' http://127.0.0.1:* http://localhost:* http://[::1]:* ws://127.0.0.1:* ws://localhost:* ws://[::1]:*") || !strings.Contains(got, "frame-ancestors 'none'") {
+		t.Fatalf("csp = %q", got)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"CAPD Probe", "accounts/check", "agents/route", "/healthz", "requireMultiple", "requireAllFreshQuota", "Evidence JSON"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("probe HTML missing %q", want)
+		}
+	}
+	for _, forbidden := range []string{"secretRef", "secret_ref", "rawAuthJson", "RawAuthJSON", "localStorage.setItem", "sessionStorage.setItem", "?token=${TOKEN}"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("probe HTML contains forbidden %q", forbidden)
+		}
+	}
+}
+
 func TestConsoleStaticContract(t *testing.T) {
 	html := consoleHTML
 	required := []string{

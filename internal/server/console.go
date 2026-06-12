@@ -8,7 +8,22 @@ import (
 //go:embed console_index.html
 var consoleHTML string
 
+//go:embed probe_index.html
+var probeHTML string
+
 func (s *Server) handleConsole(w http.ResponseWriter, _ *http.Request) {
+	writeLocalPageHeaders(w)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(consoleHTML))
+}
+
+func (s *Server) handleProbe(w http.ResponseWriter, _ *http.Request) {
+	writeLocalPageHeaders(w)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(probeHTML))
+}
+
+func writeLocalPageHeaders(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' http://127.0.0.1:* http://localhost:* http://[::1]:* ws://127.0.0.1:* ws://localhost:* ws://[::1]:*; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
@@ -16,6 +31,4 @@ func (s *Server) handleConsole(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(consoleHTML))
 }

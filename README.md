@@ -145,6 +145,7 @@ capd agents usage codex --account auto
 capd agents route --account auto --require-fresh-quota --json
 
 capd accounts codex import   # import local ~/.codex/auth.json into capd
+capd accounts codex import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # batch import explicit paths
 CAPD_CODEX_AUTH_PATHS="/tmp/a/auth.json:/tmp/b/auth.json" capd accounts codex import # batch import on macOS/Linux
 capd accounts codex list     # imported Codex accounts, current account marked
 capd accounts codex project  # create a per-account CODEX_HOME projection
@@ -154,6 +155,7 @@ CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --require-secret-backend native # readiness gate
 CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
+open "http://127.0.0.1:7777/probe/?token=$(cat ~/.capd/token)" # simple web data probe
 capd health --json           # confirm daemon /healthz before CAP checks
 capd accounts check --json   # daemon-side accounts/check smoke evidence
 capd accounts check --readiness # daemon-side multi-account readiness gate

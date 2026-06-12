@@ -205,8 +205,8 @@ func newCodexAccountsCmd() *cobra.Command {
 		Use:   "import",
 		Short: "Import the local Codex auth.json into capd",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			authPath, _ := cmd.Flags().GetString("auth")
-			authPaths, err := codexImportAuthPaths(authPath)
+			authPathsFlag, _ := cmd.Flags().GetStringArray("auth")
+			authPaths, err := codexImportAuthPaths(authPathsFlag)
 			if err != nil {
 				return err
 			}
@@ -230,7 +230,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			return nil
 		},
 	}
-	importCmd.Flags().String("auth", "", "path to Codex auth.json (default: ~/.codex/auth.json, or CAPD_CODEX_AUTH_PATHS when set)")
+	importCmd.Flags().StringArray("auth", nil, "path to Codex auth.json; repeat to import multiple accounts (default: ~/.codex/auth.json, or CAPD_CODEX_AUTH_PATHS when set)")
 
 	listCmd := &cobra.Command{
 		Use:   "list",
@@ -883,9 +883,15 @@ func rejectConcreteCodexAccountArg(id string) error {
 	}
 }
 
-func codexImportAuthPaths(authPath string) ([]string, error) {
-	if path := strings.TrimSpace(authPath); path != "" {
-		return []string{path}, nil
+func codexImportAuthPaths(authPaths []string) ([]string, error) {
+	var explicit []string
+	for _, raw := range authPaths {
+		if path := strings.TrimSpace(raw); path != "" {
+			explicit = append(explicit, path)
+		}
+	}
+	if len(explicit) > 0 {
+		return explicit, nil
 	}
 	if raw := strings.TrimSpace(os.Getenv("CAPD_CODEX_AUTH_PATHS")); raw != "" {
 		var paths []string

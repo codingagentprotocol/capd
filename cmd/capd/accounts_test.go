@@ -206,6 +206,64 @@ func TestCodexAccountsImportUsesAuthPathListEnv(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsImportAcceptsRepeatedAuthFlags(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := t.TempDir()
+	firstPath := filepath.Join(dir, "first-auth.json")
+	secondPath := filepath.Join(dir, "second-auth.json")
+	envPath := filepath.Join(dir, "env-auth.json")
+	for path, body := range map[string]string{
+		firstPath:  `{"email":"first@example.com","tokens":{"access_token":"first-access-secret","account_id":"acct_first"}}`,
+		secondPath: `{"email":"second@example.com","tokens":{"access_token":"second-access-secret","account_id":"acct_second"}}`,
+		envPath:    `{"email":"env@example.com","tokens":{"access_token":"env-access-secret","account_id":"acct_env"}}`,
+	} {
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("CAPD_CODEX_AUTH_PATHS", envPath)
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "import", "--auth", firstPath, "--auth", secondPath})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{"imported codex-acct_first <first@example.com>", "imported codex-acct_second <second@example.com>"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("output missing %q: %s", want, text)
+		}
+	}
+	for _, leaked := range []string{firstPath, secondPath, envPath, "first-access-secret", "second-access-secret", "env-access-secret"} {
+		if strings.Contains(text, leaked) {
+			t.Fatalf("import output leaked %q: %s", leaked, text)
+		}
+	}
+	accounts, err := account.OpenStore(filepath.Join(home, ".capd", "accounts.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer accounts.Close()
+	list, err := accounts.ListAccounts(codexauth.Provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]account.Account{}
+	for _, acc := range list {
+		byID[acc.ID] = acc
+	}
+	if len(list) != 2 || byID["codex-acct_first"].Email != "first@example.com" || byID["codex-acct_second"].Email != "second@example.com" {
+		t.Fatalf("accounts = %+v", list)
+	}
+	if _, ok := byID["codex-acct_env"]; ok {
+		t.Fatalf("--auth should override CAPD_CODEX_AUTH_PATHS: %+v", list)
+	}
+}
+
 func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

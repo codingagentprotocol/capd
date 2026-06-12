@@ -1,0 +1,159 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>CAPD Probe</title>
+<style>
+  :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#0d1117; color:#e6edf3; }
+  body { margin:0; padding:20px; }
+  main { max-width:1080px; margin:0 auto; display:grid; gap:14px; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  h1 { margin:0; font-size:22px; font-weight:650; }
+  button { background:#238636; color:white; border:0; border-radius:6px; padding:8px 12px; font-weight:650; cursor:pointer; }
+  button.secondary { background:#30363d; }
+  button:disabled { opacity:.55; cursor:not-allowed; }
+  label { display:flex; align-items:center; gap:8px; color:#c9d1d9; font-size:13px; }
+  .toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:10px; }
+  .metric { border:1px solid #30363d; border-radius:8px; padding:12px; background:#161b22; min-height:74px; }
+  .label { color:#8b949e; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .value { margin-top:8px; font-size:18px; font-weight:650; overflow-wrap:anywhere; }
+  .ok { color:#3fb950; }
+  .warn { color:#d29922; }
+  .bad { color:#f85149; }
+  .panel { border:1px solid #30363d; border-radius:8px; background:#0d1117; overflow:hidden; }
+  .panel h2 { margin:0; padding:10px 12px; border-bottom:1px solid #30363d; font-size:14px; background:#161b22; }
+  pre { margin:0; padding:12px; overflow:auto; min-height:96px; font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:pre-wrap; }
+</style>
+<main>
+  <header>
+    <h1>CAPD Probe</h1>
+    <div class="toolbar">
+      <label><input id="native" type="checkbox" checked> native secret</label>
+      <button id="refresh">Refresh</button>
+      <button id="readiness" class="secondary">Readiness</button>
+    </div>
+  </header>
+  <section class="grid">
+    <div class="metric"><div class="label">daemon</div><div id="daemon" class="value warn">waiting</div></div>
+    <div class="metric"><div class="label">codex accounts</div><div id="accounts" class="value warn">waiting</div></div>
+    <div class="metric"><div class="label">quota fresh</div><div id="quota" class="value warn">waiting</div></div>
+    <div class="metric"><div class="label">auto route</div><div id="route" class="value warn">waiting</div></div>
+  </section>
+  <section class="panel">
+    <h2>Summary</h2>
+    <pre id="summary">waiting</pre>
+  </section>
+  <section class="panel">
+    <h2>Evidence JSON</h2>
+    <pre id="json">{}</pre>
+  </section>
+</main>
+<script>
+const params = new URLSearchParams(location.search);
+const TOKEN = params.get("token") || "";
+if (TOKEN) {
+  params.delete("token");
+  history.replaceState(null, "", location.pathname + (params.toString() ? "?" + params.toString() : ""));
+}
+const state = { ws: null, id: 0, pending: {} };
+const $ = id => document.getElementById(id);
+const setMetric = (id, text, cls) => { const el = $(id); el.textContent = text; el.className = "value " + cls; };
+function capdHost() { return location.host || "127.0.0.1:7777"; }
+function httpURL(path) { return `${location.protocol === "https:" ? "https" : "http"}://${capdHost()}${path}`; }
+function wsURL() { return `${location.protocol === "https:" ? "wss" : "ws"}://${capdHost()}/ws?token=${encodeURIComponent(TOKEN)}`; }
+function showJSON(data) { $("json").textContent = JSON.stringify(data, null, 2); }
+function showSummary(lines) { $("summary").textContent = lines.join("\n"); }
+async function call(method, params = {}) {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) throw new Error("CAP WebSocket is not connected");
+  const id = ++state.id;
+  state.ws.send(JSON.stringify({ jsonrpc:"2.0", id, method, params }));
+  return new Promise((resolve, reject) => {
+    state.pending[id] = { resolve, reject };
+    setTimeout(() => {
+      if (state.pending[id]) {
+        delete state.pending[id];
+        reject(new Error(`${method} timeout`));
+      }
+    }, 12000);
+  });
+}
+async function connect() {
+  if (!TOKEN) throw new Error("token missing");
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) return;
+  state.ws = new WebSocket(wsURL());
+  state.ws.onmessage = ev => {
+    const msg = JSON.parse(ev.data);
+    if (msg.id && state.pending[msg.id]) {
+      const pending = state.pending[msg.id];
+      delete state.pending[msg.id];
+      msg.error ? pending.reject(new Error(msg.error.message || JSON.stringify(msg.error))) : pending.resolve(msg.result);
+    }
+  };
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("connect timeout")), 4000);
+    state.ws.onopen = () => { clearTimeout(timer); resolve(); };
+    state.ws.onerror = () => { clearTimeout(timer); reject(new Error("connect failed")); };
+  });
+}
+function accountEvidence(accounts) {
+  return accounts.map(a => {
+    const bits = [a.id, a.quotaState || "missing"];
+    if (typeof a.quotaFresh === "boolean") bits.push(a.quotaFresh ? "fresh" : "not-fresh");
+    if (typeof a.primaryUsedPercent === "number") bits.push(`primary ${a.primaryUsedPercent}%`);
+    return bits.join(" ");
+  });
+}
+function routeText(route) {
+  if (!route) return "missing";
+  const bits = [route.accountId || "unknown", route.quotaState || "missing"];
+  bits.push(route.fresh ? "fresh" : "not-fresh");
+  if (typeof route.primaryUsedPercent === "number") bits.push(`primary ${route.primaryUsedPercent}%`);
+  return bits.join(" ");
+}
+async function refresh(readiness = false) {
+  $("refresh").disabled = true;
+  $("readiness").disabled = true;
+  try {
+    const health = await fetch(httpURL("/healthz"), { cache:"no-store" });
+    if (!health.ok) throw new Error("healthz failed");
+    setMetric("daemon", "ok", "ok");
+    await connect();
+    await call("initialize", { protocolVersion:"0.1", client:{ name:"capd-probe" } });
+    const checkParams = readiness ? {
+      provider:"codex",
+      refreshQuota:true,
+      requireMultiple:true,
+      requireFreshQuota:true,
+      requireAllFreshQuota:true,
+      requireSecretBackend:$("native").checked ? "native" : ""
+    } : { provider:"codex" };
+    const result = await call("accounts/check", checkParams);
+    let route = result.autoRoute || null;
+    try {
+      const routed = await call("agents/route", { accountId:"auto", requireFreshQuota:readiness });
+      route = routed.accountRoute || route;
+    } catch (_) {}
+    const accounts = result.accounts || [];
+    const fresh = accounts.filter(a => a.quotaFresh).length;
+    setMetric("accounts", String(result.checkedAccounts || 0), (result.checkedAccounts || 0) >= 2 ? "ok" : "warn");
+    setMetric("quota", `${fresh}/${accounts.length}`, accounts.length && fresh === accounts.length ? "ok" : "warn");
+    setMetric("route", routeText(route), route && route.fresh ? "ok" : "warn");
+    showSummary([
+      `secret backend: ${result.secretBackend || "unknown"}`,
+      `quota refreshed: ${!!result.quotaRefreshed}`,
+      `auto route: ${routeText(route)}`,
+      ...accountEvidence(accounts)
+    ]);
+    showJSON({ accountsCheck: result, autoRoute: route });
+  } catch (e) {
+    setMetric("daemon", "attention", "bad");
+    showSummary([e.message || String(e)]);
+    showJSON({ error: e.message || String(e) });
+  } finally {
+    $("refresh").disabled = false;
+    $("readiness").disabled = false;
+  }
+}
+$("refresh").onclick = () => refresh(false);
+$("readiness").onclick = () => refresh(true);
+refresh(false);
+</script>

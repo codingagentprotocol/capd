@@ -54,13 +54,15 @@ Import at least one Codex `auth.json`, then run the local smoke check:
 
 ```bash
 capd accounts codex import
+capd accounts codex import --auth /tmp/acct-a/auth.json --auth /tmp/acct-b/auth.json
 CAPD_CODEX_AUTH_PATHS="/tmp/acct-a/auth.json:/tmp/acct-b/auth.json" capd accounts codex import
 capd accounts codex smoke
 capd accounts codex smoke --json
 ```
 
-`CAPD_CODEX_AUTH_PATHS` uses the OS path-list separator (`:` on macOS/Linux,
-`;` on Windows) and is only used when `--auth` is not supplied.
+Repeat `--auth` for explicit multi-account imports. `CAPD_CODEX_AUTH_PATHS`
+uses the OS path-list separator (`:` on macOS/Linux, `;` on Windows) and is
+only used when `--auth` is not supplied.
 
 For real quota validation:
 
@@ -78,6 +80,7 @@ CAPD_SECRET_BACKEND=native capd doctor --json --fail --require-secret-backend na
 # In another terminal, keep the daemon running for CAP/WebSocket checks:
 CAPD_SECRET_BACKEND=native capd start
 
+open "http://127.0.0.1:7777/probe/?token=$(cat ~/.capd/token)"
 capd health --json
 capd accounts check --json
 capd accounts check --readiness

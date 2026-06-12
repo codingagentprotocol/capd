@@ -23,11 +23,12 @@ environment variable and file. For a guided tour, read the [README](../README.md
 | `--port` | `7777` | listen port |
 | `--origins` | _(empty)_ | extra browser origins allowed for WebSocket, comma-separated or repeated; localhost is always allowed |
 
-The daemon also serves the local web console at `/console/`; it still connects
-back to `/ws` with the daemon token, so opening the page does not bypass CAP
-authentication. Console responses are `no-store` and include CSP, referrer,
-permissions, and frame-deny headers because the token may be supplied once in
-the URL. The console exposes account import, current-account selection,
+The daemon also serves the local web console at `/console/` and a compact data
+probe at `/probe/`; both connect back to `/ws` with the daemon token, so opening
+either page does not bypass CAP authentication. Page responses are `no-store`
+and include CSP, referrer, permissions, and frame-deny headers because the token
+may be supplied once in the URL. The console exposes account import,
+current-account selection,
 runtime projection, selected or all-account quota refresh, safe account checks,
 and readiness gates over the same CAP RPC methods used by CLI clients.
 
@@ -113,7 +114,7 @@ the file backend.
 
 | Command | Meaning |
 |---------|---------|
-| `capd accounts codex import [--auth path]` | Import one or more Codex `auth.json` files into capd. `--auth` imports one explicit path. Without `--auth`, `CAPD_CODEX_AUTH_PATHS` can provide an OS path-list of auth files (`:` on macOS/Linux, `;` on Windows); otherwise it defaults to `~/.codex/auth.json`. |
+| `capd accounts codex import [--auth path ...]` | Import one or more Codex `auth.json` files into capd. Repeat `--auth` to import explicit paths in one command. Without `--auth`, `CAPD_CODEX_AUTH_PATHS` can provide an OS path-list of auth files (`:` on macOS/Linux, `;` on Windows); otherwise it defaults to `~/.codex/auth.json`. |
 | `capd accounts codex list` | List imported Codex account metadata; the current account is marked with `*`; quota state is reported as `fresh`, `stale`, or `missing`. |
 | `capd accounts codex current [account-id]` | Show or set the current Codex account. |
 | `capd accounts codex project [account-id]` | Create or refresh a capd-managed per-account `CODEX_HOME`; prints the path. |
