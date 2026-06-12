@@ -934,7 +934,7 @@ func accountsImportNextStep(importedAccounts int) string {
 	if importedAccounts < 2 {
 		return "import a second Codex account with: capd accounts import --auth /path/to/auth.json"
 	}
-	return "verify readiness with: capd accounts check --readiness"
+	return "verify readiness with: " + accountsCheckReadinessCommandFromEnv()
 }
 
 func codexLocalImportNextStep(secretBackend string, second bool) string {

@@ -104,6 +104,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"ProbeValidationRowsStayUnique",
 		"ConsoleStaticContract",
 		"ConsoleApprovalRendererHasSingleBoxDeclaration",
+		"AccountsImportNextStepPreservesEnvBackend",
 		"AccountsCheckReadinessShortcutSetsDaemonGateParams",
 		"DoctorReportsMultiAccountQuotaAndAutoRoute",
 		"DoctorChecksDaemonAccountsThroughCAP",

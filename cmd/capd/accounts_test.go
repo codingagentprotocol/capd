@@ -940,7 +940,7 @@ func TestAccountsImportCallsDaemonRPCWithRepeatedAuthFlags(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "imported codex-acct_first <first@example.com>") || !strings.Contains(out.String(), "current codex-test") || !strings.Contains(out.String(), "next: verify readiness with: capd accounts check --readiness") {
+	if !strings.Contains(out.String(), "imported codex-acct_first <first@example.com>") || !strings.Contains(out.String(), "current codex-test") || !strings.Contains(out.String(), "next: verify readiness with: capd accounts check --json --readiness --timeout 2m") {
 		t.Fatalf("text output = %s", out.String())
 	}
 	if strings.Contains(out.String(), firstPath) || strings.Contains(out.String(), "first-access-secret") || strings.Contains(out.String(), token) {
@@ -952,13 +952,21 @@ func TestAccountsImportNextStep(t *testing.T) {
 	cases := map[int]string{
 		0: "",
 		1: "import a second Codex account with: capd accounts import --auth /path/to/auth.json",
-		2: "verify readiness with: capd accounts check --readiness",
-		3: "verify readiness with: capd accounts check --readiness",
+		2: "verify readiness with: capd accounts check --json --readiness --timeout 2m",
+		3: "verify readiness with: capd accounts check --json --readiness --timeout 2m",
 	}
 	for imported, want := range cases {
 		if got := accountsImportNextStep(imported); got != want {
 			t.Fatalf("accountsImportNextStep(%d) = %q, want %q", imported, got, want)
 		}
+	}
+}
+
+func TestAccountsImportNextStepPreservesEnvBackend(t *testing.T) {
+	t.Setenv(secret.EnvBackend, secret.BackendFile)
+	want := "verify readiness with: capd accounts check --json --readiness --require-secret-backend file --timeout 2m"
+	if got := accountsImportNextStep(2); got != want {
+		t.Fatalf("accountsImportNextStep = %q, want %q", got, want)
 	}
 }
 
