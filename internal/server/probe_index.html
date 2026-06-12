@@ -157,6 +157,8 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
   const fresh = accounts.filter(a => a.quotaFresh).length;
   const secretBackend = result && result.secretBackend ? result.secretBackend : "unknown";
   const routeEvidence = routeText(route);
+  const nativeSecretOK = !readiness || !requireNative || secretBackend === "native";
+  const nativeSecretNextStep = !readiness || !requireNative ? "" : (secretBackend === "native" ? "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native" : "restart daemon with: CAPD_SECRET_BACKEND=native capd start");
   const rows = [
     { name:"daemon health", ok:!!healthOK, evidence:healthOK ? "/healthz ok" : "/healthz unavailable", nextStep:healthOK ? "" : "start capd with: capd start" },
     { name:"accounts/check data", ok:!!result, evidence:result ? `${result.checkedAccounts || 0} account(s), secret ${secretBackend}` : "accounts/check failed", nextStep:result ? "" : "check daemon logs and retry accounts/check" },
@@ -165,7 +167,7 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
     { name:"auto route data", ok:!!route, evidence:routeEvidence, nextStep:route ? "" : "import accounts, then refresh quota with: capd accounts check --readiness" },
     { name:"auto route fresh", ok:!!(route && route.fresh), evidence:routeEvidence, nextStep:(route && route.fresh) ? "" : "refresh quota and route with: capd accounts check --readiness" },
     { name:"route decision", ok:!!routeDecision, evidence:routeDecisionText(routeDecision, route), nextStep:routeDecision ? "" : "preview routing with: capd agents route --account auto" },
-    { name:"native secret backend", ok:!readiness || !requireNative || secretBackend === "native", evidence:requireNative ? `secret ${secretBackend}` : "not required", nextStep:(!readiness || !requireNative || secretBackend === "native") ? "" : "restart daemon with: CAPD_SECRET_BACKEND=native capd start" },
+    { name:"native secret backend", ok:nativeSecretOK, evidence:requireNative ? `secret ${secretBackend}` : "not required", nextStep:nativeSecretNextStep },
   ];
   if (readiness) rows.push({ name:"readiness gate", ok:!readinessError && !routeError && rows.every(r => r.name === "readiness gate" || r.ok), evidence:readinessError || routeError || "all readiness checks passed", nextStep:(readinessError || routeError) ? "fix failed checks above, then rerun Readiness" : "" });
   if (readinessError) rows.push({ name:"readiness error detail", ok:false, evidence:readinessError, nextStep:"fix readiness gate inputs, then rerun Readiness" });
