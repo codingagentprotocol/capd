@@ -1516,25 +1516,15 @@ func codexSmokeAutoRouteEvidence(accounts *account.Store) (*codexSmokeAutoRoute,
 	if err != nil {
 		return nil, err
 	}
-	current, _ := accounts.CurrentAccount(codexauth.Provider)
+	evidence := account.QuotaRouteEvidence(accounts, acc)
 	route := &codexSmokeAutoRoute{
-		AccountID:  acc.ID,
-		Score:      account.QuotaRouteScore(accounts, acc, current),
-		QuotaState: protocol.AccountQuotaStateMissing,
-	}
-	if q, err := accounts.LoadQuota(acc.ID); err == nil {
-		route.CheckedAt = q.CheckedAt
-		route.Primary = &q.PrimaryUsedPercent
-		if account.QuotaSnapshotFresh(q, time.Now()) {
-			route.QuotaState = protocol.AccountQuotaStateFresh
-			route.Fresh = true
-			route.Reason = fmt.Sprintf("fresh primary quota %.1f%%", q.PrimaryUsedPercent)
-		} else {
-			route.QuotaState = protocol.AccountQuotaStateStale
-			route.Reason = "conservative score with stale cached quota"
-		}
-	} else {
-		route.Reason = "conservative score without fresh cached quota"
+		AccountID:  evidence.AccountID,
+		Reason:     evidence.Reason,
+		Score:      evidence.Score,
+		QuotaState: evidence.QuotaState,
+		Fresh:      evidence.Fresh,
+		CheckedAt:  evidence.CheckedAt,
+		Primary:    evidence.PrimaryUsedPercent,
 	}
 	return route, nil
 }

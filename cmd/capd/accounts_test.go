@@ -1892,7 +1892,7 @@ func TestCodexAccountsSmokeJSONIncludesAutoRouteEvidence(t *testing.T) {
 	if result.AutoRoute.AccountID != "codex-low" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateFresh || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 4 {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
-	if !strings.Contains(result.AutoRoute.Reason, "fresh primary quota") {
+	if result.AutoRoute.Reason != "auto account codex-low primary 4%" {
 		t.Fatalf("auto route reason = %q", result.AutoRoute.Reason)
 	}
 }
@@ -2023,6 +2023,9 @@ func TestCodexAccountsSmokeRequireMultipleReturnsPartialAccountEvidence(t *testi
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateStale || result.AutoRoute.Fresh {
 		t.Fatalf("partial auto route = %+v", result.AutoRoute)
 	}
+	if result.AutoRoute.Reason != "auto account codex-test without fresh cached quota; current account tie-break" {
+		t.Fatalf("partial auto route reason = %q", result.AutoRoute.Reason)
+	}
 	if len(result.RouteCandidates) != 1 || result.RouteCandidates[0].AccountID != "codex-test" || result.RouteCandidates[0].Reason != "auto account codex-test without fresh cached quota; current account tie-break" {
 		t.Fatalf("partial route candidates = %+v", result.RouteCandidates)
 	}
@@ -2054,6 +2057,9 @@ func TestCodexAccountsSmokeJSONMarksAutoRouteStaleQuota(t *testing.T) {
 	}
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateStale || result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 2 || result.AutoRoute.CheckedAt != staleAt {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
+	}
+	if result.AutoRoute.Reason != "auto account codex-test without fresh cached quota; current account tie-break" {
+		t.Fatalf("auto route reason = %q", result.AutoRoute.Reason)
 	}
 	if len(result.RouteCandidates) != 1 || result.RouteCandidates[0].AccountID != "codex-test" || result.RouteCandidates[0].QuotaState != protocol.AccountQuotaStateStale || result.RouteCandidates[0].Fresh {
 		t.Fatalf("route candidates = %+v", result.RouteCandidates)
@@ -2231,6 +2237,9 @@ func TestCodexAccountsSmokeJSONFailureKeepsPartialEvidence(t *testing.T) {
 	}
 	if got.AutoRoute == nil || got.AutoRoute.AccountID != "codex-test" || !got.AutoRoute.Fresh || got.AutoRoute.Primary == nil || *got.AutoRoute.Primary != 4 {
 		t.Fatalf("preflight failure should keep auto-route evidence: %+v", got)
+	}
+	if got.AutoRoute.Reason != "auto account codex-test primary 4%; current account tie-break" {
+		t.Fatalf("preflight failure auto-route reason = %q", got.AutoRoute.Reason)
 	}
 	if len(got.RouteCandidates) != 1 || got.RouteCandidates[0].AccountID != "codex-test" || !got.RouteCandidates[0].Fresh {
 		t.Fatalf("preflight failure should keep route candidates: %+v", got.RouteCandidates)
