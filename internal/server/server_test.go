@@ -213,6 +213,9 @@ func TestProbeDataReturnsSafeAccountRouteEvidence(t *testing.T) {
 	if got.AutoRoute == nil || got.AutoRoute.AccountID != "codex-test" || !got.AutoRoute.Fresh {
 		t.Fatalf("autoRoute = %+v", got.AutoRoute)
 	}
+	if !got.Summary.Ready || got.Summary.Readiness || got.Summary.CheckedAccounts != 1 || got.Summary.RequiredAccounts != 2 || got.Summary.MissingAccounts != 1 || got.Summary.FreshQuotaAccounts != 1 || got.Summary.AutoRouteAccountID != "codex-test" || !got.Summary.AutoRouteFresh || !got.Summary.RouteDecisionOK || got.Summary.RouteCandidates != 1 || !got.Summary.SecretBackendOK {
+		t.Fatalf("summary = %+v", got.Summary)
+	}
 	body := rec.Body.String()
 	for _, leaked := range []string{"it-token", "test-token", "secretRef", "rawAuthJson", s.opts.RuntimeRoot} {
 		if strings.Contains(body, leaked) {
@@ -255,6 +258,9 @@ func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
 	}
 	if len(got.AccountsCheck.Accounts) != 1 || !got.AccountsCheck.Accounts[0].QuotaFresh || !got.AccountsCheck.Accounts[0].RuntimeReady {
 		t.Fatalf("partial account evidence = %+v", got.AccountsCheck.Accounts)
+	}
+	if got.Summary.Ready || !got.Summary.Readiness || got.Summary.CheckedAccounts != 1 || got.Summary.MissingAccounts != 1 || got.Summary.FreshQuotaAccounts != 1 || got.Summary.RequiredSecretBackend != "file" || got.Summary.SecretBackend != "file" || !got.Summary.SecretBackendOK {
+		t.Fatalf("partial summary = %+v", got.Summary)
 	}
 	if len(got.Errors) == 0 || !strings.Contains(got.Errors[0].Message, "expected multiple Codex accounts") {
 		t.Fatalf("errors = %+v", got.Errors)

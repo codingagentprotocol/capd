@@ -206,7 +206,9 @@ before account checks when native storage is unavailable or mismatched.
 `/probe/data` endpoint used by the lightweight web probe, so live preflight also
 verifies the Web diagnostics path with header auth and safe partial evidence.
 The endpoint bounds server-side work too: ordinary probes get 12s and readiness
-probes get 2m.
+probes get 2m. Its JSON includes a compact `summary` for account counts, quota
+freshness, auto-route freshness, route-decision status, and SecretStore backend
+status.
 Both `agents/route --account auto --json` and daemon-side `accounts/check`
 include `routeCandidates`, sorted by the same conservative quota score used for
 auto routing, so clients can verify why one account was selected.

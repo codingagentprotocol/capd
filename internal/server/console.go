@@ -38,6 +38,7 @@ func (s *Server) handleProbe(w http.ResponseWriter, _ *http.Request) {
 
 type probeDataResult struct {
 	OK              bool                            `json:"ok"`
+	Summary         probeDataSummary                `json:"summary"`
 	Health          map[string]any                  `json:"health"`
 	AccountsCheck   *protocol.AccountsCheckResult   `json:"accountsCheck,omitempty"`
 	RouteDecision   *protocol.AgentRouteResult      `json:"routeDecision,omitempty"`
@@ -45,6 +46,24 @@ type probeDataResult struct {
 	RouteCandidates []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
 	Checks          []probeDataCheck                `json:"checks"`
 	Errors          []probeDataError                `json:"errors,omitempty"`
+}
+
+type probeDataSummary struct {
+	Ready                 bool   `json:"ready"`
+	Readiness             bool   `json:"readiness"`
+	CheckedAccounts       int    `json:"checkedAccounts"`
+	RequiredAccounts      int    `json:"requiredAccounts"`
+	MissingAccounts       int    `json:"missingAccounts"`
+	FreshQuotaAccounts    int    `json:"freshQuotaAccounts"`
+	StaleQuotaAccounts    int    `json:"staleQuotaAccounts"`
+	MissingQuotaAccounts  int    `json:"missingQuotaAccounts"`
+	AutoRouteAccountID    string `json:"autoRouteAccountId,omitempty"`
+	AutoRouteFresh        bool   `json:"autoRouteFresh"`
+	RouteDecisionOK       bool   `json:"routeDecisionOk"`
+	RouteCandidates       int    `json:"routeCandidates"`
+	SecretBackend         string `json:"secretBackend,omitempty"`
+	RequiredSecretBackend string `json:"requiredSecretBackend,omitempty"`
+	SecretBackendOK       bool   `json:"secretBackendOk"`
 }
 
 type probeDataCheck struct {
@@ -144,7 +163,61 @@ func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBac
 	}
 	result.Checks = probeDataChecks(result, readiness, requireSecretBackend)
 	result.OK = len(result.Errors) == 0 && allProbeChecksOK(result.Checks)
+	result.Summary = probeDataSummaryFor(result, readiness, requireSecretBackend)
 	return result
+}
+
+func probeDataSummaryFor(result probeDataResult, readiness bool, requireSecretBackend string) probeDataSummary {
+	accounts := []protocol.AccountCheckEvidence{}
+	secretBackend := ""
+	checked := 0
+	if result.AccountsCheck != nil {
+		accounts = result.AccountsCheck.Accounts
+		secretBackend = result.AccountsCheck.SecretBackend
+		checked = result.AccountsCheck.CheckedAccounts
+	}
+	if secretBackend == "" {
+		if raw, ok := result.Health["secretBackend"].(string); ok {
+			secretBackend = raw
+		}
+	}
+	freshQuota := 0
+	staleQuota := 0
+	missingQuota := 0
+	for _, row := range accounts {
+		switch row.QuotaState {
+		case protocol.AccountQuotaStateFresh:
+			freshQuota++
+		case protocol.AccountQuotaStateStale:
+			staleQuota++
+		default:
+			missingQuota++
+		}
+	}
+	missingAccounts := 0
+	if checked < 2 {
+		missingAccounts = 2 - checked
+	}
+	summary := probeDataSummary{
+		Ready:                 result.OK,
+		Readiness:             readiness,
+		CheckedAccounts:       checked,
+		RequiredAccounts:      2,
+		MissingAccounts:       missingAccounts,
+		FreshQuotaAccounts:    freshQuota,
+		StaleQuotaAccounts:    staleQuota,
+		MissingQuotaAccounts:  missingQuota,
+		AutoRouteFresh:        result.AutoRoute != nil && result.AutoRoute.Fresh,
+		RouteDecisionOK:       result.RouteDecision != nil,
+		RouteCandidates:       len(result.RouteCandidates),
+		SecretBackend:         secretBackend,
+		RequiredSecretBackend: requireSecretBackend,
+		SecretBackendOK:       requireSecretBackend == "" || secretBackend == requireSecretBackend,
+	}
+	if result.AutoRoute != nil {
+		summary.AutoRouteAccountID = result.AutoRoute.AccountID
+	}
+	return summary
 }
 
 func probeDataChecks(result probeDataResult, readiness bool, requireSecretBackend string) []probeDataCheck {

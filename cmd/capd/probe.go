@@ -84,7 +84,23 @@ type probeDataOptions struct {
 }
 
 type probeDataResponse struct {
-	OK     bool `json:"ok"`
+	OK      bool `json:"ok"`
+	Summary struct {
+		Ready                bool   `json:"ready"`
+		Readiness            bool   `json:"readiness"`
+		CheckedAccounts      int    `json:"checkedAccounts"`
+		RequiredAccounts     int    `json:"requiredAccounts"`
+		MissingAccounts      int    `json:"missingAccounts"`
+		FreshQuotaAccounts   int    `json:"freshQuotaAccounts"`
+		StaleQuotaAccounts   int    `json:"staleQuotaAccounts"`
+		MissingQuotaAccounts int    `json:"missingQuotaAccounts"`
+		AutoRouteAccountID   string `json:"autoRouteAccountId"`
+		AutoRouteFresh       bool   `json:"autoRouteFresh"`
+		RouteDecisionOK      bool   `json:"routeDecisionOk"`
+		RouteCandidates      int    `json:"routeCandidates"`
+		SecretBackend        string `json:"secretBackend"`
+		SecretBackendOK      bool   `json:"secretBackendOk"`
+	} `json:"summary"`
 	Health struct {
 		Version         string `json:"version"`
 		ProtocolVersion string `json:"protocolVersion"`
@@ -173,6 +189,20 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 	}
 	if result.AccountsCheck != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "accounts: %d checked, secret %s\n", result.AccountsCheck.CheckedAccounts, result.AccountsCheck.SecretBackend)
+	}
+	if result.Summary.RequiredAccounts > 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "summary: ready=%t accounts=%d/%d missing=%d quota fresh=%d stale=%d missing=%d autoFresh=%t routeDecision=%t secretOK=%t\n",
+			result.Summary.Ready,
+			result.Summary.CheckedAccounts,
+			result.Summary.RequiredAccounts,
+			result.Summary.MissingAccounts,
+			result.Summary.FreshQuotaAccounts,
+			result.Summary.StaleQuotaAccounts,
+			result.Summary.MissingQuotaAccounts,
+			result.Summary.AutoRouteFresh,
+			result.Summary.RouteDecisionOK,
+			result.Summary.SecretBackendOK,
+		)
 	}
 	if result.AutoRoute != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s fresh=%t\n", result.AutoRoute.AccountID, result.AutoRoute.QuotaState, result.AutoRoute.Fresh)
