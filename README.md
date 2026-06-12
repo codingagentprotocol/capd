@@ -171,8 +171,8 @@ capd agents route --account auto --require-fresh-quota
 For deterministic local regression, run `make verify`; for native SecretStore
 coverage, run `make verify-secretstore`; for a no-real-account Codex
 multi-account quota/routing/readiness regression, run
-`make verify-codex-readiness-sim`. `capd doctor --json --fail` is the safe
-preflight to run before live Codex work: it checks daemon health, Codex CLI
+`make verify-codex-readiness-sim`. `capd doctor --json --fail` is a safe
+readiness audit for live Codex work: it checks daemon health, Codex CLI
 availability, imported account count, quota freshness, auto-route freshness,
 the active SecretStore backend, and daemon-side CAP `accounts/check` reachability
 without printing token material. Add `--verify-secretstore` before native live
@@ -182,8 +182,9 @@ accounts are missing, use
 the Web Console. Use `capd accounts check --json --readiness` for the
 daemon-side refresh-and-verify gate after fixing quota or account issues. After
 importing multiple Codex accounts and starting `capd start` with the same
-backend in another terminal, `make live-codex-preflight` runs the live
-quota/routing/readiness checks without sending a prompt. `make
+backend in another terminal, `make live-codex-preflight` verifies SecretStore,
+refreshes every Codex quota, runs doctor against fresh local evidence, then
+checks daemon/Web quota/routing/readiness without sending a prompt. `make
 live-codex-readiness` runs the same preflight and then sends the final live
 prompt. Override the final prompt with
 `LIVE_PROMPT="..." make live-codex-readiness`; override the backend only for

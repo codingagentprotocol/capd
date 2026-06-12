@@ -44,6 +44,12 @@ func TestLiveCodexReadinessUsesOneSecretBackend(t *testing.T) {
 			t.Fatalf("Makefile contains backend-drift-prone command %q", forbidden)
 		}
 	}
+	quotaAll := "CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex quota all"
+	freshSmoke := "CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend $(LIVE_SECRET_BACKEND)"
+	doctor := "CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd doctor --json --fail --verify-secretstore --require-secret-backend $(LIVE_SECRET_BACKEND)"
+	if !(strings.Index(makefile, quotaAll) < strings.Index(makefile, freshSmoke) && strings.Index(makefile, freshSmoke) < strings.Index(makefile, doctor)) {
+		t.Fatal("live-codex-preflight must refresh quota and run fresh smoke before doctor --fail")
+	}
 }
 
 func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {

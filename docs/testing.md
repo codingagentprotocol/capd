@@ -124,12 +124,14 @@ fresh-quota enforcement, daemon-side `accounts/check` readiness, doctor
 CAP/WebSocket account checks, direct smoke route-candidate evidence, CLI
 shortcut parameters, and secret-leak guards with local test backends.
 
-`make live-codex-preflight` first runs `capd doctor --json --fail`, then checks
-that at least two Codex accounts are imported and runs the quota/readiness
-chain. `make live-codex-readiness` runs that preflight before the final live
-prompt. Override the prompt with `LIVE_PROMPT="..." make live-codex-readiness`.
-Override the backend with `LIVE_SECRET_BACKEND=file` only when intentionally
-testing the file SecretStore path; the default live backend is `native`.
+`make live-codex-preflight` first verifies the selected SecretStore backend,
+checks that at least two Codex accounts are imported, refreshes every Codex
+quota, then runs `capd doctor --json --fail` against fresh local evidence before
+the daemon/Web readiness chain. `make live-codex-readiness` runs that preflight
+before the final live prompt. Override the prompt with
+`LIVE_PROMPT="..." make live-codex-readiness`. Override the backend with
+`LIVE_SECRET_BACKEND=file` only when intentionally testing the file SecretStore
+path; the default live backend is `native`.
 When doctor reports missing accounts and the daemon is running, prefer
 `capd accounts import --auth ...` so the import uses the same CAP/WebSocket path
 as the Web Console. `capd accounts codex import` remains available for direct
