@@ -129,6 +129,30 @@ func TestSafeImportErrorRedactsPathsAndTokenMarkers(t *testing.T) {
 	}
 }
 
+func TestAccountWithBundleMetadataOnlyFillsMissingFields(t *testing.T) {
+	acc := account.Account{ID: "codex-a", Provider: Provider, Email: "kept@example.com"}
+	updated, changed := AccountWithBundleMetadata(acc, secret.Bundle{
+		AuthMode:  "oauth",
+		Email:     "bundle@example.com",
+		AccountID: "acct_bundle",
+	})
+	if !changed {
+		t.Fatal("expected metadata change")
+	}
+	if updated.AuthMode != "oauth" || updated.Email != "kept@example.com" || updated.AccountID != "acct_bundle" {
+		t.Fatalf("updated = %+v", updated)
+	}
+
+	again, changed := AccountWithBundleMetadata(updated, secret.Bundle{
+		AuthMode:  "chatgpt",
+		Email:     "other@example.com",
+		AccountID: "acct_other",
+	})
+	if changed || again != updated {
+		t.Fatalf("again=%+v changed=%t", again, changed)
+	}
+}
+
 func jwt(t *testing.T, claims map[string]any) string {
 	t.Helper()
 	header, _ := json.Marshal(map[string]any{"alg": "none"})

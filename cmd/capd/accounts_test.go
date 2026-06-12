@@ -398,6 +398,70 @@ func TestCodexAccountsQuotaAutoUsesLowestCachedQuotaAccount(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsQuotaBackfillsMissingMetadataFromSecretAndPlan(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, secrets := seedCodexAccount(t)
+	defer accounts.Close()
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.Email = ""
+	acc.AccountID = ""
+	acc.Plan = ""
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := secrets.Put(context.Background(), "codex-test", secret.Bundle{
+		Provider:     codexauth.Provider,
+		AuthMode:     "chatgpt",
+		AccessToken:  "access-secret",
+		RefreshToken: "refresh-secret",
+		Email:        "secret@example.com",
+		AccountID:    "acct_secret",
+		RawAuthJSON:  []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"access-secret","refresh_token":"refresh-secret","account_id":"acct_secret"}}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var sawAccount string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAccount = r.Header.Get("ChatGPT-Account-Id")
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": "enterprise",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": 19},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "quota", "--base-url", srv.URL})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if sawAccount != "acct_secret" {
+		t.Fatalf("ChatGPT-Account-Id = %q", sawAccount)
+	}
+	var result codexQuotaSummary
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Email != "secret@example.com" || result.AccountID != "acct_secret" || result.Plan != "enterprise" || result.PrimaryUsedPercent != 19 {
+		t.Fatalf("result = %+v", result)
+	}
+	got, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Email != "secret@example.com" || got.AccountID != "acct_secret" || got.Plan != "enterprise" {
+		t.Fatalf("stored account = %+v", got)
+	}
+}
+
 func TestCodexAccountsQuotaAllRefreshesEveryAccountSafely(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, secrets := seedCodexAccount(t)

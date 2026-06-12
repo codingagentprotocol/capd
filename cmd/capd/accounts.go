@@ -706,9 +706,20 @@ func refreshCodexQuotaWithUsage(ctx context.Context, accounts *account.Store, se
 	if bundle.AccountID == "" {
 		bundle.AccountID = acc.AccountID
 	}
+	updatedAcc, changed := codexauth.AccountWithBundleMetadata(acc, bundle)
 	result, err := codexquota.Client{BaseURL: baseURL}.Usage(ctx, acc.ID, bundle)
 	if err != nil {
 		return codexQuotaSummary{}, nil, err
+	}
+	if updatedAcc.Plan == "" && result.Quota.Plan != "" {
+		updatedAcc.Plan = result.Quota.Plan
+		changed = true
+	}
+	if changed {
+		if err := accounts.UpsertAccount(updatedAcc); err != nil {
+			return codexQuotaSummary{}, nil, err
+		}
+		acc = updatedAcc
 	}
 	if err := accounts.SaveQuota(result.Quota); err != nil {
 		return codexQuotaSummary{}, nil, err

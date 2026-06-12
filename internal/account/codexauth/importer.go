@@ -89,6 +89,24 @@ func (im Importer) ImportAuthJSON(ctx context.Context, path string) (ImportResul
 	return ImportResult{Account: acc, Secret: ref}, nil
 }
 
+func AccountWithBundleMetadata(acc account.Account, bundle secret.Bundle) (account.Account, bool) {
+	updated := acc
+	changed := false
+	if updated.AuthMode == "" && bundle.AuthMode != "" {
+		updated.AuthMode = bundle.AuthMode
+		changed = true
+	}
+	if updated.Email == "" && bundle.Email != "" {
+		updated.Email = bundle.Email
+		changed = true
+	}
+	if updated.AccountID == "" && bundle.AccountID != "" {
+		updated.AccountID = bundle.AccountID
+		changed = true
+	}
+	return updated, changed
+}
+
 func SafeImportError(err error, authPath string) string {
 	if err == nil {
 		return ""

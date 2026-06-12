@@ -491,9 +491,20 @@ func (s *Server) refreshOneAccountQuota(ctx context.Context, acc account.Account
 	if bundle.AccountID == "" {
 		bundle.AccountID = acc.AccountID
 	}
+	updatedAcc, changed := codexauth.AccountWithBundleMetadata(acc, bundle)
 	result, err := codexquota.Client{BaseURL: s.opts.CodexQuotaBaseURL}.Usage(ctx, acc.ID, bundle)
 	if err != nil {
 		return protocol.AccountSummary{}, protocol.NewError(protocol.CodeAgentUnavailable, "quota: %v", err)
+	}
+	if updatedAcc.Plan == "" && result.Quota.Plan != "" {
+		updatedAcc.Plan = result.Quota.Plan
+		changed = true
+	}
+	if changed {
+		if err := s.opts.Accounts.UpsertAccount(updatedAcc); err != nil {
+			return protocol.AccountSummary{}, protocol.NewError(protocol.CodeInternalError, "update account metadata: %v", err)
+		}
+		acc = updatedAcc
 	}
 	if err := s.opts.Accounts.SaveQuota(result.Quota); err != nil {
 		return protocol.AccountSummary{}, protocol.NewError(protocol.CodeInternalError, "save quota: %v", err)

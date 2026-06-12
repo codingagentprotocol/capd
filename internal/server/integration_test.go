@@ -1689,6 +1689,62 @@ func TestAccountsQuotaUsesAccountMetadataWhenSecretAccountIDMissing(t *testing.T
 	}
 }
 
+func TestAccountsQuotaBackfillsMissingMetadataFromSecretAndPlan(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.Email = ""
+	acc.AccountID = ""
+	acc.Plan = ""
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.opts.Secrets.Put(context.Background(), "codex-test", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "test-token",
+		Email:       "secret@example.com",
+		AccountID:   "acct_secret",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"test-token","account_id":"acct_secret"}}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var sawAccount string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAccount = r.Header.Get("ChatGPT-Account-Id")
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": "enterprise",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": 11},
+			},
+		})
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+	c := initialized(t, ts)
+
+	var result protocol.AccountsQuotaResult
+	c.mustResult(c.call(protocol.MethodAccountsQuota, protocol.AccountsQuotaParams{
+		Provider:  codexauth.Provider,
+		AccountID: "codex-test",
+	}), &result)
+	if sawAccount != "acct_secret" {
+		t.Fatalf("ChatGPT-Account-Id = %q", sawAccount)
+	}
+	if result.Account.Email != "secret@example.com" || result.Account.AccountID != "acct_secret" || result.Account.Plan != "enterprise" {
+		t.Fatalf("account = %+v", result.Account)
+	}
+	got, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Email != "secret@example.com" || got.AccountID != "acct_secret" || got.Plan != "enterprise" {
+		t.Fatalf("stored account = %+v", got)
+	}
+}
+
 func TestAccountsQuotaAutoRefreshesLowestCachedQuotaAccount(t *testing.T) {
 	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
 	ref, err := s.opts.Secrets.Put(context.Background(), "codex-low", secret.Bundle{
