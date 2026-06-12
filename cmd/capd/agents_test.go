@@ -123,6 +123,31 @@ func TestRouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache(t *testing.T) 
 	}
 }
 
+func TestRouteCLITextIncludesAccountRouteEvidence(t *testing.T) {
+	primary := 8.0
+	text := routeCLIText(protocol.AgentRouteResult{
+		Agent:     protocol.AgentInfo{ID: "codex"},
+		AccountID: "codex-test",
+		AccountRoute: &protocol.AccountRouteEvidence{
+			AccountID:          "codex-test",
+			QuotaState:         protocol.AccountQuotaStateFresh,
+			Fresh:              true,
+			PrimaryUsedPercent: &primary,
+			Score:              8,
+			CheckedAt:          1700000000,
+		},
+		Reason: "matched capabilities; auto account codex-test primary 8%",
+	})
+	for _, want := range []string{
+		"codex\tcodex-test\tquota fresh fresh true primary 8.0% score 8.00 checked ",
+		"matched capabilities",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("route text missing %q: %s", want, text)
+		}
+	}
+}
+
 func TestRouteCLIRejectsUnknownCapability(t *testing.T) {
 	_, err := agentCapabilitiesFromNames([]string{"review", "telepathy"})
 	if err == nil || !strings.Contains(err.Error(), "unknown capability") {

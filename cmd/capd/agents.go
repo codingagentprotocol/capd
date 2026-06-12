@@ -69,11 +69,7 @@ func newAgentsCmd() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))
 				return nil
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s", result.Agent.ID)
-			if result.AccountID != "" {
-				fmt.Fprintf(cmd.OutOrStdout(), "\t%s", result.AccountID)
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "\t%s\n", result.Reason)
+			fmt.Fprint(cmd.OutOrStdout(), routeCLIText(result))
 			return nil
 		},
 	}
@@ -145,6 +141,33 @@ func newAgentsCmd() *cobra.Command {
 	usageCmd.Flags().String("account", "", "imported account id for account-specific usage (currently Codex)")
 	cmd.AddCommand(routeCmd, usageCmd)
 	return cmd
+}
+
+func routeCLIText(result protocol.AgentRouteResult) string {
+	parts := []string{result.Agent.ID}
+	if result.AccountID != "" {
+		parts = append(parts, result.AccountID)
+	}
+	if result.AccountRoute != nil {
+		parts = append(parts, routeEvidenceText(*result.AccountRoute))
+	}
+	if result.Reason != "" {
+		parts = append(parts, result.Reason)
+	}
+	return strings.Join(parts, "\t") + "\n"
+}
+
+func routeEvidenceText(route protocol.AccountRouteEvidence) string {
+	parts := []string{"quota " + route.QuotaState}
+	parts = append(parts, fmt.Sprintf("fresh %t", route.Fresh))
+	if route.PrimaryUsedPercent != nil {
+		parts = append(parts, "primary "+formatPercent(*route.PrimaryUsedPercent))
+	}
+	parts = append(parts, fmt.Sprintf("score %.2f", route.Score))
+	if route.CheckedAt > 0 {
+		parts = append(parts, "checked "+time.Unix(route.CheckedAt, 0).Format(time.RFC3339))
+	}
+	return strings.Join(parts, " ")
 }
 
 func saveUsageQuota(ctx context.Context, accounts *account.Store, secrets secret.Store, acc account.Account, usage map[string]any) error {
