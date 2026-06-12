@@ -2412,6 +2412,35 @@ func TestSessionLifecycleAndReplay(t *testing.T) {
 	}
 }
 
+func TestClientDisconnectDoesNotEndLiveSessionAndReconnectCanContinue(t *testing.T) {
+	ts, _ := newIntegration(t)
+	c := initialized(t, ts)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake"}), &created)
+	if err := c.conn.Close(websocket.StatusNormalClosure, "client reconnect test"); err != nil {
+		t.Fatal(err)
+	}
+
+	c2 := initialized(t, ts)
+	var list protocol.SessionListResult
+	c2.mustResult(c2.call(protocol.MethodSessionList, struct{}{}), &list)
+	if len(list.Sessions) != 1 || list.Sessions[0].SessionID != created.SessionID || list.Sessions[0].State != protocol.SessionStateLive {
+		t.Fatalf("session after disconnect = %+v", list.Sessions)
+	}
+
+	var attached protocol.SessionAttachResult
+	c2.mustResult(c2.call(protocol.MethodSessionAttach, protocol.SessionAttachParams{SessionID: created.SessionID, FromSeq: 0}), &attached)
+	if attached.SessionID != created.SessionID {
+		t.Fatalf("attached session = %+v", attached)
+	}
+	c2.mustResult(c2.call(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: created.SessionID, Prompt: "after-reconnect"}), nil)
+	if ev := c2.waitEvent(protocol.EventOutputText); ev.SessionID != created.SessionID || ev.Data["text"] != "echo:after-reconnect" {
+		t.Fatalf("reconnected event = %+v", ev)
+	}
+	c2.waitEvent(protocol.EventTaskDone)
+}
+
 func TestRejectsInvalidPermissionMode(t *testing.T) {
 	ts, _ := newIntegration(t)
 	c := initialized(t, ts)
