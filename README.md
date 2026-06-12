@@ -161,7 +161,7 @@ CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --j
 CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native --timeout 2m # verify native SecretStore directly
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native --timeout 2m # readiness gate
 capd start --secret-backend native # keep running in another terminal for CAP/WebSocket checks
-capd console --probe         # simple web data probe; opens with daemon token without printing it
+capd console --probe --require-secret-backend native # simple web data probe; opens with daemon token without printing it
 capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail # same probe diagnostics for automation
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe/data # safe JSON diagnostics
 capd health --json --require-secret-backend native # confirm daemon /healthz plus version/protocol/secret backend

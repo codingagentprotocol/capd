@@ -45,6 +45,47 @@ func TestConsoleCmdPrintsProbeURLAfterHealthCheck(t *testing.T) {
 	}
 }
 
+func TestConsoleCmdPrintsRequiredSecretBackendURL(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	token := "tok-console-native"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/healthz" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		w.Write([]byte("ok\n"))
+	}))
+	defer ts.Close()
+	host, port := splitTestURL(t, ts.URL)
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+
+	var out bytes.Buffer
+	cmd := newConsoleCmd()
+	cmd.SetArgs([]string{"--probe", "--url", "--require-secret-backend", "native"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := strings.TrimSpace(out.String())
+	if !strings.Contains(text, "/probe/?") || !strings.Contains(text, "token="+token) || !strings.Contains(text, "requireSecretBackend=native") {
+		t.Fatalf("probe URL = %q", text)
+	}
+}
+
+func TestConsoleCmdRejectsUnknownRequiredSecretBackend(t *testing.T) {
+	cmd := newConsoleCmd()
+	cmd.SetArgs([]string{"--url", "--require-secret-backend", "mystery"})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `unknown secret backend "mystery"`) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestConsoleCmdFailsBeforePrintingURLWhenDaemonUnhealthy(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/config"
 	"github.com/codingagentprotocol/capd/internal/daemon"
 )
@@ -17,10 +18,15 @@ import (
 func newConsoleCmd() *cobra.Command {
 	var probe bool
 	var printURL bool
+	var requireSecretBackend string
 	cmd := &cobra.Command{
 		Use:   "console",
 		Short: "Open the local web console or probe",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			requiredBackend, err := secret.NormalizeBackend(requireSecretBackend)
+			if err != nil {
+				return err
+			}
 			cfg := config.Load()
 			if _, err := daemonHealth(cmd.Context(), cfg); err != nil {
 				return err
@@ -35,6 +41,13 @@ func newConsoleCmd() *cobra.Command {
 				target = probeURL(cfg, token)
 				label = "probe"
 			}
+			if requiredBackend != "" {
+				if probe {
+					target = probeURLWithSecretBackend(cfg, token, requiredBackend)
+				} else {
+					target = consoleURLWithSecretBackend(cfg, token, requiredBackend)
+				}
+			}
 			if printURL {
 				fmt.Fprintln(cmd.OutOrStdout(), target)
 				return nil
@@ -48,6 +61,7 @@ func newConsoleCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&probe, "probe", false, "open the lightweight data probe instead of the full console")
 	cmd.Flags().BoolVar(&printURL, "url", false, "print the local URL with token instead of opening it")
+	cmd.Flags().StringVar(&requireSecretBackend, "require-secret-backend", "", "preselect a SecretStore backend requirement in the console or probe (file or native)")
 	return cmd
 }
 

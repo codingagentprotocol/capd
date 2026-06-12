@@ -61,6 +61,7 @@
 <script>
 const params = new URLSearchParams(location.search);
 const TOKEN = params.get("token") || "";
+const REQUIRED_SECRET_BACKEND = normalizeSecretBackend(params.get("requireSecretBackend") || "");
 if (TOKEN) {
   params.delete("token");
   history.replaceState(null, "", location.pathname + (params.toString() ? "?" + params.toString() : ""));
@@ -79,11 +80,19 @@ function webSocketAuthProtocol(token) {
 }
 function showJSON(data) { $("json").textContent = JSON.stringify(data, null, 2); }
 function showSummary(lines) { $("summary").textContent = lines.join("\n"); }
+function normalizeSecretBackend(value) {
+  value = String(value || "").trim();
+  return value === "file" || value === "native" ? value : "";
+}
+function requiredSecretBackend() {
+  return REQUIRED_SECRET_BACKEND || ($("native").checked ? "native" : "");
+}
 async function fetchProbeData(readiness) {
   if (!TOKEN) throw new Error("token missing");
   const query = new URLSearchParams();
   if (readiness) query.set("readiness", "1");
-  if ($("native").checked) query.set("requireSecretBackend", "native");
+  const requiredBackend = requiredSecretBackend();
+  if (requiredBackend) query.set("requireSecretBackend", requiredBackend);
   const res = await fetch(httpURL("/probe/data" + (query.toString() ? "?" + query.toString() : "")), {
     cache:"no-store",
     headers:{ Authorization:`Bearer ${TOKEN}` }
@@ -273,7 +282,7 @@ async function refresh(readiness = false) {
       requireMultiple:true,
       requireFreshQuota:true,
       requireAllFreshQuota:true,
-      requireSecretBackend:$("native").checked ? "native" : ""
+      requireSecretBackend:requiredSecretBackend()
     } : { provider:"codex" };
     let result;
     let readinessError = "";
@@ -319,14 +328,14 @@ async function refresh(readiness = false) {
     } catch (probeErr) {
       summary.push(`http probe error: ${probeErr.message || String(probeErr)}`);
     }
-    const checks = validationRows({ healthOK:healthInfo, result, route, routeDecision, readiness, requireNative:$("native").checked, readinessError, routeError });
+    const checks = validationRows({ healthOK:healthInfo, result, route, routeDecision, readiness, requireNative:requiredSecretBackend() === "native", readinessError, routeError });
     showSummary(summary);
     showTests(checks);
     showJSON({ checks, health: healthInfo, accountsCheck: result, routeDecision, autoRoute: route, routeCandidates: (routeDecision && routeDecision.routeCandidates) || result.routeCandidates, httpProbe, readinessError, routeError });
   } catch (e) {
     setMetric("daemon", "attention", "bad");
     showSummary([e.message || String(e)]);
-    const checks = validationRows({ healthOK:false, result:null, route:null, routeDecision:null, readiness, requireNative:$("native").checked, readinessError:e.message || String(e), routeError:"" });
+    const checks = validationRows({ healthOK:false, result:null, route:null, routeDecision:null, readiness, requireNative:requiredSecretBackend() === "native", readinessError:e.message || String(e), routeError:"" });
     showTests(checks);
     showJSON({ checks, error: e.message || String(e) });
   } finally {
@@ -336,5 +345,6 @@ async function refresh(readiness = false) {
 }
 $("refresh").onclick = () => refresh(false);
 $("readiness").onclick = () => refresh(true);
+if (REQUIRED_SECRET_BACKEND) $("native").checked = REQUIRED_SECRET_BACKEND === "native";
 refresh(false);
 </script>

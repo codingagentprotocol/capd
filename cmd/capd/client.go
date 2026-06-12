@@ -37,11 +37,23 @@ func consoleURL(cfg config.Config, token string) string {
 	return localPageURL(cfg, token, "/console/")
 }
 
+func consoleURLWithSecretBackend(cfg config.Config, token, secretBackend string) string {
+	return localPageURLWithParams(cfg, token, "/console/", map[string]string{"requireSecretBackend": secretBackend})
+}
+
 func probeURL(cfg config.Config, token string) string {
 	return localPageURL(cfg, token, "/probe/")
 }
 
+func probeURLWithSecretBackend(cfg config.Config, token, secretBackend string) string {
+	return localPageURLWithParams(cfg, token, "/probe/", map[string]string{"requireSecretBackend": secretBackend})
+}
+
 func localPageURL(cfg config.Config, token, path string) string {
+	return localPageURLWithParams(cfg, token, path, nil)
+}
+
+func localPageURLWithParams(cfg config.Config, token, path string, params map[string]string) string {
 	u := url.URL{
 		Scheme: "http",
 		Host:   daemonAddr(cfg),
@@ -49,6 +61,11 @@ func localPageURL(cfg config.Config, token, path string) string {
 	}
 	q := u.Query()
 	q.Set("token", token)
+	for key, value := range params {
+		if value != "" {
+			q.Set(key, value)
+		}
+	}
 	u.RawQuery = q.Encode()
 	return u.String()
 }

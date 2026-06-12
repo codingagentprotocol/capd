@@ -90,7 +90,7 @@ CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --requ
 # In another terminal, keep the daemon running for CAP/WebSocket checks:
 capd start --secret-backend native
 
-capd console --probe
+capd console --probe --require-secret-backend native
 capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe/data
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" "http://127.0.0.1:7777/probe/data?readiness=1&requireSecretBackend=native"

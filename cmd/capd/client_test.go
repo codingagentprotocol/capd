@@ -69,6 +69,23 @@ func TestConsoleURLEncodesToken(t *testing.T) {
 	}
 }
 
+func TestConsoleURLAddsRequiredSecretBackend(t *testing.T) {
+	raw := consoleURLWithSecretBackend(config.Config{Host: "localhost", Port: 17777}, "tok+with&chars", "native")
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Path != "/console/" {
+		t.Fatalf("url = %q", raw)
+	}
+	if got := u.Query().Get("token"); got != "tok+with&chars" {
+		t.Fatalf("token = %q", got)
+	}
+	if got := u.Query().Get("requireSecretBackend"); got != "native" {
+		t.Fatalf("requireSecretBackend = %q", got)
+	}
+}
+
 func TestProbeURLEncodesToken(t *testing.T) {
 	raw := probeURL(config.Config{Host: "localhost", Port: 17777}, "tok+with&chars")
 	u, err := url.Parse(raw)
@@ -80,6 +97,23 @@ func TestProbeURLEncodesToken(t *testing.T) {
 	}
 	if got := u.Query().Get("token"); got != "tok+with&chars" {
 		t.Fatalf("token = %q", got)
+	}
+}
+
+func TestProbeURLAddsRequiredSecretBackend(t *testing.T) {
+	raw := probeURLWithSecretBackend(config.Config{Host: "localhost", Port: 17777}, "tok+with&chars", "native")
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Path != "/probe/" {
+		t.Fatalf("url = %q", raw)
+	}
+	if got := u.Query().Get("token"); got != "tok+with&chars" {
+		t.Fatalf("token = %q", got)
+	}
+	if got := u.Query().Get("requireSecretBackend"); got != "native" {
+		t.Fatalf("requireSecretBackend = %q", got)
 	}
 }
 

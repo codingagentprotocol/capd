@@ -98,6 +98,7 @@
 const params = new URLSearchParams(location.search);
 const TOKEN = params.get("token") || "";
 const CAPD = safeCAPDHost(params.get("capd"));
+const REQUIRED_SECRET_BACKEND = normalizeSecretBackend(params.get("requireSecretBackend") || "");
 const QUOTA_FRESH_MS = 30 * 60 * 1000;
 if (TOKEN) {
   const cleanURL = new URL(location.href);
@@ -116,6 +117,15 @@ const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
 const RPC_TIMEOUT_MS = 12000;
 const LONG_RPC_TIMEOUT_MS = 120000;
+
+function normalizeSecretBackend(value) {
+  value = String(value || "").trim();
+  return value === "file" || value === "native" ? value : "";
+}
+
+function requiredSecretBackend() {
+  return REQUIRED_SECRET_BACKEND || (document.getElementById("requireNativeSecret").checked ? "native" : "");
+}
 
 function rpcTimeoutFor(method, params = {}) {
   if (method === "accounts/quota" || method === "agents/usage") return LONG_RPC_TIMEOUT_MS;
@@ -295,7 +305,8 @@ async function checkAccounts(readinessGate = false) {
       params.requireMultiple = true;
       params.requireFreshQuota = true;
       params.requireAllFreshQuota = true;
-      if (document.getElementById("requireNativeSecret").checked) params.requireSecretBackend = "native";
+      const requiredBackend = requiredSecretBackend();
+      if (requiredBackend) params.requireSecretBackend = requiredBackend;
     }
     const result = await call("accounts/check", params);
     const route = result.autoRoute ? ` · auto ${result.autoRoute.accountId || ""} ${routeEvidenceSummary(result.autoRoute)}` : "";
@@ -331,7 +342,8 @@ async function refreshReadinessDiagnostic() {
   try {
     await checkDaemonHealth(false);
     const checkParams = { provider: "codex" };
-    if (document.getElementById("requireNativeSecret").checked) checkParams.requireSecretBackend = "native";
+    const requiredBackend = requiredSecretBackend();
+    if (requiredBackend) checkParams.requireSecretBackend = requiredBackend;
     const result = await call("accounts/check", checkParams);
     let route = null;
     let routeError = "";
@@ -340,7 +352,7 @@ async function refreshReadinessDiagnostic() {
     } catch (e) {
       routeError = e.message || JSON.stringify(e);
     }
-    renderReadinessDiagnosticResult({ result, route, routeError, requireNativeSecret: document.getElementById("requireNativeSecret").checked });
+    renderReadinessDiagnosticResult({ result, route, routeError, requiredSecretBackend: requiredBackend });
   } catch (e) {
     if (e.data) {
       let route = null;
@@ -350,7 +362,7 @@ async function refreshReadinessDiagnostic() {
       } catch (routeErr) {
         routeError = routeErr.message || JSON.stringify(routeErr);
       }
-      renderReadinessDiagnosticResult({ result: e.data, route, routeError, readinessError: e.message || JSON.stringify(e), requireNativeSecret: document.getElementById("requireNativeSecret").checked });
+      renderReadinessDiagnosticResult({ result: e.data, route, routeError, readinessError: e.message || JSON.stringify(e), requiredSecretBackend: requiredSecretBackend() });
       return;
     }
     readinessEl.className = "warn";
@@ -361,7 +373,7 @@ async function refreshReadinessDiagnostic() {
   }
 }
 
-function renderReadinessDiagnosticResult({ result, route, routeError = "", readinessError = "", requireNativeSecret = false }) {
+function renderReadinessDiagnosticResult({ result, route, routeError = "", readinessError = "", requiredSecretBackend = "" }) {
   const accounts = result.accounts || [];
   const freshCount = accounts.filter(a => a.quotaFresh).length;
   const issues = [];
@@ -369,10 +381,10 @@ function renderReadinessDiagnosticResult({ result, route, routeError = "", readi
   if (accounts.length && freshCount < accounts.length) issues.push("quota 未全部 fresh");
   const autoRoute = result.autoRoute || (route && route.accountRoute);
   if (!autoRoute || !autoRoute.fresh) issues.push("auto route 缺 fresh quota");
-  if (requireNativeSecret && result.secretBackend !== "native") issues.push("native SecretStore 未启用");
+  if (requiredSecretBackend && result.secretBackend !== requiredSecretBackend) issues.push(`${requiredSecretBackend} SecretStore 未启用`);
   if (readinessError) issues.push("readiness gate failed");
-  const checks = readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError, requireNativeSecret });
-  const summary = readinessSummaryText({ result, accounts, freshCount, autoRoute, route, requireNativeSecret });
+  const checks = readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError, requiredSecretBackend });
+  const summary = readinessSummaryText({ result, accounts, freshCount, autoRoute, route, requiredSecretBackend });
   const parts = [
     "daemon ok",
     summary,
@@ -394,7 +406,7 @@ function renderReadinessDiagnosticResult({ result, route, routeError = "", readi
   renderAccountDiagnostics(result);
 }
 
-function readinessSummaryText({ result, accounts, freshCount, autoRoute, route, requireNativeSecret = false }) {
+function readinessSummaryText({ result, accounts, freshCount, autoRoute, route, requiredSecretBackend = "" }) {
   const summary = result.summary || {};
   const checked = summary.checkedAccounts ?? result.checkedAccounts ?? 0;
   const required = summary.requiredAccounts || 2;
@@ -403,18 +415,21 @@ function readinessSummaryText({ result, accounts, freshCount, autoRoute, route, 
   const missingQuota = summary.missingQuotaAccounts ?? accounts.filter(a => !a.quotaState || a.quotaState === "missing").length;
   const fresh = summary.freshQuotaAccounts ?? freshCount;
   const secretBackend = summary.secretBackend || result.secretBackend || "unknown";
+  const requiredBackend = summary.requiredSecretBackend || requiredSecretBackend;
   const routeOK = !!(route && route.accountRoute);
-  const secretOK = typeof summary.secretBackendOk === "boolean" ? summary.secretBackendOk : (!requireNativeSecret || secretBackend === "native");
+  const secretOK = typeof summary.secretBackendOk === "boolean" ? summary.secretBackendOk : (!requiredBackend || secretBackend === requiredBackend);
   const autoFresh = typeof summary.autoRouteFresh === "boolean" ? summary.autoRouteFresh : !!(autoRoute && autoRoute.fresh);
   const ready = missing === 0 && checked > 0 && fresh === checked && autoFresh && routeOK && secretOK;
-  return `summary ready ${ready} accounts ${checked}/${required} missing ${missing} quota fresh ${fresh} stale ${stale} missing quota ${missingQuota} auto fresh ${autoFresh} route decision ${routeOK} secret ok ${secretOK}`;
+  const requiredSecret = requiredBackend ? ` required secret ${requiredBackend}` : "";
+  return `summary ready ${ready} accounts ${checked}/${required} missing ${missing} quota fresh ${fresh} stale ${stale} missing quota ${missingQuota} auto fresh ${autoFresh} route decision ${routeOK} secret ok ${secretOK}${requiredSecret}`;
 }
 
-function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError = "", requireNativeSecret = false }) {
+function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError = "", requiredSecretBackend = "" }) {
   const checked = result.checkedAccounts || 0;
   const secretBackend = result.secretBackend || "unknown";
-  const secretOK = !requireNativeSecret || secretBackend === "native";
-  const secretNextStep = !secretOK ? "restart daemon with: capd start --secret-backend native" : "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native";
+  const requiredBackend = (result.summary && result.summary.requiredSecretBackend) || requiredSecretBackend;
+  const secretOK = !requiredBackend || secretBackend === requiredBackend;
+  const secretNextStep = !secretOK ? `restart daemon with: capd start --secret-backend ${requiredBackend}` : (requiredBackend === "native" ? "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native" : "");
   return [
     { name: "daemon health", ok: true, evidence: "health ok", nextStep: "" },
     { name: "Codex multi-account import", ok: checked >= 2, evidence: `checked ${checked}, need 2`, nextStep: checked >= 2 ? "" : "导入至少两个账号: capd accounts import --auth /path/a --auth /path/b" },
@@ -423,7 +438,7 @@ function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, ro
     { name: "readiness gate", ok: !readinessError, evidence: readinessError || "no blocking readiness error", nextStep: readinessError ? "按 partial evidence 修复账号、quota 或 SecretStore 后重跑就绪门禁" : "" },
     { name: "route decision", ok: !!route, evidence: route ? routeDecisionSummary(route) : routeError || "route missing", nextStep: route ? "" : "运行 capd agents route --account auto" },
     { name: "route candidates", ok: !!routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)), evidence: routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)) || "no routeCandidates evidence", nextStep: routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)) ? "" : "刷新诊断或运行 capd agents route --account auto --json" },
-    { name: "SecretStore backend", ok: secretOK, evidence: requireNativeSecret ? `secret ${secretBackend}, want native` : `secret ${secretBackend}`, nextStep: requireNativeSecret ? secretNextStep : "" }
+    { name: "SecretStore backend", ok: secretOK, evidence: requiredBackend ? `secret ${secretBackend}, want ${requiredBackend}` : `secret ${secretBackend}`, nextStep: requiredBackend ? secretNextStep : "" }
   ];
 }
 
@@ -961,6 +976,7 @@ document.getElementById("account").onchange = () => { markActiveAccount(); previ
 document.getElementById("requireFreshQuota").onchange = previewRoute;
 document.getElementById("prompt").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("send").click(); });
 
+if (REQUIRED_SECRET_BACKEND) document.getElementById("requireNativeSecret").checked = REQUIRED_SECRET_BACKEND === "native";
 connect().catch(e => { statusEl.textContent = "连接失败: " + (e.message || JSON.stringify(e)); });
 </script>
 </body>
