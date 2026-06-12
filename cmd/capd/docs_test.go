@@ -34,6 +34,38 @@ func TestReferenceDocsCoverRouteCandidateEvidence(t *testing.T) {
 	}
 }
 
+func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
+	referenceData, err := os.ReadFile("../../docs/reference.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testingData, err := os.ReadFile("../../docs/testing.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := string(referenceData)
+	testingDoc := string(testingData)
+
+	for _, want := range []string{
+		"ordinary `Refresh` path uses `accounts/list` metadata",
+		"does not read account SecretStore\ncredentials",
+		"`Readiness` button runs the stronger account credential",
+	} {
+		if !strings.Contains(reference, want) {
+			t.Fatalf("reference docs missing prompt-free probe refresh contract %q", want)
+		}
+	}
+	for _, want := range []string{
+		"ordinary `Refresh` path uses `accounts/list` metadata plus\nroute evidence",
+		"does not read account SecretStore credentials",
+		"without repeated OS credential prompts",
+	} {
+		if !strings.Contains(testingDoc, want) {
+			t.Fatalf("testing docs missing prompt-free probe refresh contract %q", want)
+		}
+	}
+}
+
 func TestReferenceDocsCoverAccountListRouteAudit(t *testing.T) {
 	data, err := os.ReadFile("../../docs/reference.md")
 	if err != nil {

@@ -40,7 +40,10 @@ runtime projection, selected or all-account quota refresh, safe account checks,
 and readiness gates over the same CAP RPC methods used by CLI clients.
 Use `capd console` to open the full console, or `capd console --probe` to open
 the lightweight validation probe without printing the daemon token to the
-terminal. The probe's Evidence JSON includes a `checks` array with
+terminal. The probe's ordinary `Refresh` path uses `accounts/list` metadata and
+route evidence so opening the page does not read account SecretStore
+credentials; the `Readiness` button runs the stronger account credential,
+quota, and native SecretStore gate. The probe's Evidence JSON includes a `checks` array with
 `name`, `ok`, `evidence`, and optional `nextStep` fields plus safe `health`
 metadata (`version`, `protocolVersion`, and `secretBackend` when supported) so
 browser-side readiness evidence mirrors `capd doctor --json`. The probe also

@@ -121,11 +121,11 @@ capd agents route --account auto --require-fresh-quota --json
 capd run --agent codex --account auto --require-fresh-quota "say ready"
 ```
 
-The browser probe's ordinary `Refresh` path does not force the native
-SecretStore, so it can be used for low-friction diagnostics without repeated OS
-credential prompts. Use `Readiness`, `--readiness`, or
-`--require-secret-backend native` when you intentionally want the native
-SecretStore gate.
+The browser probe's ordinary `Refresh` path uses `accounts/list` metadata plus
+route evidence and does not read account SecretStore credentials, so it can be
+used for low-friction diagnostics without repeated OS credential prompts. Use
+`Readiness`, `--readiness`, or `--require-secret-backend native` when you
+intentionally want the native SecretStore gate.
 
 After importing multiple accounts and starting the daemon in another terminal,
 the same live preflight is available without sending a prompt:
