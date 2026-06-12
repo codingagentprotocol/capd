@@ -815,6 +815,22 @@ func TestAccountsCheckJSONErrorSuggestsSecondAccountSafely(t *testing.T) {
 	}
 }
 
+func TestAccountsCheckErrorNextStepsExplainSecretAccessDenied(t *testing.T) {
+	fromMessage := accountsCheckErrorNextSteps("refresh quota: codex-test: load account secret: macOS keychain status -128", protocol.AccountsCheckResult{})
+	for _, want := range []string{"approve macOS Keychain access", "capd start --secret-backend file", "capd accounts --secret-backend file codex import"} {
+		if len(fromMessage) == 0 || !strings.Contains(fromMessage[0], want) {
+			t.Fatalf("message nextSteps missing %q: %+v", want, fromMessage)
+		}
+	}
+
+	fromEvidence := accountsCheckErrorNextSteps("load account credentials: unreadable", protocol.AccountsCheckResult{
+		Accounts: []protocol.AccountCheckEvidence{{ID: "codex-test", SecretState: protocol.AccountSecretStateAccessDenied}},
+	})
+	if len(fromEvidence) != 1 || !strings.Contains(fromEvidence[0], "approve macOS Keychain access") {
+		t.Fatalf("evidence nextSteps = %+v", fromEvidence)
+	}
+}
+
 func TestAccountsImportCallsDaemonRPCWithRepeatedAuthFlags(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

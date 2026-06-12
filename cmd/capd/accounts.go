@@ -324,6 +324,12 @@ func printAccountsCheckJSONError(cmd *cobra.Command, err error) {
 func accountsCheckErrorNextSteps(message string, partial protocol.AccountsCheckResult) []string {
 	steps := []string{}
 	summary := partial.Summary
+	if accountsCheckHasSecretState(partial, protocol.AccountSecretStateAccessDenied) || strings.Contains(message, "macOS keychain status -128") {
+		steps = append(steps, "approve macOS Keychain access, or avoid native prompts by restarting with: capd start --secret-backend file and re-importing accounts with: capd accounts --secret-backend file codex import --auth /path/to/auth.json")
+	}
+	if accountsCheckHasSecretState(partial, protocol.AccountSecretStateTimeout) {
+		steps = append(steps, "unlock or approve OS SecretStore access, then rerun: capd accounts check --json --readiness --timeout 2m")
+	}
 	requiredBackend := summary.RequiredSecretBackend
 	if requiredBackend == "" && strings.Contains(message, `want "native"`) {
 		requiredBackend = secret.BackendNative
@@ -348,6 +354,15 @@ func accountsCheckErrorNextSteps(message string, partial protocol.AccountsCheckR
 		steps = append(steps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness")
 	}
 	return compactStrings(steps)
+}
+
+func accountsCheckHasSecretState(result protocol.AccountsCheckResult, state string) bool {
+	for _, row := range result.Accounts {
+		if row.SecretState == state {
+			return true
+		}
+	}
+	return false
 }
 
 func newCodexAccountsCmd() *cobra.Command {
