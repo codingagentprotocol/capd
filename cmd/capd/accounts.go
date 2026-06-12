@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -354,9 +355,9 @@ func newCodexAccountsCmd() *cobra.Command {
 	}
 
 	quotaCmd := &cobra.Command{
-		Use:   "quota [account-id|auto]",
-		Short: "Fetch ChatGPT backend quota for an imported Codex account",
-		Long:  "Fetch ChatGPT backend quota for an imported Codex account. With auto, capd uses the same conservative quota scoring rule as account-aware routing.",
+		Use:   "quota [account-id|auto|all]",
+		Short: "Fetch ChatGPT backend quota for imported Codex accounts",
+		Long:  "Fetch ChatGPT backend quota for imported Codex accounts. With auto, capd uses the same conservative quota scoring rule as account-aware routing. With all, capd refreshes every imported Codex account and prints safe summaries.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			baseURL, _ := cmd.Flags().GetString("base-url")
@@ -378,31 +379,40 @@ func newCodexAccountsCmd() *cobra.Command {
 			if id == "" {
 				return fmt.Errorf("no Codex account selected")
 			}
+			if id == "all" {
+				if rawOut {
+					return fmt.Errorf("--raw is only supported for a single account")
+				}
+				list, err := accounts.ListAccounts(codexauth.Provider)
+				if err != nil {
+					return err
+				}
+				if len(list) == 0 {
+					return fmt.Errorf("no imported Codex accounts; run capd accounts codex import first")
+				}
+				rows := make([]codexQuotaSummary, 0, len(list))
+				for _, acc := range list {
+					row, err := refreshCodexQuota(cmd.Context(), accounts, secrets, baseURL, acc)
+					if err != nil {
+						return fmt.Errorf("%s: %w", acc.ID, err)
+					}
+					rows = append(rows, row)
+				}
+				out, _ := json.MarshalIndent(rows, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+				return nil
+			}
 			acc, err := resolveUsageAccount(accounts, id)
 			if err != nil {
 				return err
 			}
-			ref, err := secret.ParseRef(acc.SecretRef)
+			summary, usage, err := refreshCodexQuotaWithUsage(cmd.Context(), accounts, secrets, baseURL, acc)
 			if err != nil {
 				return err
 			}
-			if err := secret.EnsureRefBackend(secrets, ref); err != nil {
-				return err
-			}
-			bundle, err := secrets.Get(cmd.Context(), ref)
-			if err != nil {
-				return err
-			}
-			result, err := codexquota.Client{BaseURL: baseURL}.Usage(cmd.Context(), acc.ID, bundle)
-			if err != nil {
-				return err
-			}
-			if err := accounts.SaveQuota(result.Quota); err != nil {
-				return err
-			}
-			var body any = codexQuotaSummaryFrom(acc, result.Quota)
+			var body any = summary
 			if rawOut {
-				body = result.Usage
+				body = usage
 			}
 			out, _ := json.MarshalIndent(body, "", "  ")
 			fmt.Fprintln(cmd.OutOrStdout(), string(out))
@@ -488,6 +498,9 @@ func newCodexAccountsCmd() *cobra.Command {
 					SecretReadable:     true,
 				}
 				if refreshQuota {
+					if bundle.AccountID == "" {
+						bundle.AccountID = acc.AccountID
+					}
 					quotaResult, err := codexquota.Client{BaseURL: baseURL}.Usage(cmd.Context(), acc.ID, bundle)
 					if err != nil {
 						return fmt.Errorf("%s: refresh quota: %w", acc.ID, err)
@@ -645,6 +658,36 @@ func codexQuotaSummaryFrom(acc account.Account, q account.QuotaSnapshot) codexQu
 		CheckedAt:             q.CheckedAt,
 		QuotaState:            accountQuotaState(q),
 	}
+}
+
+func refreshCodexQuota(ctx context.Context, accounts *account.Store, secrets secret.Store, baseURL string, acc account.Account) (codexQuotaSummary, error) {
+	summary, _, err := refreshCodexQuotaWithUsage(ctx, accounts, secrets, baseURL, acc)
+	return summary, err
+}
+
+func refreshCodexQuotaWithUsage(ctx context.Context, accounts *account.Store, secrets secret.Store, baseURL string, acc account.Account) (codexQuotaSummary, map[string]any, error) {
+	ref, err := secret.ParseRef(acc.SecretRef)
+	if err != nil {
+		return codexQuotaSummary{}, nil, err
+	}
+	if err := secret.EnsureRefBackend(secrets, ref); err != nil {
+		return codexQuotaSummary{}, nil, err
+	}
+	bundle, err := secrets.Get(ctx, ref)
+	if err != nil {
+		return codexQuotaSummary{}, nil, err
+	}
+	if bundle.AccountID == "" {
+		bundle.AccountID = acc.AccountID
+	}
+	result, err := codexquota.Client{BaseURL: baseURL}.Usage(ctx, acc.ID, bundle)
+	if err != nil {
+		return codexQuotaSummary{}, nil, err
+	}
+	if err := accounts.SaveQuota(result.Quota); err != nil {
+		return codexQuotaSummary{}, nil, err
+	}
+	return codexQuotaSummaryFrom(acc, result.Quota), result.Usage, nil
 }
 
 type codexSmokeProjection struct {

@@ -148,6 +148,7 @@ capd accounts codex list     # imported Codex accounts, current account marked
 capd accounts codex project  # create a per-account CODEX_HOME projection
 capd accounts codex quota    # refresh quota and print a safe summary
 capd accounts codex quota auto
+capd accounts codex quota all
 capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
 capd accounts check --json   # daemon-side accounts/check smoke evidence
 capd accounts check --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
