@@ -1176,6 +1176,42 @@ func TestCodexAccountsRemoveDeletesMetadataAndSecret(t *testing.T) {
 	}
 }
 
+func TestCodexConcreteAccountCommandsRejectAutoAndAll(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	accounts.Close()
+
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"current auto", []string{"codex", "current", protocol.AccountAuto}, "account-aware routing"},
+		{"current all", []string{"codex", "current", protocol.AccountAll}, "quota batch refresh"},
+		{"project auto", []string{"codex", "project", protocol.AccountAuto}, "account-aware routing"},
+		{"project all", []string{"codex", "project", protocol.AccountAll}, "quota batch refresh"},
+		{"remove auto", []string{"codex", "remove", protocol.AccountAuto}, "account-aware routing"},
+		{"remove all", []string{"codex", "remove", protocol.AccountAll}, "quota batch refresh"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			cmd := newAccountsCmd()
+			cmd.SetArgs(tc.args)
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			err := cmd.Execute()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v", err)
+			}
+			for _, leaked := range []string{"access-secret", "refresh-secret", "file:codex-test"} {
+				if strings.Contains(err.Error(), leaked) || strings.Contains(out.String(), leaked) {
+					t.Fatalf("leaked %q: err=%v out=%s", leaked, err, out.String())
+				}
+			}
+		})
+	}
+}
+
 func TestResolveUsageAccountAuto(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)

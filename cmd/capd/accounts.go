@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -261,6 +262,9 @@ func newCodexAccountsCmd() *cobra.Command {
 			}
 			defer accounts.Close()
 			if len(args) == 1 {
+				if err := rejectConcreteCodexAccountArg(args[0]); err != nil {
+					return err
+				}
 				if _, err := accounts.LoadAccount(args[0]); err != nil {
 					return err
 				}
@@ -293,6 +297,9 @@ func newCodexAccountsCmd() *cobra.Command {
 			id := ""
 			if len(args) == 1 {
 				id = args[0]
+				if err := rejectConcreteCodexAccountArg(id); err != nil {
+					return err
+				}
 			} else {
 				id, err = accounts.CurrentAccount(codexauth.Provider)
 				if err != nil {
@@ -332,6 +339,9 @@ func newCodexAccountsCmd() *cobra.Command {
 				return err
 			}
 			defer accounts.Close()
+			if err := rejectConcreteCodexAccountArg(args[0]); err != nil {
+				return err
+			}
 			acc, err := accounts.LoadAccount(args[0])
 			if err != nil {
 				return err
@@ -791,6 +801,18 @@ func accountSecretBackendFlag(cmd *cobra.Command) string {
 		}
 	}
 	return ""
+}
+
+func rejectConcreteCodexAccountArg(id string) error {
+	id = strings.TrimSpace(id)
+	switch id {
+	case protocol.AccountAll:
+		return fmt.Errorf("account id %q is reserved for quota batch refresh", protocol.AccountAll)
+	case protocol.AccountAuto:
+		return fmt.Errorf("account id %q is supported only for account-aware routing", protocol.AccountAuto)
+	default:
+		return nil
+	}
 }
 
 func openAccountDepsWithBackend(backend string) (*account.Store, secret.Store, error) {
