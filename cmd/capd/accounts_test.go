@@ -175,6 +175,18 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 
 	out.Reset()
 	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"check"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "quota refreshed: false") {
+		t.Fatalf("text output missing quota refresh evidence: %s", out.String())
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
 	cmd.SetArgs([]string{"check", "--json", "--require-fresh-quota", "--require-all-fresh-quota", "--require-secret-backend", secret.BackendFile})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -209,6 +221,26 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	for _, leaked := range []string{token, "access-secret", "refresh-secret", "backend-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
 		if strings.Contains(out.String(), leaked) {
 			t.Fatalf("accounts check refresh leaked %q: %s", leaked, out.String())
+		}
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--refresh-quota"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if quotaCalls.Load() != 2 {
+		t.Fatalf("quota calls after text refresh = %d", quotaCalls.Load())
+	}
+	if !strings.Contains(out.String(), "quota refreshed: true") {
+		t.Fatalf("text output missing refreshed evidence: %s", out.String())
+	}
+	for _, leaked := range []string{token, "access-secret", "refresh-secret", "backend-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts check text refresh leaked %q: %s", leaked, out.String())
 		}
 	}
 

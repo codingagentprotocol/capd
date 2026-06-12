@@ -133,6 +133,7 @@ func newAccountsCmd() *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "current: %s\n", result.CurrentAccountID)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "secret backend: %s\n", result.SecretBackend)
+			fmt.Fprintf(cmd.OutOrStdout(), "quota refreshed: %t\n", result.QuotaRefreshed)
 			if result.AutoRoute != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s score %.2f quota %s\n", result.AutoRoute.AccountID, result.AutoRoute.Score, result.AutoRoute.QuotaState)
 			}
