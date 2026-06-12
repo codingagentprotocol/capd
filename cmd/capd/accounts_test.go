@@ -152,6 +152,40 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 			t.Fatalf("accounts check leaked %q: %s", leaked, text)
 		}
 	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--json", "--require-fresh-quota", "--require-all-fresh-quota", "--require-secret-backend", secret.BackendFile})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--require-multiple"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "expected multiple Codex accounts") {
+		t.Fatalf("err = %v", err)
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--require-secret-backend", secret.BackendNative})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `want "native"`) {
+		t.Fatalf("err = %v", err)
+	}
+	for _, leaked := range []string{token, "access-secret", "refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
+		if strings.Contains(err.Error(), leaked) || strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts check gate leaked %q: err=%v out=%s", leaked, err, out.String())
+		}
+	}
 }
 
 func TestCodexAccountsQuotaPrintsSafeSummaryByDefault(t *testing.T) {

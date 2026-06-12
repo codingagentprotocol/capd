@@ -97,6 +97,10 @@ func newAccountsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			provider, _ := cmd.Flags().GetString("provider")
 			jsonOut, _ := cmd.Flags().GetBool("json")
+			requireMultiple, _ := cmd.Flags().GetBool("require-multiple")
+			requireFreshQuota, _ := cmd.Flags().GetBool("require-fresh-quota")
+			requireAllFreshQuota, _ := cmd.Flags().GetBool("require-all-fresh-quota")
+			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			raw, err := daemonRPCCall(cmd.Context(), "capd-accounts-check", protocol.MethodAccountsCheck, protocol.AccountsCheckParams{Provider: provider})
 			if err != nil {
 				return err
@@ -104,6 +108,22 @@ func newAccountsCmd() *cobra.Command {
 			var result protocol.AccountsCheckResult
 			if err := json.Unmarshal(raw, &result); err != nil {
 				return err
+			}
+			if requireSecretBackend != "" && result.SecretBackend != requireSecretBackend {
+				return fmt.Errorf("secret backend = %q, want %q", result.SecretBackend, requireSecretBackend)
+			}
+			if requireMultiple && result.CheckedAccounts < 2 {
+				return fmt.Errorf("expected multiple Codex accounts, found %d", result.CheckedAccounts)
+			}
+			if requireFreshQuota && (result.AutoRoute == nil || !result.AutoRoute.Fresh) {
+				return fmt.Errorf("auto route does not have fresh cached quota; refresh quota first")
+			}
+			if requireAllFreshQuota {
+				for _, row := range result.Accounts {
+					if !row.QuotaFresh {
+						return fmt.Errorf("%s: quota is %s; refresh every account first", row.ID, row.QuotaState)
+					}
+				}
 			}
 			if jsonOut {
 				out, _ := json.MarshalIndent(result, "", "  ")
@@ -132,6 +152,10 @@ func newAccountsCmd() *cobra.Command {
 		},
 	}
 	checkCmd.Flags().String("provider", "codex", "account provider to check")
+	checkCmd.Flags().Bool("require-multiple", false, "fail unless at least two accounts are checked")
+	checkCmd.Flags().Bool("require-fresh-quota", false, "fail unless auto-route selection is backed by fresh cached quota")
+	checkCmd.Flags().Bool("require-all-fresh-quota", false, "fail unless every checked account has fresh cached quota")
+	checkCmd.Flags().String("require-secret-backend", "", "fail unless daemon account check uses this SecretStore backend")
 	checkCmd.Flags().Bool("json", false, "print accounts/check result as JSON without token material")
 
 	cmd.AddCommand(listCmd, checkCmd, newCodexAccountsCmd())

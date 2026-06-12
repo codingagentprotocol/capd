@@ -77,7 +77,7 @@ the file backend.
 | Command | Meaning |
 |---------|---------|
 | `capd accounts list [--json]` | List imported account metadata across all providers; provider-scoped current accounts are marked with `*`; quota state is reported as `fresh`, `stale`, or `missing`. |
-| `capd accounts check [--provider codex] [--json]` | Call the running daemon's `accounts/check` RPC and print safe smoke evidence without token material or runtime paths. |
+| `capd accounts check [--provider codex] [--json] [--require-multiple] [--require-fresh-quota] [--require-all-fresh-quota] [--require-secret-backend <file\|native>]` | Call the running daemon's `accounts/check` RPC and print safe smoke evidence without token material or runtime paths. The `--require-*` flags turn the daemon-side check into a failing readiness gate for long tasks or CI. |
 
 ### `capd accounts codex` — local Codex account control plane
 
