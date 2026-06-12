@@ -319,6 +319,20 @@ func testRequest(method string, params any) *protocol.Request {
 	return &protocol.Request{JSONRPC: protocol.JSONRPCVersion, ID: &id, Method: method, Params: raw}
 }
 
+func assertResponseDoesNotLeak(resp *protocol.Response, forbidden ...string) error {
+	raw, err := json.Marshal(resp)
+	if err != nil {
+		return err
+	}
+	text := string(raw)
+	for _, value := range forbidden {
+		if strings.Contains(text, value) {
+			return fmt.Errorf("response leaked %q: %s", value, text)
+		}
+	}
+	return nil
+}
+
 func newIntegration(t *testing.T) (*httptest.Server, *scriptedAdapter) {
 	t.Helper()
 	return newIntegrationWithToken(t, "it-token")
@@ -2295,6 +2309,7 @@ func TestConcurrentAccountsQuotaAllAndFreshRoute(t *testing.T) {
 		}
 		json.NewEncoder(w).Encode(map[string]any{
 			"planType": plan,
+			"debug":    "must-not-return",
 			"rateLimits": map[string]any{
 				"primary": map[string]any{"usedPercent": used},
 			},
@@ -2317,6 +2332,10 @@ func TestConcurrentAccountsQuotaAllAndFreshRoute(t *testing.T) {
 				Provider:  codexauth.Provider,
 				AccountID: protocol.AccountAll,
 			}))
+			if err := assertResponseDoesNotLeak(resp, "test-token", "low-token", "must-not-return", "rawAuthJson", "RawAuthJSON", "secretRef"); err != nil {
+				errs <- err
+				return
+			}
 			if resp.Error != nil {
 				errs <- fmt.Errorf("quota all: %s", resp.Error.Message)
 				return
@@ -2337,6 +2356,10 @@ func TestConcurrentAccountsQuotaAllAndFreshRoute(t *testing.T) {
 				AccountID:         protocol.AccountAuto,
 				RequireFreshQuota: true,
 			}))
+			if err := assertResponseDoesNotLeak(resp, "test-token", "low-token", "must-not-return", "rawAuthJson", "RawAuthJSON", "secretRef"); err != nil {
+				errs <- err
+				return
+			}
 			if resp.Error != nil {
 				errs <- fmt.Errorf("route: %s", resp.Error.Message)
 				return
