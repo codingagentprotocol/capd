@@ -116,6 +116,8 @@ func TestConsoleStaticContract(t *testing.T) {
 		"检查账号",
 		"checkReady",
 		"就绪门禁",
+		"就绪门禁失败",
+		`readinessGate ? "就绪门禁失败" : "账号检查失败"`,
 		"readiness quota refreshed",
 		"requireNativeSecret",
 		"native secret",

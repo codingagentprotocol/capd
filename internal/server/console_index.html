@@ -206,7 +206,8 @@ async function checkAccounts(readinessGate = false) {
     line("ev-sys", `· 账号检查完成 ${result.checkedAccounts} 个${route}`);
     await loadAccounts();
   } catch (e) {
-    line("ev-err", `✗ 账号检查失败: ${e.message || JSON.stringify(e)}`);
+    const label = readinessGate ? "就绪门禁失败" : "账号检查失败";
+    line("ev-err", `✗ ${label}: ${e.message || JSON.stringify(e)}`);
   } finally {
     button.disabled = false;
   }
