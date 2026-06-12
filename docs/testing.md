@@ -176,11 +176,13 @@ parameters, direct SecretStore JSON roundtrip, migration
 readback-before-metadata-update safety, browser token cleanup documentation, and
 secret-leak guards with local test backends.
 
-`make live-codex-preflight` first verifies the selected SecretStore backend,
-checks that at least two Codex accounts are imported, refreshes every Codex
-quota, then runs `capd doctor --json --fail` against fresh local evidence before
-the daemon/Web readiness chain. It also validates the tokenized Web probe URL
-with the same SecretStore backend requirement before fetching `/probe/data`, and
+`make live-codex-preflight` first prints safe account metadata and runs the
+multi-account smoke gate before native SecretStore roundtrip prompts, so a
+missing second account fails fast without unnecessary OS approval dialogs. It
+then verifies the selected SecretStore backend, refreshes every Codex quota, and
+runs `capd doctor --json --fail` against fresh local evidence before the
+daemon/Web readiness chain. It also validates the tokenized Web probe URL with
+the same SecretStore backend requirement before fetching `/probe/data`, and
 prints the final auto-route gate as JSON so the log preserves sorted
 `routeCandidates` evidence.
 `make live-codex-readiness` runs that preflight before the final live prompt.

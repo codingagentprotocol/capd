@@ -183,3 +183,20 @@ func TestTestingDocsCoverLiveSelftestDaemonSafety(t *testing.T) {
 		}
 	}
 }
+
+func TestTestingDocsCoverPreflightPromptAvoidance(t *testing.T) {
+	data, err := os.ReadFile("../../docs/testing.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testingDoc := string(data)
+
+	for _, want := range []string{
+		"runs the\nmulti-account smoke gate before native SecretStore roundtrip prompts",
+		"missing second account fails fast without unnecessary OS approval dialogs",
+	} {
+		if !strings.Contains(testingDoc, want) {
+			t.Fatalf("testing docs missing preflight prompt avoidance contract %q", want)
+		}
+	}
+}

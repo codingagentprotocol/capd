@@ -193,10 +193,12 @@ missing, use
 the Web Console. Use `capd accounts check --json --readiness` for the
 daemon-side refresh-and-verify gate after fixing quota or account issues. After
 importing multiple Codex accounts and starting `capd start` with the same
-backend in another terminal, `make live-codex-preflight` verifies SecretStore,
-refreshes every Codex quota, runs doctor against fresh local evidence, then
-checks the tokenized Web probe URL plus daemon/Web quota/routing/readiness
-without sending a prompt. For unattended release checks, `make
+backend in another terminal, `make live-codex-preflight` first prints safe
+account metadata and fails fast on missing second accounts before native
+SecretStore roundtrip prompts. It then verifies SecretStore, refreshes every
+Codex quota, runs doctor against fresh local evidence, and checks the tokenized
+Web probe URL plus daemon/Web quota/routing/readiness without sending a prompt.
+For unattended release checks, `make
 live-codex-selftest` starts a temporary daemon when needed, waits for health,
 runs the same preflight, and cleans up only the daemon it started. The final
 route gate runs as JSON so the log keeps the complete `routeCandidates`
