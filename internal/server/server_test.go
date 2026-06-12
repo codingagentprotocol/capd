@@ -146,7 +146,7 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 		t.Fatalf("csp = %q", got)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"CAPD Probe", "accounts/check", "agents/route", "/healthz", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "checks", "validationRows", "showTests", "daemon health", "multi-account readiness", "quota freshness", "auto route fresh", "native secret backend", "readiness gate", "rpcError", "e.data", "capd accounts check --readiness", "capd agents route --account auto", "CAPD_SECRET_BACKEND=native capd start", "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", `call("accounts/check", { provider:"codex" })`} {
+	for _, want := range []string{"CAPD Probe", "accounts/check", "agents/route", "/healthz?format=json", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "protocolVersion", "secretBackend", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "checks", "validationRows", "showTests", "daemon health", "multi-account readiness", "quota freshness", "auto route fresh", "native secret backend", "readiness gate", "rpcError", "e.data", "capd accounts check --readiness", "capd agents route --account auto", "CAPD_SECRET_BACKEND=native capd start", "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", `call("accounts/check", { provider:"codex" })`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("probe HTML missing %q", want)
 		}
@@ -317,8 +317,9 @@ func TestConsoleStaticContract(t *testing.T) {
 		"capdHTTPURL",
 		"checkDaemonHealth",
 		"checkDaemonHealth(false)",
-		`fetch(capdHTTPURL("/healthz")`,
-		"health ok",
+		`fetch(capdHTTPURL("/healthz?format=json")`,
+		"health.protocolVersion",
+		"health.secretBackend",
 	}
 	for _, needle := range required {
 		if !strings.Contains(html, needle) {

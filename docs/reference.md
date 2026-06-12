@@ -37,12 +37,13 @@ and readiness gates over the same CAP RPC methods used by CLI clients.
 Use `capd console` to open the full console, or `capd console --probe` to open
 the lightweight validation probe without printing the daemon token to the
 terminal. The probe's Evidence JSON includes a `checks` array with
-`name`, `ok`, `evidence`, and optional `nextStep` fields so browser-side
-readiness evidence mirrors `capd doctor --json`. The full console renders the
-same readiness concepts as visible pass/fail cards under the diagnostic line,
-and it shows the account-aware `routeCandidates` returned by `agents/route` and
-`accounts/check` so route choices can be audited from the browser without
-exposing token material or local runtime paths.
+`name`, `ok`, `evidence`, and optional `nextStep` fields plus safe `health`
+metadata (`version`, `protocolVersion`, and `secretBackend` when supported) so
+browser-side readiness evidence mirrors `capd doctor --json`. The full console
+renders the same readiness concepts as visible pass/fail cards under the
+diagnostic line, and it shows the account-aware `routeCandidates` returned by
+`agents/route` and `accounts/check` so route choices can be audited from the
+browser without exposing token material or local runtime paths.
 When the native SecretStore gate is enabled, the console and probe distinguish
 backend mismatches from deeper OS SecretStore verification and point the latter to
 `capd doctor --json --fail --verify-secretstore --require-secret-backend native`.

@@ -164,6 +164,27 @@ function routeCandidateText(candidates) {
   if (!Array.isArray(candidates) || candidates.length === 0) return "";
   return candidates.map(c => routeText(c)).join(" | ");
 }
+async function fetchHealthInfo() {
+  const health = await fetch(httpURL("/healthz?format=json"), { cache:"no-store" });
+  const body = (await health.text()).trim();
+  if (!health.ok) throw new Error(`healthz failed: ${health.status} ${body || "empty"}`);
+  try {
+    const info = JSON.parse(body);
+    if (!info.ok) throw new Error("health ok=false");
+    return info;
+  } catch (err) {
+    if (body !== "ok") throw new Error(`healthz invalid JSON: ${body || "empty"}`);
+    return { ok:true };
+  }
+}
+function healthEvidence(info) {
+  if (!info) return "/healthz unavailable";
+  const bits = ["/healthz ok"];
+  if (info.version) bits.push(`version ${info.version}`);
+  if (info.protocolVersion) bits.push(`protocol ${info.protocolVersion}`);
+  if (info.secretBackend) bits.push(`secret ${info.secretBackend}`);
+  return bits.join(" · ");
+}
 function validationRows({ healthOK, result, route, routeDecision, readiness, requireNative, readinessError, routeError }) {
   const accounts = result && result.accounts ? result.accounts : [];
   const fresh = accounts.filter(a => a.quotaFresh).length;
@@ -173,7 +194,7 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
   const nativeSecretOK = !readiness || !requireNative || secretBackend === "native";
   const nativeSecretNextStep = !readiness || !requireNative ? "" : (secretBackend === "native" ? "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native" : "restart daemon with: CAPD_SECRET_BACKEND=native capd start");
   const rows = [
-    { name:"daemon health", ok:!!healthOK, evidence:healthOK ? "/healthz ok" : "/healthz unavailable", nextStep:healthOK ? "" : "start capd with: capd start" },
+    { name:"daemon health", ok:!!healthOK, evidence:healthEvidence(healthOK), nextStep:healthOK ? "" : "start capd with: capd start" },
     { name:"accounts/check data", ok:!!result, evidence:result ? `${result.checkedAccounts || 0} account(s), secret ${secretBackend}` : "accounts/check failed", nextStep:result ? "" : "check daemon logs and retry accounts/check" },
     { name:"multi-account readiness", ok:(result && (result.checkedAccounts || 0) >= 2), evidence:`checked ${result ? result.checkedAccounts || 0 : 0}, need 2`, nextStep:(result && (result.checkedAccounts || 0) >= 2) ? "" : "import at least two accounts with: capd accounts import --auth /path/a --auth /path/b" },
     { name:"quota freshness", ok:accounts.length > 0 && fresh === accounts.length, evidence:`fresh ${fresh}/${accounts.length}`, nextStep:(accounts.length > 0 && fresh === accounts.length) ? "" : "refresh and verify with: capd accounts check --readiness" },
@@ -192,9 +213,9 @@ async function refresh(readiness = false) {
   $("refresh").disabled = true;
   $("readiness").disabled = true;
   try {
-    const health = await fetch(httpURL("/healthz"), { cache:"no-store" });
-    if (!health.ok) throw new Error("healthz failed");
-    setMetric("daemon", "ok", "ok");
+    const healthInfo = await fetchHealthInfo();
+    const daemonLabel = [healthInfo.version, healthInfo.protocolVersion ? `p ${healthInfo.protocolVersion}` : "", healthInfo.secretBackend ? `secret ${healthInfo.secretBackend}` : ""].filter(Boolean).join(" · ");
+    setMetric("daemon", daemonLabel || "ok", "ok");
     await connect();
     await call("initialize", { protocolVersion:"0.1", client:{ name:"capd-probe" } });
     const checkParams = readiness ? {
@@ -230,7 +251,8 @@ async function refresh(readiness = false) {
     setMetric("quota", `${fresh}/${accounts.length}`, accounts.length && fresh === accounts.length ? "ok" : "warn");
     setMetric("route", routeText(route), route && route.fresh ? "ok" : "warn");
     const summary = [
-      `secret backend: ${result.secretBackend || "unknown"}`,
+      `daemon: ${daemonLabel || "ok"}`,
+      `secret backend: ${result.secretBackend || healthInfo.secretBackend || "unknown"}`,
       `quota refreshed: ${!!result.quotaRefreshed}`,
       `auto route: ${routeText(route)}`,
       `route decision: ${routeDecisionText(routeDecision, route)}`,
@@ -239,10 +261,10 @@ async function refresh(readiness = false) {
     ];
     if (readinessError) summary.push(`readiness error: ${readinessError}`);
     if (routeError) summary.push(`route error: ${routeError}`);
-    const checks = validationRows({ healthOK:true, result, route, routeDecision, readiness, requireNative:$("native").checked, readinessError, routeError });
+    const checks = validationRows({ healthOK:healthInfo, result, route, routeDecision, readiness, requireNative:$("native").checked, readinessError, routeError });
     showSummary(summary);
     showTests(checks);
-    showJSON({ checks, accountsCheck: result, routeDecision, autoRoute: route, routeCandidates: (routeDecision && routeDecision.routeCandidates) || result.routeCandidates, readinessError, routeError });
+    showJSON({ checks, health: healthInfo, accountsCheck: result, routeDecision, autoRoute: route, routeCandidates: (routeDecision && routeDecision.routeCandidates) || result.routeCandidates, readinessError, routeError });
   } catch (e) {
     setMetric("daemon", "attention", "bad");
     showSummary([e.message || String(e)]);

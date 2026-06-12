@@ -577,9 +577,17 @@ function capdHTTPURL(path) {
 
 async function checkDaemonHealth(updateStatus = true) {
   if (updateStatus) statusEl.textContent = "检查 daemon health…";
-  const res = await fetch(capdHTTPURL("/healthz"), { cache: "no-store" });
+  const res = await fetch(capdHTTPURL("/healthz?format=json"), { cache: "no-store" });
   const body = (await res.text()).trim();
-  if (!res.ok || body !== "ok") throw new Error(`CAP health failed: ${res.status} ${body || "empty"}`);
+  if (!res.ok) throw new Error(`CAP health failed: ${res.status} ${body || "empty"}`);
+  try {
+    const info = JSON.parse(body);
+    if (!info.ok) throw new Error("health ok=false");
+    return info;
+  } catch (err) {
+    if (body !== "ok") throw new Error(`CAP health failed: invalid JSON ${body || "empty"}`);
+    return { ok: true };
+  }
 }
 
 async function refreshQuota(accountId, button) {
@@ -720,7 +728,7 @@ async function attachSession(id, replay) {
 }
 
 async function connect() {
-  await checkDaemonHealth();
+  const health = await checkDaemonHealth();
   ws = new WebSocket(capdWebSocketURL(), [webSocketAuthProtocol(TOKEN)]);
   ws.onmessage = (m) => {
     const msg = JSON.parse(m.data);
@@ -743,7 +751,12 @@ async function connect() {
   };
 
   const init = await call("initialize", { protocolVersion: "0.1", client: { name: "cap-web-demo" } });
-  document.getElementById("daemon").textContent = `${init.daemon.name} ${init.daemon.version} · protocol ${init.protocolVersion}`;
+  const healthMeta = [
+    health.version || (init.daemon && init.daemon.version),
+    `protocol ${health.protocolVersion || init.protocolVersion}`,
+    health.secretBackend ? `secret ${health.secretBackend}` : ""
+  ].filter(Boolean).join(" · ");
+  document.getElementById("daemon").textContent = `${(init.daemon && init.daemon.name) || health.daemon || "capd"} ${healthMeta}`;
   statusEl.textContent = "已连接 · health ok";
 
   const { agents } = await call("agents/list", {});
