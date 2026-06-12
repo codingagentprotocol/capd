@@ -14,10 +14,12 @@ func TestLiveCodexReadinessUsesOneSecretBackend(t *testing.T) {
 	makefile := string(data)
 	for _, want := range []string{
 		"LIVE_SECRET_BACKEND ?= native",
-		"verify-codex-readiness-sim live-codex-preflight live-codex-readiness",
+		"verify-codex-readiness-sim live-codex-preflight live-codex-readiness live-codex-selftest",
 		"live-codex-preflight:",
 		"running daemon from: capd start --secret-backend $(LIVE_SECRET_BACKEND)",
 		"live-codex-readiness: live-codex-preflight",
+		"live-codex-selftest:",
+		"./scripts/live_codex_selftest.sh",
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd secretstore check --json --roundtrip --require-backend $(LIVE_SECRET_BACKEND) --timeout 2m",
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd doctor --json --fail --verify-secretstore --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m",
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex smoke --json --require-multiple --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m",
@@ -70,6 +72,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 	for _, want := range []string{
 		"verify-codex-readiness-sim:",
 		"running deterministic simulated Codex multi-account quota/routing/readiness gates",
+		"sh -n scripts/live_codex_selftest.sh",
 		"QuotaFromUsageRedactsSensitiveRawJSON",
 		"QuotaFromUsageNormalizesOutOfRangePercentsConservatively",
 		"QuotaSnapshotFreshRejectsInvalidPrimaryPercent",
@@ -111,6 +114,35 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 	} {
 		if !strings.Contains(makefile, want) {
 			t.Fatalf("Makefile simulated readiness target missing %q", want)
+		}
+	}
+}
+
+func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
+	data, err := os.ReadFile("../../scripts/live_codex_selftest.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	for _, want := range []string{
+		`bin="${CAPD_LIVE_DAEMON_BIN:-${TMPDIR:-/tmp}/capd-live-daemon-$$}"`,
+		"bin_owned=0",
+		`go build -o "$bin" ./cmd/capd`,
+		`"$bin" health --json --require-secret-backend "$backend"`,
+		"health_any_backend()",
+		"but not with ${backend} SecretStore",
+		`"$bin" health --json >&2 || true`,
+		"restart it with: capd start --secret-backend $backend",
+		`"$bin" start --host "$host" --port "$port" --secret-backend "$backend"`,
+		`kill "$daemon_pid"`,
+		`if [ "$bin_owned" -eq 1 ]; then`,
+		`rm -f "$bin"`,
+		`make live-codex-preflight LIVE_SECRET_BACKEND="$backend"`,
+		`LIVE_RUN_PROMPT`,
+		`go run ./cmd/capd run --agent codex --account auto --require-fresh-quota "$prompt"`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("live selftest script missing safety contract %q", want)
 		}
 	}
 }

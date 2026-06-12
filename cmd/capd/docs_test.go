@@ -130,3 +130,27 @@ func TestTestingDocsCoverLinuxSecretStoreStdinSafety(t *testing.T) {
 		}
 	}
 }
+
+func TestTestingDocsCoverLiveSelftestDaemonSafety(t *testing.T) {
+	data, err := os.ReadFile("../../docs/testing.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testingDoc := string(data)
+
+	for _, want := range []string{
+		"make live-codex-selftest",
+		`LIVE_RUN_PROMPT=1 LIVE_PROMPT="say ready" make live-codex-selftest`,
+		"should not depend on a second terminal",
+		"reuses an already healthy\ndaemon",
+		"starts a\ntemporary foreground daemon in the background",
+		"cleans up that temporary process on exit",
+		"reports a different\nSecretStore backend",
+		"fails immediately",
+		"instead of trying to start a second process on the same port",
+	} {
+		if !strings.Contains(testingDoc, want) {
+			t.Fatalf("testing docs missing live selftest daemon safety contract %q", want)
+		}
+	}
+}
