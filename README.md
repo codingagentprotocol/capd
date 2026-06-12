@@ -156,7 +156,7 @@ CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --q
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native # readiness gate
 CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
 capd console --probe         # simple web data probe; opens with daemon token without printing it
-capd health --json           # confirm daemon /healthz plus version/protocol/secret backend
+capd health --json --require-secret-backend native # confirm daemon /healthz plus version/protocol/secret backend
 capd accounts import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # daemon-side CAP import
 capd accounts check --json   # daemon-side accounts/check smoke evidence
 capd accounts check --json --readiness # daemon-side multi-account readiness gate
@@ -187,9 +187,11 @@ command with the same `CAPD_SECRET_BACKEND` value, and the daemon-side
 readiness step uses `capd accounts check --json --readiness`, so failing gates
 still print safe partial evidence under `data` for quota, account, and
 SecretStore diagnostics.
-`capd health --json` reads `/healthz?format=json` where available, so live
-preflight output also captures the daemon version, protocol version, and active
-SecretStore backend without exposing token material.
+`capd health --json --require-secret-backend <file|native>` reads
+`/healthz?format=json` where available, so live preflight output also captures
+the daemon version, protocol version, and active SecretStore backend without
+exposing token material, and fails early if the daemon was started with the
+wrong backend.
 Both `agents/route --account auto --json` and daemon-side `accounts/check`
 include `routeCandidates`, sorted by the same conservative quota score used for
 auto routing, so clients can verify why one account was selected.

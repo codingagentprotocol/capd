@@ -81,7 +81,7 @@ CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --requ
 CAPD_SECRET_BACKEND=native capd start
 
 capd console --probe
-capd health --json
+capd health --json --require-secret-backend native
 capd accounts import --auth /tmp/acct-a/auth.json --auth /tmp/acct-b/auth.json
 capd accounts check --json
 capd accounts check --json --readiness

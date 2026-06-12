@@ -44,7 +44,7 @@ func TestHealthCmdChecksDaemonHealthz(t *testing.T) {
 
 	out.Reset()
 	cmd = newHealthCmd()
-	cmd.SetArgs([]string{"--json"})
+	cmd.SetArgs([]string{"--json", "--require-secret-backend", "native"})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	if err := cmd.Execute(); err != nil {
@@ -63,6 +63,30 @@ func TestHealthCmdChecksDaemonHealthz(t *testing.T) {
 	}
 	if !got.OK || got.Addr != net.JoinHostPort(host, port) || got.Daemon != "capd" || got.Version != "test-version" || got.ProtocolVersion != "0.1" || got.SecretBackend != "native" {
 		t.Fatalf("json = %+v", got)
+	}
+}
+
+func TestHealthRequireSecretBackendFailsOnMismatch(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/healthz" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true,"secretBackend":"file"}`))
+	}))
+	defer ts.Close()
+	host, port := splitTestURL(t, ts.URL)
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+
+	var out bytes.Buffer
+	cmd := newHealthCmd()
+	cmd.SetArgs([]string{"--json", "--require-secret-backend", "native"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `daemon secret backend = "file", want "native"`) {
+		t.Fatalf("err = %v", err)
 	}
 }
 
@@ -95,6 +119,16 @@ func TestHealthJSONFallsBackForOldDaemon(t *testing.T) {
 	}
 	if !got.OK || got.Addr != net.JoinHostPort(host, port) {
 		t.Fatalf("json = %+v", got)
+	}
+
+	out.Reset()
+	cmd = newHealthCmd()
+	cmd.SetArgs([]string{"--json", "--require-secret-backend", "native"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "does not report secret backend") {
+		t.Fatalf("err = %v", err)
 	}
 }
 

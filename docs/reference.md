@@ -53,8 +53,11 @@ backend mismatches from deeper OS SecretStore verification and point the latter 
 Checks the configured daemon `/healthz` endpoint and prints `ok`, or
 `{"ok":true,"addr":"...","daemon":"capd","version":"...","protocolVersion":"...","secretBackend":"..."}` with
 `--json` when the daemon supports safe health metadata. The JSON path falls back
-to `{"ok":true,"addr":"..."}` for older daemons. Failures point to
-`capd start`, making it useful before daemon-side account readiness checks.
+to `{"ok":true,"addr":"..."}` for older daemons.
+`--require-secret-backend <file|native>` fails unless the daemon reports that
+active backend, and also fails against older daemons that cannot report
+`secretBackend`. Failures point to `capd start`, making it useful before
+daemon-side account readiness checks.
 
 ### `capd doctor` — local readiness preflight
 
@@ -124,7 +127,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 
 | Command | Output |
 |---------|--------|
-| `capd health [--json]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok`, `addr`, and daemon metadata such as version, protocol version, and active SecretStore backend when supported |
+| `capd health [--json] [--require-secret-backend <file\|native>]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok`, `addr`, and daemon metadata such as version, protocol version, and active SecretStore backend when supported; `--require-secret-backend` fails early when the daemon was started with the wrong backend |
 | `capd console [--probe] [--url]` | opens the local web console, or the compact validation probe with `--probe`, after checking daemon health. By default it passes the daemon token to the browser without printing it; `--url` prints the tokenized URL only when explicitly requested. |
 | `capd doctor [--json] [--fail] [--verify-secretstore] [--require-secret-backend <file\|native>]` | local readiness preflight for daemon health, Codex CLI availability, imported account count, quota freshness, auto-route freshness, daemon-side CAP account evidence, and SecretStore backend; `--verify-secretstore` performs an explicit write/read/delete diagnostic roundtrip; text mode fails when issues are found, and `--fail` makes JSON mode fail too |
 | `capd agents list` | table: id, available/not installed, version, binary path |
