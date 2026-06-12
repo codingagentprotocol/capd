@@ -29,6 +29,12 @@ CGO_ENABLED=0 go test ./internal/account/secret
 Linux native storage requires `secret-tool` from libsecret and an unlocked
 Secret Service session.
 
+To verify Codex account smoke is actually using the native backend:
+
+```bash
+CAPD_SECRET_BACKEND=native capd accounts codex smoke --require-secret-backend native --json
+```
+
 ## Codex Account Smoke
 
 Import at least one Codex `auth.json`, then run the local smoke check:
@@ -59,5 +65,6 @@ selection, and optionally ChatGPT backend quota refresh. It prints only account
 metadata, projection paths, quota percentages, projection booleans, and the
 selected `autoRoute.accountId` plus `secretBackend`; token material is never
 printed. Use `--require-fresh-quota` to fail unless the auto-route decision is
-backed by a fresh cached quota snapshot. Use `--json` to capture
-machine-readable smoke evidence in long tasks or CI logs.
+backed by a fresh cached quota snapshot. Use `--require-secret-backend native`
+to fail unless smoke is reading credentials from the OS secret backend. Use
+`--json` to capture machine-readable smoke evidence in long tasks or CI logs.

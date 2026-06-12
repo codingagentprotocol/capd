@@ -380,6 +380,40 @@ func TestCodexAccountsSmokeRequireFreshQuotaPassesWithFreshCache(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsSmokeRequireSecretBackend(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--require-secret-backend", secret.BackendFile})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "secret backend: file") {
+		t.Fatalf("output = %s", out.String())
+	}
+}
+
+func TestCodexAccountsSmokeRequireSecretBackendMismatch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--require-secret-backend", secret.BackendNative})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `want "native"`) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestCodexAccountsSmokeFailsWithoutAccounts(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	var out bytes.Buffer

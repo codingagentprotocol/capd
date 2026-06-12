@@ -299,6 +299,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			baseURL, _ := cmd.Flags().GetString("base-url")
 			requireMultiple, _ := cmd.Flags().GetBool("require-multiple")
 			requireFreshQuota, _ := cmd.Flags().GetBool("require-fresh-quota")
+			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			jsonOut, _ := cmd.Flags().GetBool("json")
 			accounts, secrets, err := openAccountDeps()
 			if err != nil {
@@ -325,6 +326,9 @@ func newCodexAccountsCmd() *cobra.Command {
 				QuotaRefreshed:  refreshQuota,
 				SecretBackend:   secrets.Backend(),
 				Accounts:        make([]codexSmokeAccount, 0, len(list)),
+			}
+			if requireSecretBackend != "" && requireSecretBackend != result.SecretBackend {
+				return fmt.Errorf("secret backend = %q, want %q", result.SecretBackend, requireSecretBackend)
 			}
 			for _, acc := range list {
 				ref, err := secret.ParseRef(acc.SecretRef)
@@ -406,6 +410,7 @@ func newCodexAccountsCmd() *cobra.Command {
 	smokeCmd.Flags().String("base-url", "", "override ChatGPT base URL for testing")
 	smokeCmd.Flags().Bool("require-multiple", false, "fail unless at least two Codex accounts are imported")
 	smokeCmd.Flags().Bool("require-fresh-quota", false, "fail unless auto-route selection is backed by fresh cached quota")
+	smokeCmd.Flags().String("require-secret-backend", "", "fail unless the active secret backend matches this value")
 	smokeCmd.Flags().Bool("json", false, "print machine-readable smoke evidence without token material")
 
 	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, quotaCmd, smokeCmd)
