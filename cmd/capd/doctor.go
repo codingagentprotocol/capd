@@ -137,6 +137,7 @@ type doctorCodexReport struct {
 	MissingQuotaAccounts     int                             `json:"missingQuotaAccounts"`
 	SecretReadableAccounts   int                             `json:"secretReadableAccounts"`
 	SecretUnreadableAccounts int                             `json:"secretUnreadableAccounts"`
+	SecretStates             map[string]int                  `json:"secretStates,omitempty"`
 	Accounts                 []doctorCodexAccountReport      `json:"accounts,omitempty"`
 	AutoRouteAccountID       string                          `json:"autoRouteAccountId,omitempty"`
 	AutoRouteQuotaState      string                          `json:"autoRouteQuotaState,omitempty"`
@@ -299,6 +300,10 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			QuotaState: protocol.AccountQuotaStateMissing,
 		}
 		row.SecretBackendOK, row.SecretReadable, row.SecretState = doctorAccountSecretReadiness(ctx, secrets, acc.SecretRef)
+		if report.Codex.SecretStates == nil {
+			report.Codex.SecretStates = map[string]int{}
+		}
+		report.Codex.SecretStates[row.SecretState]++
 		if row.SecretReadable {
 			report.Codex.SecretReadableAccounts++
 		} else {
@@ -330,13 +335,13 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	allSecretsReadable := len(list) > 0 && report.Codex.SecretReadableAccounts == len(list)
 	if len(list) > 0 && !allSecretsReadable {
 		report.Issues = append(report.Issues, "not every imported Codex account has readable SecretStore credentials")
-		report.NextSteps = append(report.NextSteps, doctorSecretReadinessNextStep(report.Daemon.OK))
+		report.NextSteps = append(report.NextSteps, doctorSecretReadinessNextStep(report.Daemon.OK, report.Codex.SecretStates))
 	}
 	report.Checks = append(report.Checks, doctorCheckReport{
 		Name:     "Codex SecretStore credentials",
 		OK:       allSecretsReadable,
-		Evidence: fmt.Sprintf("readable %d/%d, unreadable %d", report.Codex.SecretReadableAccounts, len(list), report.Codex.SecretUnreadableAccounts),
-		NextStep: doctorCheckNextStep(!allSecretsReadable, doctorSecretReadinessNextStep(report.Daemon.OK)),
+		Evidence: doctorSecretReadinessEvidence(report.Codex.SecretReadableAccounts, len(list), report.Codex.SecretUnreadableAccounts, report.Codex.SecretStates),
+		NextStep: doctorCheckNextStep(!allSecretsReadable, doctorSecretReadinessNextStep(report.Daemon.OK, report.Codex.SecretStates)),
 	})
 	if len(list) > 0 && report.Codex.FreshQuotaAccounts < len(list) {
 		report.Issues = append(report.Issues, "not every imported Codex account has fresh quota evidence")
@@ -574,11 +579,53 @@ func doctorQuotaCheckNextStep(imported int, daemonOK bool) string {
 	return doctorReadinessNextStep()
 }
 
-func doctorSecretReadinessNextStep(daemonOK bool) string {
-	if daemonOK {
-		return "re-import affected Codex accounts through CAP with the active SecretStore backend: capd accounts import --auth /path/to/auth.json"
+func doctorSecretReadinessEvidence(readable, total, unreadable int, states map[string]int) string {
+	evidence := fmt.Sprintf("readable %d/%d, unreadable %d", readable, total, unreadable)
+	if suffix := doctorSecretStateSummary(states); suffix != "" {
+		evidence += " (" + suffix + ")"
 	}
-	return "restart capd with the active SecretStore backend, then re-import affected Codex accounts"
+	return evidence
+}
+
+func doctorSecretStateSummary(states map[string]int) string {
+	order := []string{
+		doctorSecretStateTimeout,
+		doctorSecretStateBackendMismatch,
+		doctorSecretStateMissing,
+		doctorSecretStateMalformedRef,
+		doctorSecretStateUnreadable,
+	}
+	parts := []string{}
+	for _, state := range order {
+		if n := states[state]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%s %d", state, n))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func doctorSecretReadinessNextStep(daemonOK bool, states map[string]int) string {
+	switch {
+	case states[doctorSecretStateTimeout] > 0:
+		return "unlock or approve OS SecretStore access, then rerun: capd doctor --json --fail --verify-secretstore --timeout 2m"
+	case states[doctorSecretStateBackendMismatch] > 0:
+		if daemonOK {
+			return "re-import affected Codex accounts through CAP with the active SecretStore backend: capd accounts import --auth /path/to/auth.json"
+		}
+		return "restart capd with the active SecretStore backend, then re-import affected Codex accounts"
+	case states[doctorSecretStateMissing] > 0:
+		if daemonOK {
+			return "re-import missing Codex credentials through CAP: capd accounts import --auth /path/to/auth.json"
+		}
+		return "re-import missing Codex credentials after starting capd"
+	case states[doctorSecretStateMalformedRef] > 0:
+		return "remove and re-import malformed Codex account metadata"
+	default:
+		if daemonOK {
+			return "re-import affected Codex accounts through CAP with the active SecretStore backend: capd accounts import --auth /path/to/auth.json"
+		}
+		return "restart capd with the active SecretStore backend, then re-import affected Codex accounts"
+	}
 }
 
 func doctorRouteCheckNextStep(imported int, daemonOK bool) string {

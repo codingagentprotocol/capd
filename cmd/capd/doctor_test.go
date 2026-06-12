@@ -557,7 +557,7 @@ func TestDoctorReportsUnreadableAccountSecretsSafely(t *testing.T) {
 	if !containsDoctorCheck(report.Checks, doctorCheckReport{
 		Name:     "Codex SecretStore credentials",
 		OK:       false,
-		Evidence: "readable 0/1, unreadable 1",
+		Evidence: "readable 0/1, unreadable 1 (backend-mismatch 1)",
 		NextStep: "restart capd with the active SecretStore backend, then re-import affected Codex accounts",
 	}) {
 		t.Fatalf("missing secret readability check: %+v", report.Checks)
@@ -604,6 +604,18 @@ func TestDoctorReportsMalformedSecretRefsSafely(t *testing.T) {
 		if strings.Contains(string(data), leaked) {
 			t.Fatalf("doctor malformed secret state leaked %q: %s", leaked, data)
 		}
+	}
+}
+
+func TestDoctorSecretReadinessNextStepUsesSecretState(t *testing.T) {
+	if got := doctorSecretReadinessNextStep(false, map[string]int{doctorSecretStateTimeout: 1}); !strings.Contains(got, "unlock or approve OS SecretStore access") || !strings.Contains(got, "--timeout 2m") {
+		t.Fatalf("timeout next step = %q", got)
+	}
+	if got := doctorSecretReadinessEvidence(0, 2, 2, map[string]int{doctorSecretStateTimeout: 1, doctorSecretStateMissing: 1}); got != "readable 0/2, unreadable 2 (timeout 1, missing 1)" {
+		t.Fatalf("evidence = %q", got)
+	}
+	if got := doctorSecretReadinessNextStep(true, map[string]int{doctorSecretStateMissing: 1}); !strings.Contains(got, "re-import missing Codex credentials through CAP") {
+		t.Fatalf("missing next step = %q", got)
 	}
 }
 
