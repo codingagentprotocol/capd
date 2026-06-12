@@ -2021,6 +2021,9 @@ func TestCodexAccountsSmokeJSONFailureKeepsPartialEvidence(t *testing.T) {
 	if got.OK || got.CheckedAccounts != 1 || got.SecretBackend != "file" || !containsString(got.Issues, "expected multiple Codex accounts, found 1") {
 		t.Fatalf("result = %+v", got)
 	}
+	if !containsString(got.NextSteps, "import a second Codex account with: capd accounts codex import --auth /path/to/auth.json") {
+		t.Fatalf("nextSteps = %+v", got.NextSteps)
+	}
 	if len(got.RouteCandidates) != 0 || len(got.Accounts) != 0 {
 		t.Fatalf("preflight failure should not project accounts before require-multiple passes: %+v", got)
 	}
@@ -2028,6 +2031,18 @@ func TestCodexAccountsSmokeJSONFailureKeepsPartialEvidence(t *testing.T) {
 		if strings.Contains(out.String(), secret) {
 			t.Fatalf("smoke failure JSON leaked %q: %s", secret, out.String())
 		}
+	}
+}
+
+func TestCodexAccountsSmokeNativeImportNextStep(t *testing.T) {
+	if got := codexLocalImportNextStep(secret.BackendNative, false); got != "import Codex auth with: capd accounts --secret-backend native codex import" {
+		t.Fatalf("import next step = %q", got)
+	}
+	if got := codexLocalImportNextStep(secret.BackendNative, true); got != "import a second Codex account with: capd accounts --secret-backend native codex import --auth /path/to/auth.json" {
+		t.Fatalf("second import next step = %q", got)
+	}
+	if got := codexLocalImportNextStep(secret.BackendFile, true); got != "import a second Codex account with: capd accounts codex import --auth /path/to/auth.json" {
+		t.Fatalf("file import next step = %q", got)
 	}
 }
 

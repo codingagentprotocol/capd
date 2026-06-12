@@ -725,10 +725,10 @@ the native OS backend and keeps the source secret as a rollback path. Add
 				Accounts:        make([]codexSmokeAccount, 0, len(list)),
 			}
 			if len(list) == 0 {
-				return codexSmokeFail(cmd, jsonOut, result, "no imported Codex accounts; run capd accounts codex import first", "import Codex auth with: capd accounts codex import")
+				return codexSmokeFail(cmd, jsonOut, result, "no imported Codex accounts; run capd accounts codex import first", codexLocalImportNextStep(result.SecretBackend, false))
 			}
 			if requireMultiple && len(list) < 2 {
-				return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("expected multiple Codex accounts, found %d", len(list)), "import a second Codex account with: capd accounts codex import --auth /path/to/auth.json")
+				return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("expected multiple Codex accounts, found %d", len(list)), codexLocalImportNextStep(result.SecretBackend, true))
 			}
 			if requireSecretBackend != "" && requireSecretBackend != result.SecretBackend {
 				return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("secret backend = %q, want %q", result.SecretBackend, requireSecretBackend), "rerun with CAPD_SECRET_BACKEND="+requireSecretBackend)
@@ -870,6 +870,17 @@ func accountsImportNextStep(importedAccounts int) string {
 		return "import a second Codex account with: capd accounts import --auth /path/to/auth.json"
 	}
 	return "verify readiness with: capd accounts check --readiness"
+}
+
+func codexLocalImportNextStep(secretBackend string, second bool) string {
+	cmd := "capd accounts codex import"
+	if secretBackend != "" && secretBackend != secret.BackendFile {
+		cmd = "capd accounts --secret-backend " + secretBackend + " codex import"
+	}
+	if second {
+		return "import a second Codex account with: " + cmd + " --auth /path/to/auth.json"
+	}
+	return "import Codex auth with: " + cmd
 }
 
 func smokeRouteEvidenceText(route codexSmokeAutoRoute) string {
