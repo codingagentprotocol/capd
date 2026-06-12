@@ -93,25 +93,26 @@ type doctorAgentReport struct {
 }
 
 type doctorCodexReport struct {
-	CLIAvailable          bool                       `json:"cliAvailable"`
-	ImportedAccounts      int                        `json:"importedAccounts"`
-	CurrentAccountID      string                     `json:"currentAccountId,omitempty"`
-	SecretBackend         string                     `json:"secretBackend,omitempty"`
-	DaemonCheckOK         bool                       `json:"daemonCheckOk"`
-	DaemonCheckedAccounts int                        `json:"daemonCheckedAccounts,omitempty"`
-	DaemonSecretBackend   string                     `json:"daemonSecretBackend,omitempty"`
-	DaemonCheckError      string                     `json:"daemonCheckError,omitempty"`
-	FreshQuotaAccounts    int                        `json:"freshQuotaAccounts"`
-	StaleQuotaAccounts    int                        `json:"staleQuotaAccounts"`
-	MissingQuotaAccounts  int                        `json:"missingQuotaAccounts"`
-	Accounts              []doctorCodexAccountReport `json:"accounts,omitempty"`
-	AutoRouteAccountID    string                     `json:"autoRouteAccountId,omitempty"`
-	AutoRouteQuotaState   string                     `json:"autoRouteQuotaState,omitempty"`
-	AutoRouteFresh        bool                       `json:"autoRouteFresh"`
-	AutoRouteScore        float64                    `json:"autoRouteScore,omitempty"`
-	AutoRouteReason       string                     `json:"autoRouteReason,omitempty"`
-	AutoRouteCheckedAt    int64                      `json:"autoRouteCheckedAt,omitempty"`
-	AutoRoutePrimary      *float64                   `json:"autoRoutePrimaryUsedPercent,omitempty"`
+	CLIAvailable          bool                            `json:"cliAvailable"`
+	ImportedAccounts      int                             `json:"importedAccounts"`
+	CurrentAccountID      string                          `json:"currentAccountId,omitempty"`
+	SecretBackend         string                          `json:"secretBackend,omitempty"`
+	DaemonCheckOK         bool                            `json:"daemonCheckOk"`
+	DaemonCheckedAccounts int                             `json:"daemonCheckedAccounts,omitempty"`
+	DaemonSecretBackend   string                          `json:"daemonSecretBackend,omitempty"`
+	DaemonCheckError      string                          `json:"daemonCheckError,omitempty"`
+	FreshQuotaAccounts    int                             `json:"freshQuotaAccounts"`
+	StaleQuotaAccounts    int                             `json:"staleQuotaAccounts"`
+	MissingQuotaAccounts  int                             `json:"missingQuotaAccounts"`
+	Accounts              []doctorCodexAccountReport      `json:"accounts,omitempty"`
+	AutoRouteAccountID    string                          `json:"autoRouteAccountId,omitempty"`
+	AutoRouteQuotaState   string                          `json:"autoRouteQuotaState,omitempty"`
+	AutoRouteFresh        bool                            `json:"autoRouteFresh"`
+	AutoRouteScore        float64                         `json:"autoRouteScore,omitempty"`
+	AutoRouteReason       string                          `json:"autoRouteReason,omitempty"`
+	AutoRouteCheckedAt    int64                           `json:"autoRouteCheckedAt,omitempty"`
+	AutoRoutePrimary      *float64                        `json:"autoRoutePrimaryUsedPercent,omitempty"`
+	RouteCandidates       []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
 }
 
 type doctorCodexAccountReport struct {
@@ -304,6 +305,9 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 				report.NextSteps = append(report.NextSteps, doctorRouteReadinessNextStep())
 			}
 		}
+		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil {
+			report.Codex.RouteCandidates = candidates
+		}
 	}
 	autoRouteOK := report.Codex.AutoRouteAccountID != "" && report.Codex.AutoRouteFresh
 	autoRouteEvidence := "auto route missing"
@@ -486,6 +490,12 @@ func printDoctorReport(cmd *cobra.Command, report doctorReport) {
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s quota=%s fresh=%t score=%.2f%s %s\n",
 			report.Codex.AutoRouteAccountID, report.Codex.AutoRouteQuotaState, report.Codex.AutoRouteFresh, report.Codex.AutoRouteScore, primary, report.Codex.AutoRouteReason)
+	}
+	if len(report.Codex.RouteCandidates) > 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "route candidates:")
+		for _, candidate := range report.Codex.RouteCandidates {
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s %s\n", candidate.AccountID, routeEvidenceText(candidate))
+		}
 	}
 	if len(report.Codex.Accounts) > 0 {
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)

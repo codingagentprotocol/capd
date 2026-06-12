@@ -359,6 +359,15 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	if report.Codex.AutoRouteReason != "auto account codex-low primary 5%" {
 		t.Fatalf("codex route reason = %q", report.Codex.AutoRouteReason)
 	}
+	if len(report.Codex.RouteCandidates) != 2 {
+		t.Fatalf("route candidates = %+v", report.Codex.RouteCandidates)
+	}
+	if report.Codex.RouteCandidates[0].AccountID != "codex-low" || !report.Codex.RouteCandidates[0].Fresh || report.Codex.RouteCandidates[0].PrimaryUsedPercent == nil || *report.Codex.RouteCandidates[0].PrimaryUsedPercent != 5 {
+		t.Fatalf("first route candidate = %+v", report.Codex.RouteCandidates[0])
+	}
+	if report.Codex.RouteCandidates[1].AccountID != "codex-test" || !report.Codex.RouteCandidates[1].Fresh || report.Codex.RouteCandidates[1].PrimaryUsedPercent == nil || *report.Codex.RouteCandidates[1].PrimaryUsedPercent != 80 {
+		t.Fatalf("second route candidate = %+v", report.Codex.RouteCandidates[1])
+	}
 	data, err := json.Marshal(report)
 	if err != nil {
 		t.Fatal(err)
@@ -435,6 +444,18 @@ func TestDoctorReportsStaleAndMissingAccountQuota(t *testing.T) {
 	}
 	if report.Codex.AutoRouteAccountID != "codex-fresh" || !report.Codex.AutoRouteFresh || report.Codex.AutoRouteScore != 20 {
 		t.Fatalf("auto route = %+v", report.Codex)
+	}
+	if len(report.Codex.RouteCandidates) != 3 {
+		t.Fatalf("route candidates = %+v", report.Codex.RouteCandidates)
+	}
+	if report.Codex.RouteCandidates[0].AccountID != "codex-fresh" || !report.Codex.RouteCandidates[0].Fresh {
+		t.Fatalf("first route candidate = %+v", report.Codex.RouteCandidates[0])
+	}
+	if report.Codex.RouteCandidates[1].AccountID != "codex-test" || report.Codex.RouteCandidates[1].QuotaState != protocol.AccountQuotaStateStale {
+		t.Fatalf("second route candidate = %+v", report.Codex.RouteCandidates[1])
+	}
+	if report.Codex.RouteCandidates[2].AccountID != "codex-missing" || report.Codex.RouteCandidates[2].QuotaState != protocol.AccountQuotaStateMissing {
+		t.Fatalf("third route candidate = %+v", report.Codex.RouteCandidates[2])
 	}
 	byID := map[string]doctorCodexAccountReport{}
 	for _, row := range report.Codex.Accounts {

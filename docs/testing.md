@@ -137,7 +137,9 @@ read token material into the output; it reports daemon health, Codex CLI
 availability, imported account count, cached quota freshness, auto-route
 freshness, SecretStore backend, an explicit SecretStore write/read/delete
 roundtrip, daemon-side CAP `accounts/check` reachability, readiness issues, and
-concrete next steps. After fixing account or quota issues, use
+concrete next steps. Its JSON also includes the same `routeCandidates` ordering
+used by `agents/route --account auto`, so live preflight evidence explains why
+one account would be selected. After fixing account or quota issues, use
 `capd accounts check --json --readiness` to
 refresh and verify the daemon-side readiness gate before the final live run,
 with safe partial evidence printed on failure.
