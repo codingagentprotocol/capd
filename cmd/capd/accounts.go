@@ -886,9 +886,16 @@ the native OS backend and keeps the source secret as a rollback path. Add
 				return nil
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tEMAIL\tPROJECTED_CODEX_HOME\tAUTH_MODE\tPRIMARY_USED")
+			fmt.Fprintln(w, "ID\tEMAIL\tPROJECTED_CODEX_HOME\tAUTH_MODE\tSECRET_STATE\tCREDENTIAL\tRUNTIME\tAUTH_JSON\tMARKER\tQUOTA\tFRESH\tPRIMARY\tCHECKED_AT")
 			for _, row := range result.Accounts {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", row.ID, row.Email, row.ProjectedCodexHome, row.AuthMode, row.PrimaryUsed)
+				checkedAt := ""
+				if row.QuotaCheckedAt > 0 {
+					checkedAt = time.Unix(row.QuotaCheckedAt, 0).Format(time.RFC3339)
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%t\t%t\t%t\t%t\t%s\t%t\t%s\t%s\n",
+					row.ID, row.Email, row.ProjectedCodexHome, row.AuthMode, emptyDash(row.SecretState),
+					row.SecretReadable, row.RuntimeEnvOK, row.AuthJSONPrivate, row.ProjectionMarkerOK,
+					row.QuotaState, row.QuotaFresh, row.PrimaryUsed, checkedAt)
 			}
 			if err := w.Flush(); err != nil {
 				return err

@@ -2052,6 +2052,17 @@ func TestCodexAccountsSmokeTextIncludesAutoRouteEvidence(t *testing.T) {
 	}
 	text := out.String()
 	for _, want := range []string{
+		"SECRET_STATE",
+		"CREDENTIAL",
+		"RUNTIME",
+		"AUTH_JSON",
+		"MARKER",
+		"QUOTA",
+		"FRESH",
+		protocol.AccountSecretStateReadable,
+		protocol.AccountQuotaStateFresh,
+		"true",
+		"9.0%",
 		"auto route: codex-test quota fresh fresh true primary 9.0% score ",
 		"route candidates:",
 		"codex-test quota fresh fresh true primary 9.0% score ",
