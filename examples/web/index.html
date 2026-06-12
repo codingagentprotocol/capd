@@ -53,6 +53,8 @@
   <button id="previewRoute">预览路由</button>
   <button id="importCodex">导入 Codex</button>
   <button id="checkAccounts">检查账号</button>
+  <button id="checkReady">就绪门禁</button>
+  <label><input id="requireNativeSecret" type="checkbox" /> native secret</label>
   <button id="refreshSelectedQuota">刷新所选 quota</button>
   <button id="send">发送</button>
   <button id="cancel">中断</button>
@@ -189,18 +191,29 @@ async function importCodexAccount() {
   }
 }
 
-async function checkAccounts() {
-  const button = document.getElementById("checkAccounts");
+async function checkAccounts(readinessGate = false) {
+  const button = document.getElementById(readinessGate ? "checkReady" : "checkAccounts");
   button.disabled = true;
   try {
     const result = await call("accounts/check", { provider: "codex" });
     const route = result.autoRoute ? ` · auto ${result.autoRoute.accountId || ""} ${result.autoRoute.quotaState}` : "";
+    if (readinessGate) assertAccountsReady(result);
     line("ev-sys", `· 账号检查完成 ${result.checkedAccounts} 个${route}`);
     await loadAccounts();
   } catch (e) {
     line("ev-err", `✗ 账号检查失败: ${e.message || JSON.stringify(e)}`);
   } finally {
     button.disabled = false;
+  }
+}
+
+function assertAccountsReady(result) {
+  const requireNative = document.getElementById("requireNativeSecret").checked;
+  if ((result.checkedAccounts || 0) < 2) throw new Error(`expected multiple Codex accounts, found ${result.checkedAccounts || 0}`);
+  if (requireNative && result.secretBackend !== "native") throw new Error(`secret backend = ${result.secretBackend || "unknown"}, want native`);
+  if (!result.autoRoute || !result.autoRoute.fresh) throw new Error("auto route does not have fresh cached quota");
+  for (const row of result.accounts || []) {
+    if (!row.quotaFresh) throw new Error(`${row.id}: quota is ${row.quotaState || "missing"}`);
   }
 }
 
@@ -495,7 +508,8 @@ document.getElementById("cancel").onclick = () => sessionId && call("task/cancel
 document.getElementById("refreshSessions").onclick = loadSessions;
 document.getElementById("previewRoute").onclick = previewRoute;
 document.getElementById("importCodex").onclick = importCodexAccount;
-document.getElementById("checkAccounts").onclick = checkAccounts;
+document.getElementById("checkAccounts").onclick = () => checkAccounts(false);
+document.getElementById("checkReady").onclick = () => checkAccounts(true);
 document.getElementById("refreshSelectedQuota").onclick = refreshSelectedQuota;
 document.getElementById("account").onchange = () => { markActiveAccount(); previewRoute(); };
 document.getElementById("requireFreshQuota").onchange = previewRoute;

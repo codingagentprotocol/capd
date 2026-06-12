@@ -88,3 +88,5 @@ Use its `--require-*` flags as a daemon-side readiness gate: the command exits
 non-zero when too few accounts are imported, auto-route quota is stale or
 missing, any checked account lacks fresh cached quota, or the daemon is using a
 different SecretStore backend than expected.
+The Web Console's `就绪门禁` button applies the same readiness checks to the
+`accounts/check` evidence, with an optional native SecretStore requirement.
