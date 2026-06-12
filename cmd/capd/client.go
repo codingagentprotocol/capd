@@ -30,10 +30,18 @@ func daemonWSURL(cfg config.Config, token string) string {
 }
 
 func consoleURL(cfg config.Config, token string) string {
+	return localPageURL(cfg, token, "/console/")
+}
+
+func probeURL(cfg config.Config, token string) string {
+	return localPageURL(cfg, token, "/probe/")
+}
+
+func localPageURL(cfg config.Config, token, path string) string {
 	u := url.URL{
 		Scheme: "http",
 		Host:   daemonAddr(cfg),
-		Path:   "/console/",
+		Path:   path,
 	}
 	q := u.Query()
 	q.Set("token", token)

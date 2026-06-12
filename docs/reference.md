@@ -31,6 +31,9 @@ may be supplied once in the URL. The console exposes account import,
 current-account selection,
 runtime projection, selected or all-account quota refresh, safe account checks,
 and readiness gates over the same CAP RPC methods used by CLI clients.
+Use `capd console` to open the full console, or `capd console --probe` to open
+the lightweight validation probe without printing the daemon token to the
+terminal.
 
 ### `capd health` — check the daemon
 
@@ -97,6 +100,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 | Command | Output |
 |---------|--------|
 | `capd health [--json]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok` and `addr` |
+| `capd console [--probe] [--url]` | opens the local web console, or the compact validation probe with `--probe`, after checking daemon health. By default it passes the daemon token to the browser without printing it; `--url` prints the tokenized URL only when explicitly requested. |
 | `capd doctor [--json] [--fail] [--require-secret-backend <file\|native>]` | local readiness preflight for daemon health, Codex CLI availability, imported account count, quota freshness, auto-route freshness, and SecretStore backend; text mode fails when issues are found, and `--fail` makes JSON mode fail too |
 | `capd agents list` | table: id, available/not installed, version, binary path |
 | `capd agents route [--account <id\|auto>] [--capability name] [--require-fresh-quota] [--json]` | preview local routing without starting a session; with `--account auto`, shows the Codex account selected by conservative quota scoring. `--require-fresh-quota` fails unless that auto selection is backed by fresh cached quota |
