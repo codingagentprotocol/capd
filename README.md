@@ -160,7 +160,8 @@ capd agents route --account auto --require-fresh-quota
 For deterministic local regression, run `make verify`; for native SecretStore
 coverage, run `make verify-secretstore`. After importing multiple Codex
 accounts and starting `capd start` in another terminal, `make
-live-codex-readiness` runs the live quota/routing/readiness chain.
+live-codex-readiness` runs the live quota/routing/readiness chain. Override the
+final prompt with `LIVE_PROMPT="..." make live-codex-readiness`.
 
 Every flag, protocol field, and event is documented in
 [docs/reference.md](docs/reference.md).

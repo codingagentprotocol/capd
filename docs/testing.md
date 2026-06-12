@@ -87,6 +87,10 @@ the same live chain is available as:
 make live-codex-readiness
 ```
 
+The target first checks that at least two Codex accounts are imported, then
+runs the quota/readiness chain. Override the final live prompt with
+`LIVE_PROMPT="..." make live-codex-readiness`.
+
 The smoke command verifies imported account metadata, SecretStore readability,
 per-account `CODEX_HOME` projection, runtime `CODEX_HOME` env, private
 `auth.json` permissions, capd projection marker integrity, auto-route account

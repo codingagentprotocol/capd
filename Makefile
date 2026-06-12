@@ -32,8 +32,11 @@ verify-secretstore:
 	CGO_ENABLED=0 go test ./internal/account/secret
 
 live-codex-readiness:
+	@echo "live-codex-readiness requires >=2 imported Codex accounts and a running daemon from: capd start"
+	go run ./cmd/capd accounts codex smoke --require-multiple
 	go run ./cmd/capd accounts codex quota all
 	go run ./cmd/capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
+	@echo "checking daemon CAP/WebSocket readiness"
 	go run ./cmd/capd accounts check --json
 	go run ./cmd/capd accounts check --refresh-quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
 	go run ./cmd/capd agents usage codex --account auto
