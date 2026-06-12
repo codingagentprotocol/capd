@@ -50,6 +50,7 @@
   <datalist id="cwds"></datalist>
   <input id="prompt" placeholder="让 agent 干点什么…" />
   <button id="previewRoute">预览路由</button>
+  <button id="refreshSelectedQuota">刷新所选 quota</button>
   <button id="send">发送</button>
   <button id="cancel">中断</button>
 </div>
@@ -279,6 +280,16 @@ async function refreshQuota(accountId, button) {
   }
 }
 
+async function refreshSelectedQuota() {
+  const button = document.getElementById("refreshSelectedQuota");
+  const accountId = document.getElementById("account").value;
+  if (!accountId) {
+    line("ev-err", "✗ 请选择 Codex 账号或自动账号");
+    return;
+  }
+  await refreshQuota(accountId, button);
+}
+
 function updateCwdOptions(sessions) {
   const dirs = [...new Set((sessions || []).map(s => s.cwd).filter(Boolean))];
   const dl = document.getElementById("cwds");
@@ -380,6 +391,7 @@ document.getElementById("send").onclick = async () => {
 document.getElementById("cancel").onclick = () => sessionId && call("task/cancel", { sessionId });
 document.getElementById("refreshSessions").onclick = loadSessions;
 document.getElementById("previewRoute").onclick = previewRoute;
+document.getElementById("refreshSelectedQuota").onclick = refreshSelectedQuota;
 document.getElementById("account").onchange = () => { markActiveAccount(); previewRoute(); };
 document.getElementById("prompt").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("send").click(); });
 

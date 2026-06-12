@@ -86,6 +86,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"agents/route",
 		"previewRoute",
 		"routePreview",
+		"refreshSelectedQuota",
 		"dataset.accountId",
 		`params.accountId = accountId`,
 		"session/list",
