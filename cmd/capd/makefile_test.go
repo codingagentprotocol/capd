@@ -171,7 +171,7 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`diagnose_secretstore="${LIVE_DIAGNOSE_SECRETSTORE:-0}"`,
 		`"$bin" health --json --require-secret-backend "$backend" || true`,
 		`"$bin" accounts --secret-backend "$backend" codex list --json || true`,
-		`"$bin" agents route --account auto --json || true`,
+		`"$bin" agents route --account auto --require-fresh-quota --json || true`,
 		`"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`,
 		`case "$diagnose_secretstore" in`,
 		`"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true`,
@@ -198,9 +198,9 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		t.Fatal("live selftest failure block must exist before optional SecretStore gate")
 	}
 	defaultFailureBlock := script[failureStart:gate]
-	if !(strings.Index(defaultFailureBlock, `"$bin" accounts --secret-backend "$backend" codex list --json || true`) < strings.Index(defaultFailureBlock, `"$bin" agents route --account auto --json || true`) &&
-		strings.Index(defaultFailureBlock, `"$bin" agents route --account auto --json || true`) < strings.Index(defaultFailureBlock, `"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`)) {
-		t.Fatal("live selftest default failure diagnostics must show route evidence between account list and smoke")
+	if !(strings.Index(defaultFailureBlock, `"$bin" accounts --secret-backend "$backend" codex list --json || true`) < strings.Index(defaultFailureBlock, `"$bin" agents route --account auto --require-fresh-quota --json || true`) &&
+		strings.Index(defaultFailureBlock, `"$bin" agents route --account auto --require-fresh-quota --json || true`) < strings.Index(defaultFailureBlock, `"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`)) {
+		t.Fatal("live selftest default failure diagnostics must show fresh route evidence between account list and smoke")
 	}
 	for _, forbidden := range []string{`"$bin" doctor `, `"$bin" probe data --json --readiness`} {
 		if strings.Contains(defaultFailureBlock, forbidden) {

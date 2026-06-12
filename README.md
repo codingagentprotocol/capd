@@ -207,8 +207,8 @@ live-codex-selftest` starts a temporary daemon when needed, waits for health,
 runs the same preflight, and cleans up only the daemon it started. The final
 route gate runs as JSON so the log keeps the complete `routeCandidates`
 ordering used for account-aware selection. If selftest preflight fails, it first
-prints prompt-free diagnostics: daemon health, account metadata, route preview,
-and smoke JSON; set `LIVE_DIAGNOSE_SECRETSTORE=1` for the heavier native
+prints prompt-free diagnostics: daemon health, account metadata, fresh route
+gate JSON, and smoke JSON; set `LIVE_DIAGNOSE_SECRETSTORE=1` for the heavier native
 SecretStore doctor/probe diagnostics. `make live-codex-readiness` runs the
 same preflight and then sends the final live prompt. Override the final prompt with
 `LIVE_PROMPT="..." make live-codex-readiness`; override the backend only for
