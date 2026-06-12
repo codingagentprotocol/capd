@@ -165,6 +165,36 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestProbeValidationRowsStayUnique(t *testing.T) {
+	body := probeHTML
+	for _, name := range []string{
+		`name:"daemon health"`,
+		`name:"accounts/check data"`,
+		`name:"account credentials"`,
+		`name:"account runtime"`,
+		`name:"multi-account readiness"`,
+		`name:"quota freshness"`,
+		`name:"auto route data"`,
+		`name:"auto route fresh"`,
+		`name:"route decision"`,
+		`name:"route candidates"`,
+		`name:"native secret backend"`,
+	} {
+		if got := strings.Count(body, name); got != 1 {
+			t.Fatalf("probe validation row %q count = %d", name, got)
+		}
+	}
+	for _, dynamic := range []string{
+		`name:"readiness gate"`,
+		`name:"readiness error detail"`,
+		`name:"route error detail"`,
+	} {
+		if got := strings.Count(body, dynamic); got != 1 {
+			t.Fatalf("probe dynamic validation row %q count = %d", dynamic, got)
+		}
+	}
+}
+
 func TestProbeDataRequiresAuthorizationHeader(t *testing.T) {
 	s, _ := newTestServer(t)
 	for _, target := range []string{"/probe/data", "/probe/data?token=test-token"} {
