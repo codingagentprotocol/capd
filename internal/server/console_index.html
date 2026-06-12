@@ -311,7 +311,7 @@ async function refreshReadinessDiagnostic() {
     } catch (e) {
       routeError = e.message || JSON.stringify(e);
     }
-    renderReadinessDiagnosticResult({ result, route, routeError });
+    renderReadinessDiagnosticResult({ result, route, routeError, requireNativeSecret: document.getElementById("requireNativeSecret").checked });
   } catch (e) {
     if (e.data) {
       let route = null;
@@ -321,7 +321,7 @@ async function refreshReadinessDiagnostic() {
       } catch (routeErr) {
         routeError = routeErr.message || JSON.stringify(routeErr);
       }
-      renderReadinessDiagnosticResult({ result: e.data, route, routeError, readinessError: e.message || JSON.stringify(e) });
+      renderReadinessDiagnosticResult({ result: e.data, route, routeError, readinessError: e.message || JSON.stringify(e), requireNativeSecret: document.getElementById("requireNativeSecret").checked });
       return;
     }
     readinessEl.className = "warn";
@@ -332,7 +332,7 @@ async function refreshReadinessDiagnostic() {
   }
 }
 
-function renderReadinessDiagnosticResult({ result, route, routeError = "", readinessError = "" }) {
+function renderReadinessDiagnosticResult({ result, route, routeError = "", readinessError = "", requireNativeSecret = false }) {
   const accounts = result.accounts || [];
   const freshCount = accounts.filter(a => a.quotaFresh).length;
   const issues = [];
@@ -340,8 +340,9 @@ function renderReadinessDiagnosticResult({ result, route, routeError = "", readi
   if (accounts.length && freshCount < accounts.length) issues.push("quota 未全部 fresh");
   const autoRoute = result.autoRoute || (route && route.accountRoute);
   if (!autoRoute || !autoRoute.fresh) issues.push("auto route 缺 fresh quota");
+  if (requireNativeSecret && result.secretBackend !== "native") issues.push("native SecretStore 未启用");
   if (readinessError) issues.push("readiness gate failed");
-  const checks = readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError });
+  const checks = readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError, requireNativeSecret });
   const parts = [
     "daemon ok",
     `codex ${result.checkedAccounts || 0}`,
@@ -359,9 +360,11 @@ function renderReadinessDiagnosticResult({ result, route, routeError = "", readi
   renderReadinessChecks(checks);
 }
 
-function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError = "" }) {
+function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError = "", requireNativeSecret = false }) {
   const checked = result.checkedAccounts || 0;
   const secretBackend = result.secretBackend || "unknown";
+  const secretOK = !requireNativeSecret || secretBackend === "native";
+  const secretNextStep = !secretOK ? "restart daemon with: CAPD_SECRET_BACKEND=native capd start" : "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native";
   return [
     { name: "daemon health", ok: true, evidence: "health ok", nextStep: "" },
     { name: "Codex multi-account import", ok: checked >= 2, evidence: `checked ${checked}, need 2`, nextStep: checked >= 2 ? "" : "导入至少两个账号: capd accounts import --auth /path/a --auth /path/b" },
@@ -369,7 +372,7 @@ function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, ro
     { name: "Codex auto route freshness", ok: !!(autoRoute && autoRoute.fresh), evidence: autoRoute ? routeEvidenceSummary(autoRoute) : "auto route missing", nextStep: autoRoute && autoRoute.fresh ? "" : "刷新 quota 后预览自动路由" },
     { name: "readiness gate", ok: !readinessError, evidence: readinessError || "no blocking readiness error", nextStep: readinessError ? "按 partial evidence 修复账号、quota 或 SecretStore 后重跑就绪门禁" : "" },
     { name: "route decision", ok: !!route, evidence: route ? routeDecisionSummary(route) : routeError || "route missing", nextStep: route ? "" : "运行 capd agents route --account auto" },
-    { name: "SecretStore backend", ok: true, evidence: `secret ${secretBackend}`, nextStep: "" }
+    { name: "SecretStore backend", ok: secretOK, evidence: requireNativeSecret ? `secret ${secretBackend}, want native` : `secret ${secretBackend}`, nextStep: requireNativeSecret ? secretNextStep : "" }
   ];
 }
 

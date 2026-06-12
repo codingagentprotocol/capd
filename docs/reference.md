@@ -37,6 +37,9 @@ terminal. The probe's Evidence JSON includes a `checks` array with
 `name`, `ok`, `evidence`, and optional `nextStep` fields so browser-side
 readiness evidence mirrors `capd doctor --json`. The full console renders the
 same readiness concepts as visible pass/fail cards under the diagnostic line.
+When the native SecretStore gate is enabled, the console distinguishes backend
+mismatches from deeper OS SecretStore verification and points the latter to
+`capd doctor --json --fail --verify-secretstore --require-secret-backend native`.
 
 ### `capd health` — check the daemon
 
