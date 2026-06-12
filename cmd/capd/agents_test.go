@@ -61,6 +61,44 @@ func TestRouteCLIAccountAutoSelectsFreshLowestQuotaCodex(t *testing.T) {
 	}
 }
 
+func TestRouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	infos := []protocol.AgentInfo{
+		{ID: "codex", Available: true, Capabilities: protocol.AgentCapabilities{Usage: true, Resume: true}},
+	}
+	_, err := routeCLI(infos, accounts, routeCLIParams{
+		AccountID:    protocol.AccountAuto,
+		RequireFresh: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "fresh cached quota") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestRouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 8}); err != nil {
+		t.Fatal(err)
+	}
+	infos := []protocol.AgentInfo{
+		{ID: "codex", Available: true, Capabilities: protocol.AgentCapabilities{Usage: true, Resume: true}},
+	}
+	result, err := routeCLI(infos, accounts, routeCLIParams{
+		AccountID:    protocol.AccountAuto,
+		RequireFresh: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AccountID != "codex-test" || !strings.Contains(result.Reason, "primary 8%") {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
 func TestRouteCLIRejectsUnknownCapability(t *testing.T) {
 	_, err := agentCapabilitiesFromNames([]string{"review", "telepathy"})
 	if err == nil || !strings.Contains(err.Error(), "unknown capability") {

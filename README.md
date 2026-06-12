@@ -141,7 +141,7 @@ capd watch s_xxx          # re-join a long-running task: replay + follow
 capd agents usage codex   # plan, rate-limit windows, reset times
 capd agents usage codex --account codex-acct
 capd agents usage codex --account auto
-capd agents route --account auto --json
+capd agents route --account auto --require-fresh-quota --json
 
 capd accounts codex import   # import local ~/.codex/auth.json into capd
 capd accounts codex list     # imported Codex accounts, current account marked

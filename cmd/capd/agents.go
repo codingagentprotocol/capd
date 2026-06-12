@@ -80,6 +80,7 @@ func newAgentsCmd() *cobra.Command {
 	routeCmd.Flags().String("effort", "", "effort requirement; routes to agents with effort support")
 	routeCmd.Flags().StringSlice("capability", nil, "required capability name; repeat or comma-separate")
 	routeCmd.Flags().StringSlice("prefer", nil, "preferred agent id order; repeat or comma-separate")
+	routeCmd.Flags().Bool("require-fresh-quota", false, "fail unless --account auto is backed by fresh cached quota")
 	routeCmd.Flags().Bool("json", false, "print route result as JSON")
 	usageCmd := &cobra.Command{
 		Use:   "usage <agent-id>",
@@ -150,6 +151,7 @@ type routeCLIParams struct {
 	Effort       string
 	Capabilities protocol.AgentCapabilities
 	Prefer       []string
+	RequireFresh bool
 	JSON         bool
 }
 
@@ -167,6 +169,7 @@ func routeCLIParamsFromFlags(cmd *cobra.Command) (routeCLIParams, error) {
 	effort, _ := cmd.Flags().GetString("effort")
 	prefer, _ := cmd.Flags().GetStringSlice("prefer")
 	capabilityNames, _ := cmd.Flags().GetStringSlice("capability")
+	requireFresh, _ := cmd.Flags().GetBool("require-fresh-quota")
 	jsonOut, _ := cmd.Flags().GetBool("json")
 	required, err := agentCapabilitiesFromNames(capabilityNames)
 	if err != nil {
@@ -184,6 +187,7 @@ func routeCLIParamsFromFlags(cmd *cobra.Command) (routeCLIParams, error) {
 		Effort:       effort,
 		Capabilities: required,
 		Prefer:       prefer,
+		RequireFresh: requireFresh,
 		JSON:         jsonOut,
 	}, nil
 }
@@ -252,6 +256,11 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 				return protocol.AgentRouteResult{}, err
 			}
 			selectedAccountID = acc.ID
+			if params.RequireFresh {
+				if q, err := accounts.LoadQuota(acc.ID); err != nil || !account.QuotaSnapshotFresh(q, time.Now()) {
+					return protocol.AgentRouteResult{}, fmt.Errorf("auto route does not have fresh cached quota; run capd accounts codex smoke --quota --require-fresh-quota or refresh quota first")
+				}
+			}
 			accountReason = autoRouteReason(accounts, acc)
 		} else {
 			acc, err := resolveUsageAccount(accounts, accountID)
