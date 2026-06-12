@@ -81,6 +81,10 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"ProbeDataReturnsSafeAccountRouteEvidence",
 		"ProbeDataReadinessReturnsPartialEvidenceOnFailure",
 		"ProbeDataReadinessDefaultsToNativeAndAvoidsQuotaOnBackendMismatch",
+		"ProbeServedWithSecurityHeaders",
+		"ProbeValidationRowsStayUnique",
+		"ConsoleStaticContract",
+		"ConsoleApprovalRendererHasSingleBoxDeclaration",
 		"AccountsCheckReadinessShortcutSetsDaemonGateParams",
 		"DoctorReportsMultiAccountQuotaAndAutoRoute",
 		"DoctorChecksDaemonAccountsThroughCAP",
@@ -93,6 +97,9 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"HealthRequireSecretBackendFailsOnMismatch",
 		"SecretStoreCheckJSONRoundTrip",
 		"MigrateCodexAccountSecretsVerifiesTargetReadableBeforeMetadataUpdate",
+		"RunTaskFreshQuotaFailureSuggestsReadiness",
+		"ReferenceDocsCoverRunFreshQuotaRecovery",
+		"go test ./internal/adapter/codex -run 'TestProbeUsesResolvedCodexBinary$$' -count=1",
 	} {
 		if !strings.Contains(makefile, want) {
 			t.Fatalf("Makefile simulated readiness target missing %q", want)
