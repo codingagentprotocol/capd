@@ -130,8 +130,10 @@ make verify-codex-readiness-sim
 
 It exercises multi-account quota refresh, conservative auto-route selection,
 fresh-quota enforcement, daemon-side `accounts/check` readiness, doctor
-CAP/WebSocket account checks, direct smoke route-candidate evidence, CLI
-shortcut parameters, and secret-leak guards with local test backends.
+CAP/WebSocket account checks, Web probe readiness summaries, probe native
+SecretStore defaults, `/healthz` backend gates, direct smoke route-candidate
+evidence, CLI shortcut parameters, direct SecretStore JSON roundtrip, and
+secret-leak guards with local test backends.
 
 `make live-codex-preflight` first verifies the selected SecretStore backend,
 checks that at least two Codex accounts are imported, refreshes every Codex

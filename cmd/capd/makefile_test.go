@@ -78,6 +78,9 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"AccountsCheckReadinessFailureIsDaemonSideAndSafe",
 		"AccountsCheckAllFreshFailureReportsEveryStaleAccountSafely",
 		"AccountsQuotaAllRefreshesEveryCodexAccountSafely",
+		"ProbeDataReturnsSafeAccountRouteEvidence",
+		"ProbeDataReadinessReturnsPartialEvidenceOnFailure",
+		"ProbeDataReadinessDefaultsToNativeAndAvoidsQuotaOnBackendMismatch",
 		"AccountsCheckReadinessShortcutSetsDaemonGateParams",
 		"DoctorReportsMultiAccountQuotaAndAutoRoute",
 		"DoctorChecksDaemonAccountsThroughCAP",
@@ -85,6 +88,10 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"CodexAccountsSmokeTextIncludesAutoRouteEvidence",
 		"RouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache",
 		"CodexAccountsQuotaAllRefreshesEveryAccountSafely",
+		"ProbeDataTextPrintsReadinessSummary",
+		"ProbeDataReadinessCanOverrideRequiredSecretBackend",
+		"HealthRequireSecretBackendFailsOnMismatch",
+		"SecretStoreCheckJSONRoundTrip",
 	} {
 		if !strings.Contains(makefile, want) {
 			t.Fatalf("Makefile simulated readiness target missing %q", want)

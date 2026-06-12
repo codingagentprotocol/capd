@@ -174,7 +174,10 @@ capd agents route --account auto --require-fresh-quota
 For deterministic local regression, run `make verify`; for native SecretStore
 coverage, run `make verify-secretstore`; for a no-real-account Codex
 multi-account quota/routing/readiness regression, run
-`make verify-codex-readiness-sim`. `capd doctor --json --fail --timeout 2m` is a safe
+`make verify-codex-readiness-sim`. That simulated gate also covers the safe Web
+probe summaries, probe readiness SecretStore defaults, `/healthz` backend
+requirement, and direct SecretStore JSON roundtrip without touching live Codex
+accounts. `capd doctor --json --fail --timeout 2m` is a safe
 readiness audit for live Codex work: it checks daemon health, Codex CLI
 availability, imported account count, per-account SecretStore credential
 readability, quota freshness, auto-route freshness, the active SecretStore
