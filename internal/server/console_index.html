@@ -400,6 +400,18 @@ function capdWebSocketURL() {
   return u.toString();
 }
 
+function capdHTTPURL(path) {
+  const u = new URL(`http://${CAPD}${path}`);
+  return u.toString();
+}
+
+async function checkDaemonHealth() {
+  statusEl.textContent = "检查 daemon health…";
+  const res = await fetch(capdHTTPURL("/healthz"), { cache: "no-store" });
+  const body = (await res.text()).trim();
+  if (!res.ok || body !== "ok") throw new Error(`CAP health failed: ${res.status} ${body || "empty"}`);
+}
+
 async function refreshQuota(accountId, button) {
   button.disabled = true;
   try {
@@ -538,6 +550,7 @@ async function attachSession(id, replay) {
 }
 
 async function connect() {
+  await checkDaemonHealth();
   ws = new WebSocket(capdWebSocketURL());
   ws.onmessage = (m) => {
     const msg = JSON.parse(m.data);
@@ -561,7 +574,7 @@ async function connect() {
 
   const init = await call("initialize", { protocolVersion: "0.1", client: { name: "cap-web-demo" } });
   document.getElementById("daemon").textContent = `${init.daemon.name} ${init.daemon.version} · protocol ${init.protocolVersion}`;
-  statusEl.textContent = "已连接";
+  statusEl.textContent = "已连接 · health ok";
 
   const { agents } = await call("agents/list", {});
   const sel = document.getElementById("agent");
