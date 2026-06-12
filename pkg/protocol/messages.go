@@ -1,5 +1,7 @@
 package protocol
 
+import "encoding/json"
+
 // Client → daemon methods.
 const (
 	MethodInitialize      = "initialize"       // version negotiation, must be the first call
@@ -11,7 +13,7 @@ const (
 	MethodAccountsCurrent = "accounts/current" // show or set provider-scoped current account, without secrets
 	MethodAccountsProject = "accounts/project" // create/verify account runtime projection, without paths or secrets
 	MethodAccountsCheck   = "accounts/check"   // safe local account smoke evidence, without paths or secrets
-	MethodAccountsQuota   = "accounts/quota"   // refresh one imported account quota, without secrets
+	MethodAccountsQuota   = "accounts/quota"   // refresh imported account quota, without secrets
 	MethodAccountsRemove  = "accounts/remove"  // remove an imported account and local token material
 	MethodSessionCreate   = "session/create"   // start an agent session
 	MethodSessionList     = "session/list"     // enumerate sessions and their liveness
@@ -89,6 +91,7 @@ type AgentsListResult struct {
 const AgentAuto = "auto"
 
 const AccountAuto = "auto"
+const AccountAll = "all"
 
 const (
 	AccountQuotaStateFresh   = "fresh"
@@ -208,11 +211,27 @@ type AccountCheckEvidence struct {
 
 type AccountsQuotaParams struct {
 	Provider  string `json:"provider,omitempty"`  // empty = codex
-	AccountID string `json:"accountId,omitempty"` // empty = provider's current account; "auto" = account-aware route scoring
+	AccountID string `json:"accountId,omitempty"` // empty = current account; "auto" = account-aware route scoring; "all" = every imported provider account
 }
 
 type AccountsQuotaResult struct {
-	Account AccountSummary `json:"account"`
+	Account  AccountSummary   `json:"account,omitempty"`
+	Accounts []AccountSummary `json:"accounts,omitempty"`
+}
+
+func (r AccountsQuotaResult) MarshalJSON() ([]byte, error) {
+	type quotaResult struct {
+		Account  *AccountSummary  `json:"account,omitempty"`
+		Accounts []AccountSummary `json:"accounts,omitempty"`
+	}
+	var account *AccountSummary
+	if !r.Account.isZero() {
+		account = &r.Account
+	}
+	return json.Marshal(quotaResult{
+		Account:  account,
+		Accounts: r.Accounts,
+	})
 }
 
 type AccountsRemoveParams struct {
@@ -236,6 +255,16 @@ type AccountSummary struct {
 	AccountID string                `json:"accountId,omitempty"`
 	Plan      string                `json:"plan,omitempty"`
 	Quota     *AccountQuotaSnapshot `json:"quota,omitempty"`
+}
+
+func (a AccountSummary) isZero() bool {
+	return a.ID == "" &&
+		a.Provider == "" &&
+		a.AuthMode == "" &&
+		a.Email == "" &&
+		a.AccountID == "" &&
+		a.Plan == "" &&
+		a.Quota == nil
 }
 
 type AccountQuotaSnapshot struct {

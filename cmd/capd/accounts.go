@@ -379,7 +379,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			if id == "" {
 				return fmt.Errorf("no Codex account selected")
 			}
-			if id == "all" {
+			if id == protocol.AccountAll {
 				if rawOut {
 					return fmt.Errorf("--raw is only supported for a single account")
 				}

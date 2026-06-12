@@ -347,6 +347,26 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInvalidParams, "quota refresh is currently supported only for provider %q", codexauth.Provider)
 	}
 	accountID := strings.TrimSpace(params.AccountID)
+	if accountID == protocol.AccountAll {
+		accounts, err := s.opts.Accounts.ListAccounts(provider)
+		if err != nil {
+			return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInternalError, "list accounts: %v", err)
+		}
+		if len(accounts) == 0 {
+			return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
+		}
+		result := protocol.AccountsQuotaResult{
+			Accounts: make([]protocol.AccountSummary, 0, len(accounts)),
+		}
+		for _, acc := range accounts {
+			summary, perr := s.refreshOneAccountQuota(ctx, acc)
+			if perr != nil {
+				return protocol.AccountsQuotaResult{}, protocol.NewError(perr.Code, "%s: %s", acc.ID, perr.Message)
+			}
+			result.Accounts = append(result.Accounts, summary)
+		}
+		return result, nil
+	}
 	var err error
 	if accountID == "" {
 		accountID, err = s.opts.Accounts.CurrentAccount(provider)
@@ -370,29 +390,36 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 	if acc.Provider != codexauth.Provider {
 		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInvalidParams, "accountId %q is not a Codex account", accountID)
 	}
+	summary, perr := s.refreshOneAccountQuota(ctx, acc)
+	if perr != nil {
+		return protocol.AccountsQuotaResult{}, perr
+	}
+	return protocol.AccountsQuotaResult{Account: summary}, nil
+}
+
+func (s *Server) refreshOneAccountQuota(ctx context.Context, acc account.Account) (protocol.AccountSummary, *protocol.Error) {
 	ref, err := secret.ParseRef(acc.SecretRef)
 	if err != nil {
-		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInternalError, "parse secret ref: %v", err)
+		return protocol.AccountSummary{}, protocol.NewError(protocol.CodeInternalError, "parse secret ref: %v", err)
 	}
 	if err := secret.EnsureRefBackend(s.opts.Secrets, ref); err != nil {
-		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInternalError, "%v", err)
+		return protocol.AccountSummary{}, protocol.NewError(protocol.CodeInternalError, "%v", err)
 	}
 	bundle, err := s.opts.Secrets.Get(ctx, ref)
 	if err != nil {
-		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInternalError, "load account secret: %v", err)
+		return protocol.AccountSummary{}, protocol.NewError(protocol.CodeInternalError, "load account secret: %v", err)
 	}
 	if bundle.AccountID == "" {
 		bundle.AccountID = acc.AccountID
 	}
 	result, err := codexquota.Client{BaseURL: s.opts.CodexQuotaBaseURL}.Usage(ctx, acc.ID, bundle)
 	if err != nil {
-		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeAgentUnavailable, "quota: %v", err)
+		return protocol.AccountSummary{}, protocol.NewError(protocol.CodeAgentUnavailable, "quota: %v", err)
 	}
 	if err := s.opts.Accounts.SaveQuota(result.Quota); err != nil {
-		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInternalError, "save quota: %v", err)
+		return protocol.AccountSummary{}, protocol.NewError(protocol.CodeInternalError, "save quota: %v", err)
 	}
-	summary := accountSummary(acc, result.Quota)
-	return protocol.AccountsQuotaResult{Account: summary}, nil
+	return accountSummary(acc, result.Quota), nil
 }
 
 func (s *Server) removeAccount(ctx context.Context, params protocol.AccountsRemoveParams) (protocol.AccountsRemoveResult, *protocol.Error) {

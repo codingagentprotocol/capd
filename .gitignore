@@ -1,4 +1,6 @@
 /capd
 /dist/
+/.gocache/
+/.tmp-home/
 *.log
 .DS_Store

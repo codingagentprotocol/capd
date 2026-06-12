@@ -406,23 +406,16 @@ async function refreshAllQuota() {
   const button = document.getElementById("refreshAllQuota");
   button.disabled = true;
   try {
-    const { accounts } = await call("accounts/list", { provider: "codex" });
-    const codexAccounts = (accounts || []).filter(a => a.provider === "codex");
-    if (!codexAccounts.length) {
+    const result = await call("accounts/quota", { provider: "codex", accountId: "all" });
+    const refreshed = result.accounts || [];
+    if (!refreshed.length) {
       line("ev-err", "✗ 没有可刷新的 Codex 账号");
       return;
     }
-    let ok = 0;
-    for (const account of codexAccounts) {
-      try {
-        await call("accounts/quota", { provider: "codex", accountId: account.id });
-        ok++;
-      } catch (e) {
-        line("ev-err", `✗ quota 刷新失败 ${account.email || account.id}: ${e.message || JSON.stringify(e)}`);
-      }
-    }
-    line("ev-sys", `· quota 批量刷新完成 ${ok}/${codexAccounts.length}`);
+    line("ev-sys", `· quota 批量刷新完成 ${refreshed.length}/${refreshed.length}`);
     await loadAccounts();
+  } catch (e) {
+    line("ev-err", `✗ quota 批量刷新失败: ${e.message || JSON.stringify(e)}`);
   } finally {
     button.disabled = false;
   }

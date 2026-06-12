@@ -242,11 +242,16 @@ returns token material, `secret_ref`, raw auth JSON, or local filesystem paths.
 
 `{"provider": "codex", "accountId": "codex-acct"}` → `{"account": {...}}`.
 
+`{"provider": "codex", "accountId": "all"}` → `{"accounts": [...]}`.
+
 Refreshes one imported Codex account through the ChatGPT backend quota endpoint,
 updates the local quota snapshot, and returns the same safe account summary
 shape as `accounts/list`. Omit `accountId` to refresh the current Codex account.
 Use `"accountId":"auto"` to refresh the account selected by the same
-conservative quota scoring rule used by account-aware routing.
+conservative quota scoring rule used by account-aware routing. Use
+`"accountId":"all"` to refresh every imported Codex account in one daemon-side
+operation; if one account fails, the RPC fails with that account id in the error
+message instead of returning partial readiness evidence.
 The response never returns token material, `secret_ref`, or raw backend JSON.
 
 ### `accounts/remove`

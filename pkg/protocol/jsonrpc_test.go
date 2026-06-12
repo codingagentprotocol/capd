@@ -41,3 +41,25 @@ func TestResponseShapes(t *testing.T) {
 		t.Fatalf("got %s", data)
 	}
 }
+
+func TestAccountsQuotaResultJSONShapes(t *testing.T) {
+	single, err := json.Marshal(AccountsQuotaResult{
+		Account: AccountSummary{ID: "codex-test", Provider: "codex"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(single) != `{"account":{"id":"codex-test","provider":"codex"}}` {
+		t.Fatalf("single = %s", single)
+	}
+
+	batch, err := json.Marshal(AccountsQuotaResult{
+		Accounts: []AccountSummary{{ID: "codex-test", Provider: "codex"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(batch) != `{"accounts":[{"id":"codex-test","provider":"codex"}]}` {
+		t.Fatalf("batch = %s", batch)
+	}
+}
