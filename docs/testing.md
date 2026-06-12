@@ -154,6 +154,10 @@ and run the daemon-side readiness gate as JSON. If a gate fails, the command
 still exits non-zero, but the JSON output may include safe partial
 `accounts/check` evidence under `data` so you can see which account, quota, or
 SecretStore check failed without exposing tokens or local runtime paths.
+`make live-codex-selftest` builds one temporary capd binary, starts the
+temporary daemon with it when needed, and passes the same binary into
+`live-codex-preflight` and the optional final prompt. Manual preflight defaults
+to `go run ./cmd/capd`; pass `CAPD_BIN=./capd` to validate a specific build.
 
 Without real Codex accounts, run the deterministic simulated gate:
 

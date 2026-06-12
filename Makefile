@@ -1,6 +1,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LIVE_PROMPT ?= say ready
 LIVE_SECRET_BACKEND ?= native
+CAPD_BIN ?= go run ./cmd/capd
 LDFLAGS := -X github.com/codingagentprotocol/capd/internal/daemon.Version=$(VERSION)
 
 .PHONY: build run test vet tidy verify verify-secretstore verify-codex-readiness-sim live-codex-preflight live-codex-readiness live-codex-selftest
@@ -42,24 +43,24 @@ verify-codex-readiness-sim:
 
 live-codex-preflight:
 	@echo "live-codex-preflight requires >=2 imported Codex accounts, CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND), and a running daemon from: capd start --secret-backend $(LIVE_SECRET_BACKEND)"
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd secretstore check --json --roundtrip --require-backend $(LIVE_SECRET_BACKEND) --timeout 2m
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex list --json
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex smoke --json --require-multiple --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd health --json --require-secret-backend $(LIVE_SECRET_BACKEND)
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex quota all --timeout 2m
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd doctor --json --fail --verify-secretstore --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) secretstore check --json --roundtrip --require-backend $(LIVE_SECRET_BACKEND) --timeout 2m
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) accounts --secret-backend $(LIVE_SECRET_BACKEND) codex list --json
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) accounts --secret-backend $(LIVE_SECRET_BACKEND) codex smoke --json --require-multiple --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) health --json --require-secret-backend $(LIVE_SECRET_BACKEND)
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) accounts --secret-backend $(LIVE_SECRET_BACKEND) codex quota all --timeout 2m
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) accounts --secret-backend $(LIVE_SECRET_BACKEND) codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) doctor --json --fail --verify-secretstore --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
 	@echo "checking daemon CAP/WebSocket readiness"
-	@probe_url=$$(CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd console --probe --url --require-secret-backend $(LIVE_SECRET_BACKEND)); curl -fsS "$$probe_url" >/dev/null
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts check --json --timeout 2m
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts check --json --readiness --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd probe data --json --readiness --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m --fail
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd agents usage codex --account auto
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd agents route --account auto --require-fresh-quota --json
+	@probe_url=$$(CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) console --probe --url --require-secret-backend $(LIVE_SECRET_BACKEND)); curl -fsS "$$probe_url" >/dev/null
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) accounts check --json --timeout 2m
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) accounts check --json --readiness --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) probe data --json --readiness --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m --fail
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) agents usage codex --account auto
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) agents route --account auto --require-fresh-quota --json
 
 live-codex-readiness: live-codex-preflight
 	@echo "running live Codex prompt with quota-aware auto account"
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd run --agent codex --account auto --require-fresh-quota "$(LIVE_PROMPT)"
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) run --agent codex --account auto --require-fresh-quota "$(LIVE_PROMPT)"
 
 live-codex-selftest:
 	./scripts/live_codex_selftest.sh

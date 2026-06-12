@@ -68,7 +68,7 @@ else
 	done
 fi
 
-if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend"; then
+if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then
 	echo "live-codex-preflight failed; safe diagnostics follow" >&2
 	"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true
 	if health; then
@@ -80,6 +80,6 @@ fi
 case "$run_prompt" in
 	1|true|TRUE|yes|YES)
 		echo "running live Codex prompt with quota-aware auto account"
-		go run ./cmd/capd run --agent codex --account auto --require-fresh-quota "$prompt"
+		"$bin" run --agent codex --account auto --require-fresh-quota "$prompt"
 		;;
 esac
