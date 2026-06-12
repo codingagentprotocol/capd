@@ -1227,7 +1227,7 @@ func TestAccountsCheckReturnsSafeSmokeEvidence(t *testing.T) {
 	c.mustResult(c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
 		Provider: codexauth.Provider,
 	}), &result)
-	if result.Provider != codexauth.Provider || result.CurrentAccountID != "codex-test" || result.SecretBackend != secret.BackendFile || result.CheckedAccounts != 1 || len(result.Accounts) != 1 {
+	if result.Provider != codexauth.Provider || result.CurrentAccountID != "codex-test" || result.SecretBackend != secret.BackendFile || result.CheckedAccounts != 1 || result.QuotaRefreshed || len(result.Accounts) != 1 {
 		t.Fatalf("result = %+v", result)
 	}
 	row := result.Accounts[0]
@@ -1301,7 +1301,7 @@ func TestAccountsCheckCanRefreshQuotaAndEnforceReadiness(t *testing.T) {
 		RequireAllFreshQuota: true,
 		RequireSecretBackend: secret.BackendFile,
 	}), &result)
-	if result.CheckedAccounts != 2 || result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-low" || !result.AutoRoute.Fresh {
+	if result.CheckedAccounts != 2 || !result.QuotaRefreshed || result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-low" || !result.AutoRoute.Fresh {
 		t.Fatalf("result = %+v", result)
 	}
 	if seen["Bearer test-token"] != "acct_test" || seen["Bearer low-token"] != "acct_low" {

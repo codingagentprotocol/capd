@@ -195,6 +195,7 @@ type AccountsCheckResult struct {
 	CurrentAccountID string                 `json:"currentAccountId,omitempty"`
 	SecretBackend    string                 `json:"secretBackend"`
 	CheckedAccounts  int                    `json:"checkedAccounts"`
+	QuotaRefreshed   bool                   `json:"quotaRefreshed,omitempty"`
 	AutoRoute        *AccountRouteEvidence  `json:"autoRoute,omitempty"`
 	Accounts         []AccountCheckEvidence `json:"accounts"`
 }

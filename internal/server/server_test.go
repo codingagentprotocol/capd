@@ -119,6 +119,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"就绪门禁失败",
 		`readinessGate ? "就绪门禁失败" : "账号检查失败"`,
 		"readiness quota refreshed",
+		"result.quotaRefreshed",
 		"params.refreshQuota = true",
 		"params.requireMultiple = true",
 		"params.requireFreshQuota = true",

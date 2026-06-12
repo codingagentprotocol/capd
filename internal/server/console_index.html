@@ -206,7 +206,7 @@ async function checkAccounts(readinessGate = false) {
     }
     const result = await call("accounts/check", params);
     const route = result.autoRoute ? ` · auto ${result.autoRoute.accountId || ""} ${result.autoRoute.quotaState}` : "";
-    if (readinessGate) line("ev-sys", `· readiness quota refreshed ${result.checkedAccounts || 0}`);
+    if (readinessGate) line("ev-sys", `· readiness quota refreshed ${result.quotaRefreshed ? "yes" : "no"}`);
     line("ev-sys", `· 账号检查完成 ${result.checkedAccounts} 个${route}`);
     await loadAccounts();
   } catch (e) {

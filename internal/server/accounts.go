@@ -306,6 +306,7 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		CurrentAccountID: current,
 		SecretBackend:    s.opts.Secrets.Backend(),
 		CheckedAccounts:  len(accounts),
+		QuotaRefreshed:   params.RefreshQuota,
 		Accounts:         make([]protocol.AccountCheckEvidence, 0, len(accounts)),
 	}
 	for _, acc := range accounts {

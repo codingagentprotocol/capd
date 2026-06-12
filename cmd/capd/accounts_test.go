@@ -203,6 +203,9 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if refreshed.AutoRoute == nil || !refreshed.AutoRoute.Fresh || refreshed.AutoRoute.PrimaryUsedPercent == nil || *refreshed.AutoRoute.PrimaryUsedPercent != 6 {
 		t.Fatalf("refreshed auto route = %+v", refreshed.AutoRoute)
 	}
+	if !refreshed.QuotaRefreshed {
+		t.Fatalf("quotaRefreshed = false")
+	}
 	for _, leaked := range []string{token, "access-secret", "refresh-secret", "backend-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
 		if strings.Contains(out.String(), leaked) {
 			t.Fatalf("accounts check refresh leaked %q: %s", leaked, out.String())
