@@ -465,6 +465,9 @@ func newCodexAccountsCmd() *cobra.Command {
 			if requireMultiple && len(list) < 2 {
 				return fmt.Errorf("expected multiple Codex accounts, found %d", len(list))
 			}
+			sort.Slice(list, func(i, j int) bool {
+				return list[i].ID < list[j].ID
+			})
 			home, err := daemon.Home()
 			if err != nil {
 				return err

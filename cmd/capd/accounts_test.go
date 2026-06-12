@@ -893,6 +893,48 @@ func TestCodexAccountsSmokeJSONIncludesAutoRouteEvidence(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsSmokeJSONSortsAccountsByID(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, secrets := seedCodexAccount(t)
+	defer accounts.Close()
+	ref, err := secrets.Put(context.Background(), "codex-zlow", secret.Bundle{
+		Provider:     codexauth.Provider,
+		AuthMode:     "chatgpt",
+		AccessToken:  "zlow-access-secret",
+		RefreshToken: "zlow-refresh-secret",
+		RawAuthJSON:  []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"zlow-access-secret","refresh_token":"zlow-refresh-secret"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-zlow",
+		Provider:  codexauth.Provider,
+		AuthMode:  "chatgpt",
+		Email:     "zlow@example.com",
+		AccountID: "acct_zlow",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json", "--require-multiple"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var result codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Accounts) != 2 || result.Accounts[0].ID != "codex-test" || result.Accounts[1].ID != "codex-zlow" {
+		t.Fatalf("accounts not sorted by account id: %+v", result.Accounts)
+	}
+}
+
 func TestCodexAccountsSmokeRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)
