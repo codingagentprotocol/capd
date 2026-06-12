@@ -102,6 +102,12 @@ func newAccountsCmd() *cobra.Command {
 			requireFreshQuota, _ := cmd.Flags().GetBool("require-fresh-quota")
 			requireAllFreshQuota, _ := cmd.Flags().GetBool("require-all-fresh-quota")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
+			refreshQuota, _ := cmd.Flags().GetBool("refresh-quota")
+			if refreshQuota {
+				if _, err := daemonRPCCall(cmd.Context(), "capd-accounts-quota", protocol.MethodAccountsQuota, protocol.AccountsQuotaParams{Provider: provider, AccountID: protocol.AccountAll}); err != nil {
+					return err
+				}
+			}
 			raw, err := daemonRPCCall(cmd.Context(), "capd-accounts-check", protocol.MethodAccountsCheck, protocol.AccountsCheckParams{Provider: provider})
 			if err != nil {
 				return err
@@ -157,6 +163,7 @@ func newAccountsCmd() *cobra.Command {
 	checkCmd.Flags().Bool("require-fresh-quota", false, "fail unless auto-route selection is backed by fresh cached quota")
 	checkCmd.Flags().Bool("require-all-fresh-quota", false, "fail unless every checked account has fresh cached quota")
 	checkCmd.Flags().String("require-secret-backend", "", "fail unless daemon account check uses this SecretStore backend")
+	checkCmd.Flags().Bool("refresh-quota", false, "refresh every imported Codex account quota through the daemon before checking")
 	checkCmd.Flags().Bool("json", false, "print accounts/check result as JSON without token material")
 
 	cmd.AddCommand(listCmd, checkCmd, newCodexAccountsCmd())

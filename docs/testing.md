@@ -58,7 +58,7 @@ For multi-account routing readiness:
 capd accounts codex quota all
 capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
 capd accounts check --json
-capd accounts check --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
+capd accounts check --refresh-quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
 capd agents usage codex --account auto
 ```
 
@@ -85,9 +85,9 @@ the running daemon and CAP WebSocket path used by web clients. Unlike
 `capd accounts codex smoke --quota`, it does not refresh remote quota; it
 checks cached quota freshness, SecretStore readability, runtime projection, and
 auto-route evidence without returning runtime paths or token material.
-Use `capd accounts codex quota all` before daemon-side readiness checks when
-you want to refresh every imported Codex account from the CLI without printing
-raw backend usage JSON.
+Use `capd accounts check --refresh-quota` when you want a single daemon-side
+readiness gate to refresh every imported Codex account through `accounts/quota`
+before checking cached freshness, without printing raw backend usage JSON.
 Use its `--require-*` flags as a daemon-side readiness gate: the command exits
 non-zero when too few accounts are imported, auto-route quota is stale or
 missing, any checked account lacks fresh cached quota, or the daemon is using a

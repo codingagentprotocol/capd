@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -99,6 +100,24 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 12}); err != nil {
 		t.Fatal(err)
 	}
+	var quotaCalls atomic.Int32
+	quotaBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		quotaCalls.Add(1)
+		if got := r.Header.Get("Authorization"); got != "Bearer access-secret" {
+			t.Fatalf("Authorization = %q", got)
+		}
+		if got := r.Header.Get("ChatGPT-Account-Id"); got != "acct_test" {
+			t.Fatalf("ChatGPT-Account-Id = %q", got)
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": "team",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": 6},
+			},
+			"debug": "backend-secret",
+		})
+	}))
+	defer quotaBackend.Close()
 	port := freeTCPPort(t)
 	t.Setenv("CAPD_HOST", "127.0.0.1")
 	t.Setenv("CAPD_PORT", strconv.Itoa(port))
@@ -107,7 +126,8 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	s := server.New(server.Options{
 		Host: "127.0.0.1", Port: port, Token: token, Version: "it",
 		Accounts: accounts, Secrets: secrets, RuntimeRoot: filepath.Join(home, "runtimes"),
-		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		CodexQuotaBaseURL: quotaBackend.URL,
+		Log:               slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	go func() { errCh <- s.Run(ctx) }()
 	waitForHealthz(t, port)
@@ -160,6 +180,33 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	cmd.SetErr(&out)
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
+	}
+	if quotaCalls.Load() != 0 {
+		t.Fatalf("quota calls before refresh = %d", quotaCalls.Load())
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--json", "--refresh-quota", "--require-fresh-quota", "--require-all-fresh-quota"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if quotaCalls.Load() != 1 {
+		t.Fatalf("quota calls = %d", quotaCalls.Load())
+	}
+	var refreshed protocol.AccountsCheckResult
+	if err := json.Unmarshal(out.Bytes(), &refreshed); err != nil {
+		t.Fatal(err)
+	}
+	if refreshed.AutoRoute == nil || !refreshed.AutoRoute.Fresh || refreshed.AutoRoute.PrimaryUsedPercent == nil || *refreshed.AutoRoute.PrimaryUsedPercent != 6 {
+		t.Fatalf("refreshed auto route = %+v", refreshed.AutoRoute)
+	}
+	for _, leaked := range []string{token, "access-secret", "refresh-secret", "backend-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts check refresh leaked %q: %s", leaked, out.String())
+		}
 	}
 
 	out.Reset()
