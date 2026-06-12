@@ -799,6 +799,36 @@ func TestSessionCreateCodexWithAutoAccountRequireFreshQuota(t *testing.T) {
 	}
 }
 
+func TestSessionForkInheritsAccountBinding(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	c := initialized(t, ts)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:   "codex",
+		AccountID: "codex-test",
+	}), &created)
+
+	var forked protocol.SessionForkResult
+	c.mustResult(c.call(protocol.MethodSessionFork, protocol.SessionForkParams{SessionID: created.SessionID}), &forked)
+	accountID, err := accounts.SessionAccount(forked.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accountID != "codex-test" {
+		t.Fatalf("forked session account = %q", accountID)
+	}
+	var list protocol.SessionListResult
+	c.mustResult(c.call(protocol.MethodSessionList, struct{}{}), &list)
+	seen := map[string]string{}
+	for _, sess := range list.Sessions {
+		seen[sess.SessionID] = sess.AccountID
+	}
+	if seen[created.SessionID] != "codex-test" || seen[forked.SessionID] != "codex-test" {
+		t.Fatalf("session accounts = %+v sessions=%+v", seen, list.Sessions)
+	}
+}
+
 func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
 	if err := accounts.SaveQuota(account.QuotaSnapshot{

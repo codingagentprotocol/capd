@@ -273,6 +273,17 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if err != nil {
 			return nil, asProtocolError(err)
 		}
+		if s.opts.Accounts != nil {
+			accountID, err := s.opts.Accounts.SessionAccount(params.SessionID)
+			if err != nil {
+				return nil, protocol.NewError(protocol.CodeInternalError, "load parent session account: %v", err)
+			}
+			if accountID != "" {
+				if err := s.opts.Accounts.BindSessionAccount(forked.ID, accountID); err != nil {
+					return nil, protocol.NewError(protocol.CodeInternalError, "bind forked session account: %v", err)
+				}
+			}
+		}
 		s.subscribe(ctx, client, forked, 0)
 		return protocol.SessionForkResult{SessionID: forked.ID}, nil
 

@@ -312,7 +312,9 @@ events, no subscription, no session revival. Page forward by passing
 ### `session/fork`
 
 `{"sessionId"}` → `{"sessionId": "<new>"}` — an independent session sharing
-conversation history up to this point (agents with fork support).
+conversation history up to this point (agents with fork support). If the parent
+session was bound to an imported account, the fork inherits that safe local
+`accountId` so `session/list` remains account-auditable.
 
 ### `session/rollback`
 
