@@ -180,6 +180,7 @@ function routeText(route) {
   const bits = [route.accountId || "unknown", route.quotaState || "missing"];
   bits.push(route.fresh ? "fresh" : "not-fresh");
   if (typeof route.primaryUsedPercent === "number") bits.push(`primary ${route.primaryUsedPercent}%`);
+  if (route.reason) bits.push(route.reason);
   return bits.join(" ");
 }
 function routeDecisionText(decision, route) {

@@ -405,9 +405,9 @@ flowchart TB
   rows older than 30 minutes or missing quota are treated like unknown usage so
   stale low-usage snapshots do not dominate routing. The daemon projects that
   account into a dedicated `CODEX_HOME`. `agents/route` and `accounts/check`
-  return `routeCandidates` sorted by the same score rule, and `session/create`
-  returns the resolved `accountId` so clients can audit auto-route choices
-  without another lookup. The Codex app-server profile pool
+  return `routeCandidates` sorted by the same score rule with a safe `reason`
+  for each candidate, and `session/create` returns the resolved `accountId` so
+  clients can audit auto-route choices without another lookup. The Codex app-server profile pool
   keeps it isolated from other accounts.
 
 ## Repository layout

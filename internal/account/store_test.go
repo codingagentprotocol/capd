@@ -525,7 +525,7 @@ func TestQuotaRouteEvidenceAndReason(t *testing.T) {
 	if missing.AccountID != "missing" || missing.QuotaState != protocol.AccountQuotaStateMissing || missing.Fresh || missing.PrimaryUsedPercent != nil || missing.Score != quotaUnknownScore-0.01 {
 		t.Fatalf("missing evidence = %+v", missing)
 	}
-	if got := QuotaRouteReason(st, Account{ID: "missing", Provider: "codex"}); got != "auto account missing without fresh cached quota" {
+	if got := QuotaRouteReason(st, Account{ID: "missing", Provider: "codex"}); got != "auto account missing without fresh cached quota; current account tie-break" {
 		t.Fatalf("missing reason = %q", got)
 	}
 
@@ -539,7 +539,7 @@ func TestQuotaRouteEvidenceAndReason(t *testing.T) {
 	if candidates[0].AccountID != "fresh" || !candidates[0].Fresh || candidates[0].Score != 12 {
 		t.Fatalf("first candidate = %+v", candidates[0])
 	}
-	if candidates[1].AccountID != "missing" || candidates[1].QuotaState != protocol.AccountQuotaStateMissing || candidates[1].Score != quotaUnknownScore-0.01 {
+	if candidates[1].AccountID != "missing" || candidates[1].QuotaState != protocol.AccountQuotaStateMissing || candidates[1].Score != quotaUnknownScore-0.01 || candidates[1].Reason != "auto account missing without fresh cached quota; current account tie-break" {
 		t.Fatalf("second candidate = %+v", candidates[1])
 	}
 	if candidates[2].AccountID != "stale" || candidates[2].QuotaState != protocol.AccountQuotaStateStale || candidates[2].Score != quotaUnknownScore {

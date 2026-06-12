@@ -64,18 +64,21 @@ func QuotaRouteEvidence(st *Store, acc Account) protocol.AccountRouteEvidence {
 		AccountID:  acc.ID,
 		Score:      quotaUnknownScore,
 		QuotaState: protocol.AccountQuotaStateMissing,
+		Reason:     "missing cached quota",
 	}
 	if st == nil {
 		return evidence
 	}
 	current, _ := st.CurrentAccount(acc.Provider)
-	evidence.Score = QuotaRouteScore(st, acc, current)
+	now := time.Now()
+	evidence.Score = quotaRouteScoreAt(st, acc, current, now)
+	evidence.Reason = quotaRouteReasonAt(st, acc, current, now)
 	if q, err := st.LoadQuota(acc.ID); err == nil {
 		evidence.CheckedAt = q.CheckedAt
 		if quotaPercentUsable(q.PrimaryUsedPercent) {
 			evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
 		}
-		if QuotaSnapshotFresh(q, time.Now()) {
+		if QuotaSnapshotFresh(q, now) {
 			evidence.QuotaState = protocol.AccountQuotaStateFresh
 			evidence.Fresh = true
 		} else {
@@ -119,12 +122,11 @@ func QuotaRouteCandidates(st *Store, provider string) ([]protocol.AccountRouteEv
 // QuotaRouteReason gives a short human-readable explanation for auto account
 // routing. It intentionally mirrors QuotaRouteEvidence's freshness semantics.
 func QuotaRouteReason(st *Store, acc Account) string {
-	if st != nil {
-		if q, err := st.LoadQuota(acc.ID); err == nil && QuotaSnapshotFresh(q, time.Now()) {
-			return fmt.Sprintf("auto account %s primary %.0f%%", acc.ID, q.PrimaryUsedPercent)
-		}
+	if st == nil {
+		return fmt.Sprintf("auto account %s without fresh cached quota", acc.ID)
 	}
-	return fmt.Sprintf("auto account %s without fresh cached quota", acc.ID)
+	current, _ := st.CurrentAccount(acc.Provider)
+	return quotaRouteReasonAt(st, acc, current, time.Now())
 }
 
 func quotaRouteEvidenceAt(st *Store, acc Account, current string, now time.Time) protocol.AccountRouteEvidence {
@@ -132,6 +134,7 @@ func quotaRouteEvidenceAt(st *Store, acc Account, current string, now time.Time)
 		AccountID:  acc.ID,
 		Score:      quotaRouteScoreAt(st, acc, current, now),
 		QuotaState: protocol.AccountQuotaStateMissing,
+		Reason:     quotaRouteReasonAt(st, acc, current, now),
 	}
 	if q, err := st.LoadQuota(acc.ID); err == nil {
 		evidence.CheckedAt = q.CheckedAt
@@ -146,6 +149,22 @@ func quotaRouteEvidenceAt(st *Store, acc Account, current string, now time.Time)
 		}
 	}
 	return evidence
+}
+
+func quotaRouteReasonAt(st *Store, acc Account, current string, now time.Time) string {
+	suffix := ""
+	if acc.ID == current {
+		suffix = "; current account tie-break"
+	}
+	if st != nil {
+		if q, err := st.LoadQuota(acc.ID); err == nil {
+			if QuotaSnapshotFresh(q, now) {
+				return fmt.Sprintf("auto account %s primary %.0f%%%s", acc.ID, q.PrimaryUsedPercent, suffix)
+			}
+			return fmt.Sprintf("auto account %s without fresh cached quota%s", acc.ID, suffix)
+		}
+	}
+	return fmt.Sprintf("auto account %s without fresh cached quota%s", acc.ID, suffix)
 }
 
 func quotaRouteScoreAt(st *Store, acc Account, current string, now time.Time) float64 {

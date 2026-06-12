@@ -777,6 +777,7 @@ function routeEvidenceSummary(route) {
   if (hasNumber(route.primaryUsedPercent)) parts.push(`primary ${route.primaryUsedPercent}%`);
   if (hasNumber(route.score)) parts.push(`score ${route.score}`);
   if (route.checkedAt) parts.push(`checked ${new Date(route.checkedAt * 1000).toLocaleString()}`);
+  if (route.reason) parts.push(route.reason);
   return parts.join(" ");
 }
 

@@ -130,6 +130,7 @@ type AccountRouteEvidence struct {
 	Fresh              bool     `json:"fresh"`
 	CheckedAt          int64    `json:"checkedAt,omitempty"`
 	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
+	Reason             string   `json:"reason,omitempty"`
 }
 
 type AgentsUsageParams struct {

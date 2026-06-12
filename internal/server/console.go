@@ -489,6 +489,9 @@ func routeEvidenceTextPtr(route *protocol.AccountRouteEvidence) string {
 		parts = append(parts, "primary "+strconv.FormatFloat(*route.PrimaryUsedPercent, 'f', -1, 64)+"%")
 	}
 	parts = append(parts, "score "+strconv.FormatFloat(route.Score, 'f', -1, 64))
+	if route.Reason != "" {
+		parts = append(parts, route.Reason)
+	}
 	return strings.Join(parts, " ")
 }
 

@@ -167,6 +167,9 @@ func routeEvidenceText(route protocol.AccountRouteEvidence) string {
 	if route.CheckedAt > 0 {
 		parts = append(parts, "checked "+time.Unix(route.CheckedAt, 0).Format(time.RFC3339))
 	}
+	if route.Reason != "" {
+		parts = append(parts, route.Reason)
+	}
 	return strings.Join(parts, " ")
 }
 

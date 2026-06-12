@@ -1067,7 +1067,7 @@ func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 	if acc.Quota.PrimaryUsedPercent != 25 || acc.Quota.PrimaryResetAt == "" || acc.Quota.QuotaState != protocol.AccountQuotaStateFresh {
 		t.Fatalf("quota = %+v", acc.Quota)
 	}
-	if !acc.QuotaFresh || acc.RouteScore == nil || *acc.RouteScore != 24.99 || acc.RouteReason != "auto account codex-test primary 25%" {
+	if !acc.QuotaFresh || acc.RouteScore == nil || *acc.RouteScore != 24.99 || acc.RouteReason != "auto account codex-test primary 25%; current account tie-break" {
 		t.Fatalf("route audit = %+v", acc)
 	}
 	if result.Accounts[1].RouteScore == nil || *result.Accounts[1].RouteScore != 75 || result.Accounts[1].RouteReason != "auto account codex-zlow without fresh cached quota" {
@@ -1147,7 +1147,7 @@ func TestAccountsListJSONIncludesZeroQuota(t *testing.T) {
 	if !strings.Contains(text, `"quotaState":"stale"`) {
 		t.Fatalf("quotaState missing from JSON: %s", text)
 	}
-	if !strings.Contains(text, `"routeScore":74.99`) || !strings.Contains(text, `"routeReason":"auto account codex-test without fresh cached quota"`) {
+	if !strings.Contains(text, `"routeScore":74.99`) || !strings.Contains(text, `"routeReason":"auto account codex-test without fresh cached quota; current account tie-break"`) {
 		t.Fatalf("route audit missing from JSON: %s", text)
 	}
 	if strings.Contains(text, "test-token") || strings.Contains(text, "secret") || strings.Contains(text, "must-not-return") {

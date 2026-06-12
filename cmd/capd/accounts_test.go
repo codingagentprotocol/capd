@@ -121,7 +121,7 @@ func TestCodexAccountsListJSONShowsQuotaWithoutLeakingSecrets(t *testing.T) {
 		t.Fatalf("rows = %+v", rows)
 	}
 	row := rows[0]
-	if !row.Current || row.Provider != codexauth.Provider || row.ID != "codex-test" || row.SecretBackend != secret.BackendFile || row.Plan != "pro" || row.PrimaryUsed != "0.0%" || row.QuotaState != protocol.AccountQuotaStateFresh || !row.QuotaFresh || row.QuotaCheckedAt != checkedAt || row.RouteScore == nil || *row.RouteScore != -0.01 || row.RouteReason != "auto account codex-test primary 0%" {
+	if !row.Current || row.Provider != codexauth.Provider || row.ID != "codex-test" || row.SecretBackend != secret.BackendFile || row.Plan != "pro" || row.PrimaryUsed != "0.0%" || row.QuotaState != protocol.AccountQuotaStateFresh || !row.QuotaFresh || row.QuotaCheckedAt != checkedAt || row.RouteScore == nil || *row.RouteScore != -0.01 || row.RouteReason != "auto account codex-test primary 0%; current account tie-break" {
 		t.Fatalf("row = %+v", row)
 	}
 }

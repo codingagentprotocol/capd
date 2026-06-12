@@ -280,7 +280,7 @@ No params. → `{"agents": [{"id", "name", "bin", "version", "available", "capab
 Ask capd to pick an installed agent. Params mirror route signals:
 `{"prompt", "attachments", "accountId", "model", "effort", "capabilities", "prefer", "requireFreshQuota"}`.
 
-→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"accountId": "codex-acct", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "score": 12, "checkedAt": 1781170000}, "routeCandidates": [{"accountId": "codex-acct", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "score": 12, "checkedAt": 1781170000}], "reason": "matched capabilities: effort, review"}`
+→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"accountId": "codex-acct", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "score": 12, "checkedAt": 1781170000, "reason": "auto account codex-acct primary 12%"}, "routeCandidates": [{"accountId": "codex-acct", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "score": 12, "checkedAt": 1781170000, "reason": "auto account codex-acct primary 12%"}], "reason": "matched capabilities: effort, review"}`
 
 When `accountId` is present, routing is account-aware and currently selects
 Codex only, because imported account runtimes are Codex-specific. Use
@@ -295,7 +295,9 @@ state without exposing token material.
 When account routing is in play, `accountRoute` reports the selected
 `accountId`, score, `quotaState` (`fresh`, `stale`, or `missing`), freshness,
 optional primary usage percent, and optional checked timestamp without exposing
-token material. `routeCandidates` contains the same safe evidence for every
+token material. It also includes a safe human-readable `reason`, such as a
+fresh primary quota percentage, missing/stale cached quota, or current-account
+tie-break. `routeCandidates` contains the same safe evidence for every
 imported candidate account, sorted by the same conservative score used for
 selection; when routing succeeds, `accountRoute` should match the first
 candidate.
@@ -385,8 +387,9 @@ redaction contract as a successful `accounts/check` response, including
 refresh in this same call. The response never returns token material,
 `secret_ref`, raw auth JSON, or local filesystem paths.
 When imported accounts are available, `routeCandidates` is included with the
-same ordering and redaction contract as `agents/route`, so Web clients can show
-why `autoRoute` was selected without making a second route call.
+same ordering, `reason`, and redaction contract as `agents/route`, so Web
+clients can show why `autoRoute` was selected without making a second route
+call.
 When a readiness gate fails after account metadata is loaded, the JSON-RPC
 error `data` may contain the same safe `accounts/check` evidence accumulated so
 far. Clients should treat it as partial evidence for diagnostics, not as a
