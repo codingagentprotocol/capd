@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
@@ -17,6 +18,11 @@ var consoleHTML string
 
 //go:embed probe_index.html
 var probeHTML string
+
+const (
+	probeDataDefaultTimeout   = 12 * time.Second
+	probeDataReadinessTimeout = 2 * time.Minute
+)
 
 func (s *Server) handleConsole(w http.ResponseWriter, _ *http.Request) {
 	writeLocalPageHeaders(w)
@@ -69,13 +75,22 @@ func (s *Server) handleProbeData(w http.ResponseWriter, r *http.Request) {
 	if readiness && requireSecretBackend == "" {
 		requireSecretBackend = secret.BackendNative
 	}
-	result := s.probeData(r.Context(), readiness, requireSecretBackend)
+	ctx, cancel := context.WithTimeout(r.Context(), probeDataTimeout(readiness))
+	defer cancel()
+	result := s.probeData(ctx, readiness, requireSecretBackend)
 	status := http.StatusOK
 	if !result.OK && readiness {
 		status = http.StatusFailedDependency
 	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(result)
+}
+
+func probeDataTimeout(readiness bool) time.Duration {
+	if readiness {
+		return probeDataReadinessTimeout
+	}
+	return probeDataDefaultTimeout
 }
 
 func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBackend string) probeDataResult {

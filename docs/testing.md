@@ -190,7 +190,8 @@ The Web Console's `就绪门禁` button applies the same daemon-side
 `accounts/check` readiness gate, with an optional native SecretStore
 requirement. It asks the daemon to refresh every imported Codex account before
 checking freshness; use `刷新全部 quota` for an explicit refresh outside the
-readiness gate. `capd probe data --json --readiness --timeout 2m --fail` is the automation
-wrapper around `/probe/data`; both expose the same safe diagnostics for web
-clients and smoke tests over HTTP, but require an `Authorization: Bearer` header
-so daemon tokens are not embedded in diagnostics URLs.
+readiness gate. `capd probe data --json --readiness --timeout 2m --fail` is the
+automation wrapper around `/probe/data`; both expose the same safe diagnostics
+for web clients and smoke tests over HTTP, but require an `Authorization: Bearer`
+header so daemon tokens are not embedded in diagnostics URLs. The HTTP handler
+also has a server-side deadline: 12s for ordinary probes and 2m for readiness.

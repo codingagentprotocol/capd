@@ -176,6 +176,15 @@ func TestProbeDataRequiresAuthorizationHeader(t *testing.T) {
 	}
 }
 
+func TestProbeDataTimeoutBudgetMatchesClientReadinessWindow(t *testing.T) {
+	if got := probeDataTimeout(false); got != 12*time.Second {
+		t.Fatalf("default probe timeout = %s", got)
+	}
+	if got := probeDataTimeout(true); got != 2*time.Minute {
+		t.Fatalf("readiness probe timeout = %s", got)
+	}
+}
+
 func TestProbeDataReturnsSafeAccountRouteEvidence(t *testing.T) {
 	s, _, _, accounts := newCodexAccountIntegrationServer(t)
 	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 12}); err != nil {

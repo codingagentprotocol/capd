@@ -204,6 +204,8 @@ before account checks when native storage is unavailable or mismatched.
 `capd probe data --json --readiness --timeout 2m --fail` calls the same authenticated
 `/probe/data` endpoint used by the lightweight web probe, so live preflight also
 verifies the Web diagnostics path with header auth and safe partial evidence.
+The endpoint bounds server-side work too: ordinary probes get 12s and readiness
+probes get 2m.
 Both `agents/route --account auto --json` and daemon-side `accounts/check`
 include `routeCandidates`, sorted by the same conservative quota score used for
 auto routing, so clients can verify why one account was selected.
