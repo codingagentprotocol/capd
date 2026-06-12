@@ -153,13 +153,13 @@ capd accounts codex quota    # refresh quota and print a safe summary
 capd accounts codex quota auto
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
-CAPD_SECRET_BACKEND=native capd doctor --json --fail --require-secret-backend native # readiness gate
+CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native # readiness gate
 CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
 capd console --probe         # simple web data probe; opens with daemon token without printing it
 capd health --json           # confirm daemon /healthz before CAP checks
 capd accounts import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # daemon-side CAP import
 capd accounts check --json   # daemon-side accounts/check smoke evidence
-capd accounts check --readiness # daemon-side multi-account readiness gate
+capd accounts check --json --readiness # daemon-side multi-account readiness gate
 capd agents route --account auto --require-fresh-quota
 ```
 
@@ -177,8 +177,10 @@ accounts are missing, use
 the Web Console. Use `capd accounts check --json --readiness` for the
 daemon-side refresh-and-verify gate after fixing quota or account issues. After
 importing multiple Codex accounts and starting `capd start` with the same
-backend in another terminal, `make live-codex-readiness` runs the live
-quota/routing/readiness chain. Override the final prompt with
+backend in another terminal, `make live-codex-preflight` runs the live
+quota/routing/readiness checks without sending a prompt. `make
+live-codex-readiness` runs the same preflight and then sends the final live
+prompt. Override the final prompt with
 `LIVE_PROMPT="..." make live-codex-readiness`; override the backend only for
 intentional testing with `LIVE_SECRET_BACKEND=file`. The target runs every live
 command with the same `CAPD_SECRET_BACKEND` value, and the daemon-side

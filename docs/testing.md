@@ -75,7 +75,7 @@ For multi-account routing readiness:
 ```bash
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
-CAPD_SECRET_BACKEND=native capd doctor --json --fail --require-secret-backend native
+CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native
 
 # In another terminal, keep the daemon running for CAP/WebSocket checks:
 CAPD_SECRET_BACKEND=native capd start
@@ -91,17 +91,23 @@ capd run --agent codex --account auto --require-fresh-quota "say ready"
 ```
 
 After importing multiple accounts and starting the daemon in another terminal,
-the same live chain is available as:
+the same live preflight is available without sending a prompt:
+
+```bash
+make live-codex-preflight
+```
+
+The full live chain, including the final prompt, is available as:
 
 ```bash
 make live-codex-readiness
 ```
 
-The live target runs every command with the same `CAPD_SECRET_BACKEND` value and
-runs the daemon-side readiness gate as JSON. If a gate fails, the command still
-exits non-zero, but the JSON output may include safe partial `accounts/check`
-evidence under `data` so you can see which account, quota, or SecretStore check
-failed without exposing tokens or local runtime paths.
+Both live targets run every command with the same `CAPD_SECRET_BACKEND` value
+and run the daemon-side readiness gate as JSON. If a gate fails, the command
+still exits non-zero, but the JSON output may include safe partial
+`accounts/check` evidence under `data` so you can see which account, quota, or
+SecretStore check failed without exposing tokens or local runtime paths.
 
 Without real Codex accounts, run the deterministic simulated gate:
 

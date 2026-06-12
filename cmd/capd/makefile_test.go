@@ -14,6 +14,9 @@ func TestLiveCodexReadinessUsesOneSecretBackend(t *testing.T) {
 	makefile := string(data)
 	for _, want := range []string{
 		"LIVE_SECRET_BACKEND ?= native",
+		"verify-codex-readiness-sim live-codex-preflight live-codex-readiness",
+		"live-codex-preflight:",
+		"live-codex-readiness: live-codex-preflight",
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd doctor --json --fail --verify-secretstore --require-secret-backend $(LIVE_SECRET_BACKEND)",
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex smoke --require-multiple --require-secret-backend $(LIVE_SECRET_BACKEND)",
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd health --json",
