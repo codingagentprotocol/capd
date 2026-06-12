@@ -118,7 +118,13 @@ func TestRouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "fresh cached quota") {
 		t.Fatalf("err = %v", err)
 	}
-	for _, want := range []string{"route: quota stale fresh false primary 2.0% score 74.99 checked", "route candidates: codex-test quota stale", "codex-missing quota missing", "next: run capd accounts codex smoke --quota --require-fresh-quota"} {
+	for _, want := range []string{
+		"route: quota stale fresh false primary 2.0% score 74.99 checked",
+		"route candidates: codex-test quota stale",
+		"codex-missing quota missing",
+		"next: refresh and verify daemon-side readiness with: capd accounts check --json --readiness",
+		"next: preview routing with: capd agents route --account auto --require-fresh-quota --json",
+	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error missing %q: %s", want, err.Error())
 		}
