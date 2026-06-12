@@ -35,7 +35,8 @@ Use `capd console` to open the full console, or `capd console --probe` to open
 the lightweight validation probe without printing the daemon token to the
 terminal. The probe's Evidence JSON includes a `checks` array with
 `name`, `ok`, `evidence`, and optional `nextStep` fields so browser-side
-readiness evidence mirrors `capd doctor --json`.
+readiness evidence mirrors `capd doctor --json`. The full console renders the
+same readiness concepts as visible pass/fail cards under the diagnostic line.
 
 ### `capd health` — check the daemon
 

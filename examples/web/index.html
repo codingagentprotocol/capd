@@ -23,6 +23,13 @@
   #readiness { color:#8b949e; font-size:12px; margin:-4px 0 10px; min-height:18px; }
   #readiness.ok { color:#3fb950; }
   #readiness.warn { color:#d29922; }
+  #readinessChecks { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:6px; margin:-2px 0 12px; }
+  .check { border:1px solid #30363d; border-radius:6px; padding:6px 8px; background:#010409; font-size:12px; }
+  .check.pass { border-color:#238636; }
+  .check.fail { border-color:#8b5a12; }
+  .check .name { color:#e6edf3; }
+  .check .evidence { color:#8b949e; margin-top:2px; }
+  .check .next { color:#d29922; margin-top:2px; }
   #main { display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:12px; align-items:stretch; }
   #sessions, #log { background:#010409; border:1px solid #30363d; border-radius:8px; padding:12px; height:520px; overflow-y:auto; }
   #log { white-space:pre-wrap; }
@@ -67,6 +74,7 @@
 <div id="accounts"></div>
 <div id="routePreview"></div>
 <div id="readiness">诊断等待连接…</div>
+<div id="readinessChecks"></div>
 <div id="main">
   <div id="sessions">
     <div id="sessionHead"><span>Sessions</span><button id="refreshSessions">刷新</button></div>
@@ -92,6 +100,7 @@ const sessionsEl = document.getElementById("sessions");
 const accountsEl = document.getElementById("accounts");
 const routePreviewEl = document.getElementById("routePreview");
 const readinessEl = document.getElementById("readiness");
+const readinessChecksEl = document.getElementById("readinessChecks");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
 
@@ -263,6 +272,7 @@ async function checkAccounts(readinessGate = false) {
 
 async function refreshReadinessDiagnostic() {
   readinessEl.className = "";
+  readinessChecksEl.textContent = "";
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     readinessEl.textContent = "诊断等待连接…";
     return;
@@ -287,6 +297,7 @@ async function refreshReadinessDiagnostic() {
     if (accounts.length && freshCount < accounts.length) issues.push("quota 未全部 fresh");
     const autoRoute = result.autoRoute || (route && route.accountRoute);
     if (!autoRoute || !autoRoute.fresh) issues.push("auto route 缺 fresh quota");
+    const checks = readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError });
     const parts = [
       "daemon ok",
       `codex ${result.checkedAccounts || 0}`,
@@ -300,9 +311,48 @@ async function refreshReadinessDiagnostic() {
     if (routeError) parts.push(`route error ${routeError}`);
     readinessEl.className = issues.length ? "warn" : "ok";
     readinessEl.textContent = issues.length ? `${parts.join(" · ")} · ${issues.join(" · ")}` : `${parts.join(" · ")} · ready`;
+    renderReadinessChecks(checks);
   } catch (e) {
     readinessEl.className = "warn";
     readinessEl.textContent = "诊断不可用: " + (e.message || JSON.stringify(e));
+    renderReadinessChecks([
+      { name: "daemon/CAP diagnostic", ok: false, evidence: e.message || JSON.stringify(e), nextStep: "确认 capd start 正在运行，然后刷新诊断" }
+    ]);
+  }
+}
+
+function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError }) {
+  const checked = result.checkedAccounts || 0;
+  const secretBackend = result.secretBackend || "unknown";
+  return [
+    { name: "daemon health", ok: true, evidence: "health ok", nextStep: "" },
+    { name: "Codex multi-account import", ok: checked >= 2, evidence: `checked ${checked}, need 2`, nextStep: checked >= 2 ? "" : "导入至少两个账号: capd accounts import --auth /path/a --auth /path/b" },
+    { name: "Codex quota freshness", ok: accounts.length > 0 && freshCount === accounts.length, evidence: `fresh ${freshCount}/${accounts.length}`, nextStep: accounts.length > 0 && freshCount === accounts.length ? "" : "运行就绪门禁或 capd accounts check --readiness" },
+    { name: "Codex auto route freshness", ok: !!(autoRoute && autoRoute.fresh), evidence: autoRoute ? routeEvidenceSummary(autoRoute) : "auto route missing", nextStep: autoRoute && autoRoute.fresh ? "" : "刷新 quota 后预览自动路由" },
+    { name: "route decision", ok: !!route, evidence: route ? routeDecisionSummary(route) : routeError || "route missing", nextStep: route ? "" : "运行 capd agents route --account auto" },
+    { name: "SecretStore backend", ok: true, evidence: `secret ${secretBackend}`, nextStep: "" }
+  ];
+}
+
+function renderReadinessChecks(checks) {
+  readinessChecksEl.textContent = "";
+  for (const check of checks) {
+    const box = document.createElement("div");
+    box.className = "check " + (check.ok ? "pass" : "fail");
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = `${check.ok ? "pass" : "fail"} · ${check.name}`;
+    const evidence = document.createElement("div");
+    evidence.className = "evidence";
+    evidence.textContent = check.evidence || "";
+    box.append(name, evidence);
+    if (check.nextStep) {
+      const next = document.createElement("div");
+      next.className = "next";
+      next.textContent = check.nextStep;
+      box.appendChild(next);
+    }
+    readinessChecksEl.appendChild(box);
   }
 }
 
