@@ -321,7 +321,7 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 			selectedAccount = acc
 			if params.RequireFresh {
 				if q, err := accounts.LoadQuota(acc.ID); err != nil || !account.QuotaSnapshotFresh(q, time.Now()) {
-					return protocol.AgentRouteResult{}, fmt.Errorf("auto route does not have fresh cached quota; run capd accounts codex smoke --quota --require-fresh-quota or refresh quota first")
+					return protocol.AgentRouteResult{}, routeCLIFreshQuotaError(accounts, acc)
 				}
 			}
 			accountReason = account.QuotaRouteReason(accounts, acc)
@@ -370,6 +370,22 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 		}
 	}
 	return result, nil
+}
+
+func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error {
+	lines := []string{"auto route does not have fresh cached quota"}
+	if accounts != nil && acc.ID != "" {
+		lines = append(lines, "route: "+routeEvidenceText(account.QuotaRouteEvidence(accounts, acc)))
+		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil && len(candidates) > 0 {
+			parts := make([]string, 0, len(candidates))
+			for _, candidate := range candidates {
+				parts = append(parts, candidate.AccountID+" "+routeEvidenceText(candidate))
+			}
+			lines = append(lines, "route candidates: "+strings.Join(parts, "; "))
+		}
+	}
+	lines = append(lines, "next: run capd accounts codex smoke --quota --require-fresh-quota or refresh quota first")
+	return fmt.Errorf("%s", strings.Join(lines, "\n"))
 }
 
 func trimCLIStringList(items []string) []string {

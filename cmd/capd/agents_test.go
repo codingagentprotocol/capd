@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
@@ -89,6 +90,24 @@ func TestRouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)
 	defer accounts.Close()
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-missing",
+		Provider:  codexauth.Provider,
+		AuthMode:  "chatgpt",
+		Email:     "missing@example.com",
+		SecretRef: "file:codex-missing",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	staleAt := time.Now().Add(-account.QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{
+		AccountID:          "codex-test",
+		PrimaryUsedPercent: 2,
+		CheckedAt:          staleAt,
+		RawJSON:            `{"token":"must-not-return"}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	infos := []protocol.AgentInfo{
 		{ID: "codex", Available: true, Capabilities: protocol.AgentCapabilities{Usage: true, Resume: true}},
 	}
@@ -98,6 +117,16 @@ func TestRouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "fresh cached quota") {
 		t.Fatalf("err = %v", err)
+	}
+	for _, want := range []string{"route: quota stale fresh false primary 2.0% score 74.99 checked", "route candidates: codex-test quota stale", "codex-missing quota missing", "next: run capd accounts codex smoke --quota --require-fresh-quota"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q: %s", want, err.Error())
+		}
+	}
+	for _, leaked := range []string{"must-not-return", "secretRef", "rawJson", "RawJSON"} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Fatalf("error leaked %q: %s", leaked, err.Error())
+		}
 	}
 }
 

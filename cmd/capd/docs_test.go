@@ -23,6 +23,7 @@ func TestReferenceDocsCoverRouteCandidateEvidence(t *testing.T) {
 		"why `autoRoute` was selected without making a second route call",
 		"partial evidence may still include cached\n`routeCandidates`",
 		"fresh-quota error includes safe `data.accountRoute` and\n`data.routeCandidates` evidence",
+		"failing text output includes the selected route and route-candidate quota evidence",
 	} {
 		if !strings.Contains(reference, want) {
 			t.Fatalf("reference docs missing route candidate contract %q", want)
