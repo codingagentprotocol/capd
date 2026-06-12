@@ -53,6 +53,13 @@ func TestSecretStoreCheckFailsOnBackendMismatchAfterJSON(t *testing.T) {
 	if got.OK || got.Backend != "file" || !containsString(got.Issues, `secret backend is "file", want "native"`) {
 		t.Fatalf("report = %+v", got)
 	}
+	want := "restart or rerun with: capd secretstore check --secret-backend native --require-backend native --timeout 2m"
+	if !containsString(got.NextSteps, want) {
+		t.Fatalf("nextSteps = %+v", got.NextSteps)
+	}
+	if len(got.Checks) == 0 || got.Checks[0].NextStep != want {
+		t.Fatalf("checks = %+v", got.Checks)
+	}
 }
 
 func TestSecretStoreCheckHelpIncludesTimeout(t *testing.T) {

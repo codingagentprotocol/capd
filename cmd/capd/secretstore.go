@@ -106,13 +106,13 @@ func buildSecretStoreReport(ctx context.Context, opts secretStoreOptions) (secre
 	backendOK := opts.RequireBackend == "" || secrets.Backend() == opts.RequireBackend
 	if !backendOK {
 		report.Issues = append(report.Issues, fmt.Sprintf("secret backend is %q, want %q", secrets.Backend(), opts.RequireBackend))
-		report.NextSteps = append(report.NextSteps, "restart or rerun with CAPD_SECRET_BACKEND="+opts.RequireBackend)
+		report.NextSteps = append(report.NextSteps, secretStoreBackendMismatchNextStep(opts.RequireBackend))
 	}
 	report.Checks = append(report.Checks, secretStoreCheck{
 		Name:     "SecretStore backend",
 		OK:       backendOK,
 		Evidence: "secret backend " + secrets.Backend(),
-		NextStep: secretStoreNextStep(!backendOK, "restart or rerun with CAPD_SECRET_BACKEND="+opts.RequireBackend),
+		NextStep: secretStoreNextStep(!backendOK, secretStoreBackendMismatchNextStep(opts.RequireBackend)),
 	})
 	if opts.RoundTrip {
 		check := secretStoreCheck{
@@ -160,4 +160,11 @@ func secretStoreNextStep(include bool, step string) string {
 		return step
 	}
 	return ""
+}
+
+func secretStoreBackendMismatchNextStep(requireBackend string) string {
+	if requireBackend == "" {
+		return "restart or rerun with the required SecretStore backend"
+	}
+	return "restart or rerun with: capd secretstore check --secret-backend " + requireBackend + " --require-backend " + requireBackend + " --timeout 2m"
 }
