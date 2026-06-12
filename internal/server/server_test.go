@@ -70,6 +70,18 @@ func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
 		t.Fatalf("content-type = %q", got)
 	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("cache = %q", got)
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("nosniff = %q", got)
+	}
+	if got := rec.Header().Get("Permissions-Policy"); got != "camera=(), microphone=(), geolocation=()" {
+		t.Fatalf("permissions policy = %q", got)
+	}
+	if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Fatalf("referrer policy = %q", got)
+	}
 	var got struct {
 		OK              bool   `json:"ok"`
 		Daemon          string `json:"daemon"`

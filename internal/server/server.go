@@ -98,7 +98,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if s.opts.Secrets != nil {
 		secretBackend = s.opts.Secrets.Backend()
 	}
-	w.Header().Set("Content-Type", "application/json")
+	writeLocalJSONHeaders(w)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":              true,
 		"daemon":          "capd",
