@@ -52,3 +52,25 @@ func TestOpenRejectsUnknownBackend(t *testing.T) {
 		t.Fatal("expected unknown backend error")
 	}
 }
+
+func TestNormalizeBackend(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want string
+	}{
+		{"", ""},
+		{" file ", BackendFile},
+		{" native ", BackendNative},
+	} {
+		got, err := NormalizeBackend(tc.in)
+		if err != nil {
+			t.Fatalf("%q err = %v", tc.in, err)
+		}
+		if got != tc.want {
+			t.Fatalf("%q = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	if _, err := NormalizeBackend("mystery"); err == nil {
+		t.Fatal("expected unknown backend error")
+	}
+}

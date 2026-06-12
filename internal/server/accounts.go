@@ -280,9 +280,11 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 	if provider != codexauth.Provider {
 		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInvalidParams, "account check is currently supported only for provider %q", codexauth.Provider)
 	}
-	if strings.TrimSpace(params.RequireSecretBackend) != "" {
-		params.RequireSecretBackend = strings.TrimSpace(params.RequireSecretBackend)
+	requiredBackend, err := secret.NormalizeBackend(params.RequireSecretBackend)
+	if err != nil {
+		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
 	}
+	params.RequireSecretBackend = requiredBackend
 	current, err := s.opts.Accounts.CurrentAccount(provider)
 	if err != nil {
 		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)

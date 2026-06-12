@@ -104,13 +104,17 @@ func newAccountsCmd() *cobra.Command {
 			requireAllFreshQuota, _ := cmd.Flags().GetBool("require-all-fresh-quota")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			refreshQuota, _ := cmd.Flags().GetBool("refresh-quota")
+			requireSecretBackend, err := secret.NormalizeBackend(requireSecretBackend)
+			if err != nil {
+				return err
+			}
 			raw, err := daemonRPCCall(cmd.Context(), "capd-accounts-check", protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
 				Provider:             provider,
 				RefreshQuota:         refreshQuota,
 				RequireMultiple:      requireMultiple,
 				RequireFreshQuota:    requireFreshQuota,
 				RequireAllFreshQuota: requireAllFreshQuota,
-				RequireSecretBackend: strings.TrimSpace(requireSecretBackend),
+				RequireSecretBackend: requireSecretBackend,
 			})
 			if err != nil {
 				return err
@@ -436,6 +440,10 @@ func newCodexAccountsCmd() *cobra.Command {
 			requireAllFreshQuota, _ := cmd.Flags().GetBool("require-all-fresh-quota")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			jsonOut, _ := cmd.Flags().GetBool("json")
+			requireSecretBackend, err := secret.NormalizeBackend(requireSecretBackend)
+			if err != nil {
+				return err
+			}
 			accounts, secrets, err := accountDepsFromCmd(cmd)
 			if err != nil {
 				return err

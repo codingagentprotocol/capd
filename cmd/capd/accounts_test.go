@@ -583,6 +583,25 @@ func TestAccountsCheckRefreshQuotaFailureDoesNotLeakSecrets(t *testing.T) {
 	}
 }
 
+func TestAccountsCheckRejectsUnknownRequiredSecretBackend(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--require-secret-backend", "mystery"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `unknown secret backend "mystery"`) {
+		t.Fatalf("err = %v", err)
+	}
+	for _, leaked := range []string{"access-secret", "refresh-secret", "secretRef", "CODEX_HOME"} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts check leaked %q: %s", leaked, out.String())
+		}
+	}
+}
+
 func TestAccountsCheckRequireAllFreshQuotaFailsWithoutAccounts(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -1021,6 +1040,25 @@ func TestCodexAccountsSmokeRequireSecretBackendMismatch(t *testing.T) {
 	err := cmd.Execute()
 	if err == nil || !strings.Contains(err.Error(), `want "native"`) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCodexAccountsSmokeRejectsUnknownRequiredSecretBackend(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--require-secret-backend", "mystery"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `unknown secret backend "mystery"`) {
+		t.Fatalf("err = %v", err)
+	}
+	for _, leaked := range []string{"access-secret", "refresh-secret", "secretRef", "CODEX_HOME"} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("smoke leaked %q: %s", leaked, out.String())
+		}
 	}
 }
 

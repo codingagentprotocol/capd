@@ -1392,6 +1392,19 @@ func TestAccountsCheckReadinessPreflightAvoidsQuotaCalls(t *testing.T) {
 	}
 }
 
+func TestAccountsCheckRejectsUnknownRequiredSecretBackend(t *testing.T) {
+	_, ts, _, _ := newCodexAccountIntegrationServer(t)
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider:             codexauth.Provider,
+		RequireSecretBackend: "mystery",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, `unknown secret backend "mystery"`) {
+		t.Fatalf("response = %+v", resp)
+	}
+}
+
 func TestAccountsCheckHandlesEmptyAndRejectsBackendMismatch(t *testing.T) {
 	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
 	c := initialized(t, ts)
