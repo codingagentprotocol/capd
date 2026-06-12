@@ -60,6 +60,7 @@ func QuotaRouteScore(st *Store, acc Account, current string) float64 {
 // quota freshness, and state labels cannot drift between surfaces.
 func QuotaRouteEvidence(st *Store, acc Account) protocol.AccountRouteEvidence {
 	evidence := protocol.AccountRouteEvidence{
+		AccountID:  acc.ID,
 		Score:      quotaUnknownScore,
 		QuotaState: protocol.AccountQuotaStateMissing,
 	}

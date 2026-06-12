@@ -194,7 +194,7 @@ async function checkAccounts() {
   button.disabled = true;
   try {
     const result = await call("accounts/check", { provider: "codex" });
-    const route = result.autoRoute ? ` · auto ${result.autoRoute.quotaState}` : "";
+    const route = result.autoRoute ? ` · auto ${result.autoRoute.accountId || ""} ${result.autoRoute.quotaState}` : "";
     line("ev-sys", `· 账号检查完成 ${result.checkedAccounts} 个${route}`);
     await loadAccounts();
   } catch (e) {

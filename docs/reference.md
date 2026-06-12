@@ -89,7 +89,7 @@ the file backend.
 | `capd accounts codex project [account-id]` | Create or refresh a capd-managed per-account `CODEX_HOME`; prints the path. |
 | `capd accounts codex remove <account-id>` | Remove an imported Codex account, its cached quota/session bindings, current-account state, SecretStore token bundle, and capd-managed `CODEX_HOME` projection. |
 | `capd accounts codex quota [account-id\|auto] [--raw]` | Fetch ChatGPT backend quota for an imported Codex account and update the local quota snapshot. `auto` uses the same conservative quota scoring rule as account-aware routing. Defaults to a safe summary; `--raw` prints backend usage JSON for debugging. |
-| `capd accounts codex smoke [--json] [--quota] [--require-fresh-quota] [--require-all-fresh-quota] [--require-secret-backend <file\|native>]` | Verify imported accounts, SecretStore readability, per-account projection, auth file permissions, auto-route account selection, and optionally quota refresh without printing token material. JSON includes `autoRoute.quotaState` as `fresh`, `stale`, or `missing`, plus per-account `secretBackendOk`, `secretReadable`, `quotaState`, `quotaFresh`, and `quotaCheckedAt`. `--require-fresh-quota` fails unless auto-route selection is backed by fresh cached quota; `--require-all-fresh-quota` fails unless every imported account has fresh cached quota; `--require-secret-backend` fails unless the active SecretStore backend matches. |
+| `capd accounts codex smoke [--json] [--quota] [--require-fresh-quota] [--require-all-fresh-quota] [--require-secret-backend <file\|native>]` | Verify imported accounts, SecretStore readability, per-account projection, auth file permissions, auto-route account selection, and optionally quota refresh without printing token material. JSON includes `autoRoute.accountId` and `autoRoute.quotaState` as `fresh`, `stale`, or `missing`, plus per-account `secretBackendOk`, `secretReadable`, `quotaState`, `quotaFresh`, and `quotaCheckedAt`. `--require-fresh-quota` fails unless auto-route selection is backed by fresh cached quota; `--require-all-fresh-quota` fails unless every imported account has fresh cached quota; `--require-secret-backend` fails unless the active SecretStore backend matches. |
 
 The import stores token material in `~/.capd/secrets/codex/*.json` with mode
 0600. SQLite stores only account metadata plus a `secret_ref`; access tokens,
@@ -163,7 +163,7 @@ No params. → `{"agents": [{"id", "name", "bin", "version", "available", "capab
 Ask capd to pick an installed agent. Params mirror route signals:
 `{"prompt", "attachments", "accountId", "model", "effort", "capabilities", "prefer", "requireFreshQuota"}`.
 
-→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"quotaState": "fresh", "score": 12}, "reason": "matched capabilities: effort, review"}`
+→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"accountId": "codex-acct", "quotaState": "fresh", "score": 12}, "reason": "matched capabilities: effort, review"}`
 
 When `accountId` is present, routing is account-aware and currently selects
 Codex only, because imported account runtimes are Codex-specific. Use
@@ -172,8 +172,9 @@ scoring: fresh cached primary quota uses the actual usage percent, while missing
 quota or rows older than 30 minutes receive a conservative unknown score until
 `accounts/quota` or `agents/usage` refreshes them. Set `requireFreshQuota:true`
 with `accountId:"auto"` to fail instead of routing on missing or stale quota.
-When account routing is in play, `accountRoute` reports the score plus
-`quotaState` (`fresh`, `stale`, or `missing`) without exposing token material.
+When account routing is in play, `accountRoute` reports the selected
+`accountId`, score, and `quotaState` (`fresh`, `stale`, or `missing`) without
+exposing token material.
 
 ### `agents/usage`
 
@@ -231,7 +232,8 @@ or local filesystem paths.
 Runs a safe local smoke check for imported Codex accounts: verifies SecretStore
 backend matching, credential readability, per-account runtime projection,
 private `auth.json`, projection marker integrity, cached quota freshness, and
-auto-route evidence. It does not refresh remote quota. The response never
+auto-route evidence including the selected `autoRoute.accountId`. It does not
+refresh remote quota. The response never
 returns token material, `secret_ref`, raw auth JSON, or local filesystem paths.
 
 ### `accounts/quota`

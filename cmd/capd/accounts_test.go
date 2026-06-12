@@ -143,6 +143,9 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if row.ID != "codex-test" || !row.Current || !row.SecretBackendOK || !row.CredentialReadable || !row.RuntimeReady || !row.AuthJSONPrivate || !row.ProjectionMarkerOK || row.QuotaState != protocol.AccountQuotaStateFresh || !row.QuotaFresh {
 		t.Fatalf("row = %+v", row)
 	}
+	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateFresh {
+		t.Fatalf("auto route = %+v", result.AutoRoute)
+	}
 	text := out.String()
 	for _, leaked := range []string{token, "access-secret", "refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
 		if strings.Contains(text, leaked) {

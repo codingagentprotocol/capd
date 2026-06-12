@@ -608,7 +608,7 @@ func TestAgentsRouteWithAccountRequiresCodex(t *testing.T) {
 	if routed.Agent.ID != "codex" || !strings.Contains(routed.Reason, "accountId") {
 		t.Fatalf("route = %+v", routed)
 	}
-	if routed.AccountRoute == nil || routed.AccountRoute.QuotaState != protocol.AccountQuotaStateMissing || routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent != nil {
+	if routed.AccountRoute == nil || routed.AccountRoute.AccountID != "codex-test" || routed.AccountRoute.QuotaState != protocol.AccountQuotaStateMissing || routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent != nil {
 		t.Fatalf("account route = %+v", routed.AccountRoute)
 	}
 }
@@ -631,7 +631,7 @@ func TestAgentsRouteAutoAccountChoosesLowestCachedQuota(t *testing.T) {
 	if routed.Agent.ID != "codex" || routed.AccountID != "codex-low" {
 		t.Fatalf("route = %+v", routed)
 	}
-	if routed.AccountRoute == nil || routed.AccountRoute.QuotaState != protocol.AccountQuotaStateFresh || !routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 10 {
+	if routed.AccountRoute == nil || routed.AccountRoute.AccountID != "codex-low" || routed.AccountRoute.QuotaState != protocol.AccountQuotaStateFresh || !routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 10 {
 		t.Fatalf("account route = %+v", routed.AccountRoute)
 	}
 	if !strings.Contains(routed.Reason, "auto account codex-low") {
@@ -659,7 +659,7 @@ func TestAgentsRouteAutoAccountRequireFreshQuota(t *testing.T) {
 		AccountID:         protocol.AccountAuto,
 		RequireFreshQuota: true,
 	}), &routed)
-	if routed.AccountID != "codex-test" || routed.AccountRoute == nil || !routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 7 {
+	if routed.AccountID != "codex-test" || routed.AccountRoute == nil || routed.AccountRoute.AccountID != "codex-test" || !routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 7 {
 		t.Fatalf("route = %+v", routed)
 	}
 }
@@ -683,7 +683,7 @@ func TestAgentsRouteAutoAccountIgnoresStaleLowQuota(t *testing.T) {
 	if routed.Agent.ID != "codex" || routed.AccountID != "codex-fresh" {
 		t.Fatalf("route = %+v", routed)
 	}
-	if routed.AccountRoute == nil || routed.AccountRoute.QuotaState != protocol.AccountQuotaStateFresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 20 {
+	if routed.AccountRoute == nil || routed.AccountRoute.AccountID != "codex-fresh" || routed.AccountRoute.QuotaState != protocol.AccountQuotaStateFresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 20 {
 		t.Fatalf("account route = %+v", routed.AccountRoute)
 	}
 	if !strings.Contains(routed.Reason, "auto account codex-fresh primary 20%") {
@@ -1144,7 +1144,7 @@ func TestAccountsCheckReturnsSafeSmokeEvidence(t *testing.T) {
 	if row.ID != "codex-test" || !row.Current || !row.SecretBackendOK || !row.CredentialReadable || !row.RuntimeReady || !row.AuthJSONPrivate || !row.ProjectionMarkerOK || row.QuotaState != protocol.AccountQuotaStateFresh || !row.QuotaFresh || row.PrimaryUsedPercent == nil || *row.PrimaryUsedPercent != 14 {
 		t.Fatalf("row = %+v", row)
 	}
-	if result.AutoRoute == nil || result.AutoRoute.QuotaState != protocol.AccountQuotaStateFresh || !result.AutoRoute.Fresh {
+	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateFresh || !result.AutoRoute.Fresh {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
 	profileHome := filepath.Join(s.opts.RuntimeRoot, codexauth.Provider, "codex-test")

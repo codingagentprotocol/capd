@@ -115,6 +115,7 @@ type AgentRouteResult struct {
 }
 
 type AccountRouteEvidence struct {
+	AccountID          string   `json:"accountId,omitempty"`
 	Score              float64  `json:"score"`
 	QuotaState         string   `json:"quotaState"`
 	Fresh              bool     `json:"fresh"`
