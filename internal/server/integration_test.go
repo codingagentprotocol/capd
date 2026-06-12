@@ -1317,6 +1317,26 @@ func TestAccountsCheckReturnsSafeSmokeEvidence(t *testing.T) {
 
 func TestAccountsCheckCanRefreshQuotaAndEnforceReadiness(t *testing.T) {
 	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.Email = ""
+	acc.AccountID = ""
+	acc.Plan = ""
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.opts.Secrets.Put(context.Background(), "codex-test", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "test-token",
+		AccountID:   "acct_test",
+		Email:       "refreshed@example.com",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"test-token","account_id":"acct_test"}}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
 	ref, err := s.opts.Secrets.Put(context.Background(), "codex-low", secret.Bundle{
 		Provider:    codexauth.Provider,
 		AuthMode:    "oauth",
@@ -1375,6 +1395,9 @@ func TestAccountsCheckCanRefreshQuotaAndEnforceReadiness(t *testing.T) {
 	}
 	if seen["Bearer test-token"] != "acct_test" || seen["Bearer low-token"] != "acct_low" {
 		t.Fatalf("headers = %+v", seen)
+	}
+	if result.Accounts[1].Email != "refreshed@example.com" {
+		t.Fatalf("refreshed account evidence = %+v", result.Accounts[1])
 	}
 	for _, row := range result.Accounts {
 		if !row.QuotaFresh || row.QuotaState != protocol.AccountQuotaStateFresh {

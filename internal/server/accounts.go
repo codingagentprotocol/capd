@@ -298,6 +298,13 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		if _, perr := s.refreshAccountQuota(ctx, protocol.AccountsQuotaParams{Provider: provider, AccountID: protocol.AccountAll}); perr != nil {
 			return protocol.AccountsCheckResult{}, protocol.NewError(perr.Code, "refresh quota: %s", perr.Message)
 		}
+		accounts, err = s.opts.Accounts.ListAccounts(provider)
+		if err != nil {
+			return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "list refreshed accounts: %v", err)
+		}
+		sort.Slice(accounts, func(i, j int) bool {
+			return accounts[i].ID < accounts[j].ID
+		})
 	}
 	result := protocol.AccountsCheckResult{
 		Provider:         provider,
