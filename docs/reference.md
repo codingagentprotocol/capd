@@ -104,7 +104,7 @@ the file backend.
 | Command | Meaning |
 |---------|---------|
 | `capd accounts list [--json]` | List imported account metadata across all providers; provider-scoped current accounts are marked with `*`; quota state is reported as `fresh`, `stale`, or `missing`. |
-| `capd accounts check [--provider codex] [--json] [--refresh-quota] [--require-multiple] [--require-fresh-quota] [--require-all-fresh-quota] [--require-secret-backend <file\|native>]` | Requires a running daemon (`capd start`). Optionally refresh every imported Codex quota through daemon `accounts/quota`, then call the daemon's `accounts/check` RPC and print safe smoke evidence without token material or runtime paths. Use `capd accounts codex smoke` for direct local checks that do not need the daemon. The `--require-*` flags turn the daemon-side check into a failing readiness gate for long tasks or CI; `--require-secret-backend` accepts only `file` or `native`. |
+| `capd accounts check [--provider codex] [--json] [--readiness] [--refresh-quota] [--require-multiple] [--require-fresh-quota] [--require-all-fresh-quota] [--require-secret-backend <file\|native>]` | Requires a running daemon (`capd start`). Optionally refresh every imported Codex quota through daemon `accounts/quota`, then call the daemon's `accounts/check` RPC and print safe smoke evidence without token material or runtime paths. Use `capd accounts codex smoke` for direct local checks that do not need the daemon. `--readiness` is the recommended daemon-side gate for live Codex work: it enables quota refresh, multiple-account, fresh auto-route, all-fresh quota, and native SecretStore requirements by default. `--require-secret-backend` accepts only `file` or `native` and can override the readiness backend for intentional file-backend tests. |
 
 ### `capd accounts codex` — local Codex account control plane
 
@@ -265,6 +265,10 @@ reads cached quota only; set `refreshQuota:true` to refresh every imported Codex
 account first inside the daemon. The `require*` fields turn the same RPC into a
 failing readiness gate for multi-account checks, fresh auto-route quota, fresh
 quota on every checked account, and a specific SecretStore backend.
+`capd accounts check --readiness` is CLI shorthand for setting
+`refreshQuota:true`, `requireMultiple:true`, `requireFreshQuota:true`,
+`requireAllFreshQuota:true`, and `requireSecretBackend:"native"` unless a
+different `--require-secret-backend` is supplied.
 `quotaRefreshed:true` means the returned evidence follows a successful quota
 refresh in this same call. The response never returns token material,
 `secret_ref`, raw auth JSON, or local filesystem paths.

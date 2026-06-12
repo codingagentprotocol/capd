@@ -117,6 +117,16 @@ SecretStore smoke check that does not require the daemon, use
 			requireAllFreshQuota, _ := cmd.Flags().GetBool("require-all-fresh-quota")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			refreshQuota, _ := cmd.Flags().GetBool("refresh-quota")
+			readiness, _ := cmd.Flags().GetBool("readiness")
+			if readiness {
+				refreshQuota = true
+				requireMultiple = true
+				requireFreshQuota = true
+				requireAllFreshQuota = true
+				if strings.TrimSpace(requireSecretBackend) == "" {
+					requireSecretBackend = secret.BackendNative
+				}
+			}
 			requireSecretBackend, err := secret.NormalizeBackend(requireSecretBackend)
 			if err != nil {
 				return err
@@ -177,6 +187,7 @@ SecretStore smoke check that does not require the daemon, use
 	checkCmd.Flags().Bool("require-all-fresh-quota", false, "fail unless every checked account has fresh cached quota")
 	checkCmd.Flags().String("require-secret-backend", "", "fail unless daemon account check uses this SecretStore backend")
 	checkCmd.Flags().Bool("refresh-quota", false, "refresh every imported Codex account quota through the daemon before checking")
+	checkCmd.Flags().Bool("readiness", false, "run the daemon-side Codex readiness gate: refresh quota, require multiple accounts, fresh auto-route quota, all fresh quotas, and native SecretStore by default")
 	checkCmd.Flags().Bool("json", false, "print accounts/check result as JSON without token material")
 
 	cmd.AddCommand(listCmd, checkCmd, newCodexAccountsCmd())

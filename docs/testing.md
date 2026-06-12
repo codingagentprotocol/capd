@@ -76,7 +76,7 @@ CAPD_SECRET_BACKEND=native capd start
 
 capd health --json
 capd accounts check --json
-capd accounts check --refresh-quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
+capd accounts check --readiness
 capd agents usage codex --account auto
 capd agents route --account auto --require-fresh-quota
 capd run --agent codex --account auto --require-fresh-quota "say ready"
@@ -126,13 +126,14 @@ running with `capd start` in another terminal before invoking it. Unlike
 `--refresh-quota` is set; it checks cached quota freshness, SecretStore
 readability, runtime projection, and auto-route evidence without returning
 runtime paths or token material.
-Use `capd accounts check --refresh-quota` when you want a single daemon-side
+Use `capd accounts check --readiness` when you want a single daemon-side
 readiness gate to refresh every imported Codex account through `accounts/quota`
 before checking cached freshness, without printing raw backend usage JSON.
-Use its `--require-*` flags as a daemon-side readiness gate: the command exits
-non-zero when too few accounts are imported, auto-route quota is stale or
-missing, any checked account lacks fresh cached quota, or the daemon is using a
-different SecretStore backend than expected.
+It exits non-zero when too few accounts are imported, auto-route quota is stale
+or missing, any checked account lacks fresh cached quota, or the daemon is not
+using the expected native SecretStore backend. Override that backend with
+`--require-secret-backend file` only when intentionally testing the file
+backend.
 The Web Console's `就绪门禁` button applies the same daemon-side
 `accounts/check` readiness gate, with an optional native SecretStore
 requirement. It asks the daemon to refresh every imported Codex account before

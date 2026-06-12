@@ -104,6 +104,7 @@ func TestAccountsCheckHelpExplainsDaemonRequirement(t *testing.T) {
 		"daemon",
 		"capd start",
 		"capd accounts codex smoke",
+		"--readiness",
 	} {
 		if !strings.Contains(text, needle) {
 			t.Fatalf("help missing %q: %s", needle, text)
@@ -318,6 +319,120 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	for _, leaked := range []string{token, "access-secret", "refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
 		if strings.Contains(err.Error(), leaked) || strings.Contains(out.String(), leaked) {
 			t.Fatalf("accounts check gate leaked %q: err=%v out=%s", leaked, err, out.String())
+		}
+	}
+}
+
+func TestAccountsCheckReadinessShortcutSetsDaemonGateParams(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	token := "tok-readiness-shortcut"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	accounts, secrets := seedCodexAccount(t)
+	defer accounts.Close()
+	ref, err := secrets.Put(context.Background(), "codex-alt", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "alt-access-secret",
+		AccountID:   "acct_alt",
+		Email:       "alt@example.com",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"alt-access-secret"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-alt",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "alt@example.com",
+		AccountID: "acct_alt",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var quotaCalls atomic.Int32
+	quotaBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		quotaCalls.Add(1)
+		used := 6
+		if r.Header.Get("Authorization") == "Bearer alt-access-secret" {
+			used = 3
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": "team",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": used},
+			},
+			"debug": "backend-secret",
+		})
+	}))
+	defer quotaBackend.Close()
+	port := freeTCPPort(t)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", strconv.Itoa(port))
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	s := server.New(server.Options{
+		Host: "127.0.0.1", Port: port, Token: token, Version: "it",
+		Accounts: accounts, Secrets: secrets, RuntimeRoot: filepath.Join(home, "runtimes"),
+		CodexQuotaBaseURL: quotaBackend.URL,
+		Log:               slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	go func() { errCh <- s.Run(ctx) }()
+	waitForHealthz(t, port)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("server shutdown: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("server did not shut down")
+		}
+	})
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--readiness"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `secret backend = "file", want "native"`) {
+		t.Fatalf("err = %v out=%s", err, out.String())
+	}
+	if quotaCalls.Load() != 0 {
+		t.Fatalf("readiness should fail backend preflight before quota calls, got %d", quotaCalls.Load())
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--json", "--readiness", "--require-secret-backend", secret.BackendFile})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if quotaCalls.Load() != 2 {
+		t.Fatalf("quota calls = %d", quotaCalls.Load())
+	}
+	var result protocol.AccountsCheckResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.CheckedAccounts != 2 || !result.QuotaRefreshed || result.SecretBackend != secret.BackendFile || result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-alt" || !result.AutoRoute.Fresh {
+		t.Fatalf("result = %+v", result)
+	}
+	for _, row := range result.Accounts {
+		if !row.QuotaFresh || row.QuotaState != protocol.AccountQuotaStateFresh {
+			t.Fatalf("row = %+v", row)
+		}
+	}
+	for _, leaked := range []string{token, "access-secret", "alt-access-secret", "refresh-secret", "backend-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts check readiness leaked %q: %s", leaked, out.String())
 		}
 	}
 }

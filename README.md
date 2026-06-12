@@ -155,7 +155,7 @@ CAPD_SECRET_BACKEND=native capd doctor --json --fail --require-secret-backend na
 CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
 capd health --json           # confirm daemon /healthz before CAP checks
 capd accounts check --json   # daemon-side accounts/check smoke evidence
-capd accounts check --refresh-quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
+capd accounts check --readiness # daemon-side multi-account readiness gate
 capd agents route --account auto --require-fresh-quota
 ```
 
@@ -307,6 +307,10 @@ flowchart TB
 - `capd accounts check --json` exercises the running daemon's CAP
   `accounts/check` RPC and therefore requires `capd start`; `capd accounts
   codex smoke` performs a direct local CLI smoke check without the daemon.
+- `capd accounts check --readiness` is the daemon-side shortcut for live Codex
+  work: it refreshes quota, requires multiple accounts, requires fresh
+  auto-route and per-account quota evidence, and requires native SecretStore by
+  default.
 - The Web Console exposes the same daemon-side evidence with an `accounts/check`
   readiness gate for multi-account, fresh-quota, and optional native SecretStore
   checks; that gate can refresh quota for every imported Codex account before it
