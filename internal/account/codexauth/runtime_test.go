@@ -94,6 +94,76 @@ func TestRuntimeProjectorTightensExistingCodexHomePermissions(t *testing.T) {
 	assertMode(t, filepath.Join(codexHome, "auth.json"), 0o600)
 }
 
+func TestRemoveRuntimeProjectionDeletesOnlyMatchingCapdProjection(t *testing.T) {
+	dir := t.TempDir()
+	secrets := secret.NewFileStore(filepath.Join(dir, "secrets"))
+	ref, err := secrets.Put(context.Background(), "codex-acct", secret.Bundle{
+		Provider:    Provider,
+		AuthMode:    "oauth",
+		AccessToken: "access-secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc := account.Account{ID: "codex-acct", Provider: Provider, SecretRef: ref.String()}
+	projector := RuntimeProjector{Root: filepath.Join(dir, "runtimes"), Secrets: secrets}
+	profile, err := projector.Project(context.Background(), acc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(profile.CodexHome, "auth.json")); err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := RemoveRuntimeProjection(projector.Root, acc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !removed {
+		t.Fatal("projection was not removed")
+	}
+	if _, err := os.Stat(profile.CodexHome); !os.IsNotExist(err) {
+		t.Fatalf("projection still exists err=%v", err)
+	}
+	removed, err = RemoveRuntimeProjection(projector.Root, acc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed {
+		t.Fatal("missing projection reported as removed")
+	}
+}
+
+func TestRemoveRuntimeProjectionRejectsMarkerMismatch(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "runtimes")
+	codexHome := filepath.Join(root, Provider, "codex-acct")
+	if err := os.MkdirAll(codexHome, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(codexHome, "auth.json"), []byte("token-secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	badMarker := []byte(`{"managedBy":"someone-else","provider":"codex","account":"codex-acct"}`)
+	if err := os.WriteFile(filepath.Join(codexHome, ".capd_projection.json"), badMarker, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := RemoveRuntimeProjection(root, account.Account{ID: "codex-acct", Provider: Provider})
+	if err == nil || !strings.Contains(err.Error(), "runtime projection marker mismatch") {
+		t.Fatalf("err = %v", err)
+	}
+	if removed {
+		t.Fatal("mismatched projection reported as removed")
+	}
+	if _, err := os.Stat(filepath.Join(codexHome, "auth.json")); err != nil {
+		t.Fatalf("projection should not be removed: %v", err)
+	}
+	if strings.Contains(err.Error(), "token-secret") {
+		t.Fatalf("error leaked token material: %v", err)
+	}
+}
+
 func TestRuntimeProjectorSanitizesAccountDirectory(t *testing.T) {
 	dir := t.TempDir()
 	secrets := secret.NewFileStore(filepath.Join(dir, "secrets"))

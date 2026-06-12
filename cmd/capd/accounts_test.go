@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -729,6 +730,19 @@ func TestCodexAccountsRemoveDeletesMetadataAndSecret(t *testing.T) {
 	}
 	accounts.Close()
 
+	var projectOut bytes.Buffer
+	projectCmd := newAccountsCmd()
+	projectCmd.SetArgs([]string{"codex", "project", "codex-test"})
+	projectCmd.SetOut(&projectOut)
+	projectCmd.SetErr(&projectOut)
+	if err := projectCmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	codexHome := strings.TrimSpace(projectOut.String())
+	if _, err := os.Stat(filepath.Join(codexHome, "auth.json")); err != nil {
+		t.Fatal(err)
+	}
+
 	var out bytes.Buffer
 	cmd := newAccountsCmd()
 	cmd.SetArgs([]string{"codex", "remove", "codex-test"})
@@ -748,6 +762,9 @@ func TestCodexAccountsRemoveDeletesMetadataAndSecret(t *testing.T) {
 	}
 	if _, err := secrets.Get(context.Background(), secret.Ref{Backend: secret.BackendFile, ID: "codex-test"}); err == nil {
 		t.Fatal("secret still readable after remove")
+	}
+	if _, err := os.Stat(codexHome); !os.IsNotExist(err) {
+		t.Fatalf("projection still exists err=%v", err)
 	}
 
 	home, err := daemon.Home()

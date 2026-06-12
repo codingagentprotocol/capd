@@ -78,6 +78,52 @@ func (rp RuntimeProjector) Project(ctx context.Context, acc account.Account) (Ru
 	}, nil
 }
 
+func RemoveRuntimeProjection(root string, acc account.Account) (bool, error) {
+	if root == "" {
+		return false, fmt.Errorf("runtime root is required")
+	}
+	dir := filepath.Join(root, Provider, safeID(acc.ID))
+	info, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !info.IsDir() {
+		return false, fmt.Errorf("runtime projection path is not a directory")
+	}
+	marker, err := readProjectionMarker(filepath.Join(dir, ".capd_projection.json"))
+	if err != nil {
+		return false, err
+	}
+	if marker.ManagedBy != "capd" || marker.Provider != Provider || marker.Account != acc.ID {
+		return false, fmt.Errorf("runtime projection marker mismatch")
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+type projectionMarker struct {
+	ManagedBy string `json:"managedBy"`
+	Provider  string `json:"provider"`
+	Account   string `json:"account"`
+}
+
+func readProjectionMarker(path string) (projectionMarker, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return projectionMarker{}, err
+	}
+	var marker projectionMarker
+	if err := json.Unmarshal(data, &marker); err != nil {
+		return projectionMarker{}, err
+	}
+	return marker, nil
+}
+
 func (rp RuntimeProjector) syncRefreshedAuth(ctx context.Context, ref secret.Ref, current secret.Bundle, authPath string) (secret.Bundle, bool) {
 	projected, err := readAuthJSON(authPath)
 	if err != nil {

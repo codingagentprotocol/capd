@@ -268,6 +268,13 @@ func newCodexAccountsCmd() *cobra.Command {
 			if err := secret.EnsureRefBackend(secrets, ref); err != nil {
 				return err
 			}
+			home, err := daemon.Home()
+			if err != nil {
+				return err
+			}
+			if _, err := codexauth.RemoveRuntimeProjection(filepath.Join(home, "runtimes"), acc); err != nil {
+				return err
+			}
 			if err := secrets.Delete(cmd.Context(), ref); err != nil {
 				return err
 			}
