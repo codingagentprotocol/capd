@@ -63,6 +63,9 @@ func newAgentsCmd() *cobra.Command {
 			}
 			result, err := routeCLI(discovery.Discover(cmd.Context(), daemon.Registry()), accounts, params)
 			if err != nil {
+				if params.JSON {
+					printRouteCLIJSONError(cmd, err)
+				}
 				return err
 			}
 			if params.JSON {
@@ -156,6 +159,38 @@ func routeCLIText(result protocol.AgentRouteResult) string {
 		parts = append(parts, result.Reason)
 	}
 	return strings.Join(parts, "\t") + "\n"
+}
+
+type routeCLIErrorResult struct {
+	OK        bool                          `json:"ok"`
+	Error     string                        `json:"error"`
+	Data      *protocol.AgentRouteErrorData `json:"data,omitempty"`
+	NextSteps []string                      `json:"nextSteps,omitempty"`
+}
+
+type routeCLIFreshQuotaFailure struct {
+	message   string
+	data      protocol.AgentRouteErrorData
+	nextSteps []string
+}
+
+func (e *routeCLIFreshQuotaFailure) Error() string {
+	return e.message
+}
+
+func printRouteCLIJSONError(cmd *cobra.Command, err error) {
+	result := routeCLIErrorResult{
+		OK:    false,
+		Error: err.Error(),
+	}
+	var freshErr *routeCLIFreshQuotaFailure
+	if errors.As(err, &freshErr) {
+		result.Error = "auto route does not have fresh cached quota"
+		result.Data = &freshErr.data
+		result.NextSteps = freshErr.nextSteps
+	}
+	out, _ := json.MarshalIndent(result, "", "  ")
+	fmt.Fprintln(cmd.OutOrStdout(), string(out))
 }
 
 func routeEvidenceText(route protocol.AccountRouteEvidence) string {
@@ -381,9 +416,13 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 
 func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error {
 	lines := []string{"auto route does not have fresh cached quota"}
+	data := protocol.AgentRouteErrorData{}
 	if accounts != nil && acc.ID != "" {
-		lines = append(lines, "route: "+routeEvidenceText(account.QuotaRouteEvidence(accounts, acc)))
+		route := account.QuotaRouteEvidence(accounts, acc)
+		data.AccountRoute = &route
+		lines = append(lines, "route: "+routeEvidenceText(route))
 		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil && len(candidates) > 0 {
+			data.RouteCandidates = candidates
 			parts := make([]string, 0, len(candidates))
 			for _, candidate := range candidates {
 				parts = append(parts, candidate.AccountID+" "+routeEvidenceText(candidate))
@@ -392,13 +431,19 @@ func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error
 		}
 	}
 	if backend := routeReadinessBackendHint(acc); backend != "" {
+		data.SecretBackend = backend
 		lines = append(lines, "secret backend: "+backend)
 	}
-	lines = append(lines,
-		"next: refresh and verify daemon-side readiness with: "+accountsCheckReadinessCommand(routeReadinessBackendHint(acc)),
-		"next: preview routing with: capd agents route --account auto --require-fresh-quota --json",
-	)
-	return fmt.Errorf("%s", strings.Join(lines, "\n"))
+	nextSteps := []string{
+		"refresh and verify daemon-side readiness with: " + accountsCheckReadinessCommand(routeReadinessBackendHint(acc)),
+		"preview routing with: capd agents route --account auto --require-fresh-quota --json",
+	}
+	lines = append(lines, "next: "+nextSteps[0], "next: "+nextSteps[1])
+	return &routeCLIFreshQuotaFailure{
+		message:   strings.Join(lines, "\n"),
+		data:      data,
+		nextSteps: nextSteps,
+	}
 }
 
 func routeReadinessBackendHint(acc account.Account) string {

@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/cobra"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
@@ -133,6 +137,59 @@ func TestRouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 	for _, leaked := range []string{"must-not-return", "secretRef", "rawJson", "RawJSON"} {
 		if strings.Contains(err.Error(), leaked) {
 			t.Fatalf("error leaked %q: %s", leaked, err.Error())
+		}
+	}
+}
+
+func TestRouteCLIJSONFreshQuotaFailurePrintsSafePartialEvidence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	staleAt := time.Now().Add(-account.QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{
+		AccountID:          "codex-test",
+		PrimaryUsedPercent: 2,
+		CheckedAt:          staleAt,
+		RawJSON:            `{"token":"must-not-return"}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	infos := []protocol.AgentInfo{
+		{ID: "codex", Available: true, Capabilities: protocol.AgentCapabilities{Usage: true, Resume: true}},
+	}
+	_, err := routeCLI(infos, accounts, routeCLIParams{
+		AccountID:    protocol.AccountAuto,
+		RequireFresh: true,
+		JSON:         true,
+	})
+	if err == nil {
+		t.Fatal("expected fresh quota error")
+	}
+
+	var out bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	printRouteCLIJSONError(cmd, err)
+
+	var got routeCLIErrorResult
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("decode json: %v output=%s", err, out.String())
+	}
+	if got.OK || got.Error != "auto route does not have fresh cached quota" || got.Data == nil {
+		t.Fatalf("json error = %+v", got)
+	}
+	if got.Data.AccountRoute == nil || got.Data.AccountRoute.AccountID != "codex-test" || got.Data.AccountRoute.SecretBackend != secret.BackendFile || got.Data.AccountRoute.QuotaState != protocol.AccountQuotaStateStale || got.Data.AccountRoute.Fresh {
+		t.Fatalf("account route = %+v", got.Data.AccountRoute)
+	}
+	if len(got.Data.RouteCandidates) != 1 || got.Data.RouteCandidates[0].AccountID != "codex-test" || got.Data.RouteCandidates[0].SecretBackend != secret.BackendFile {
+		t.Fatalf("route candidates = %+v", got.Data.RouteCandidates)
+	}
+	if got.Data.SecretBackend != secret.BackendFile || len(got.NextSteps) != 2 || strings.Contains(strings.Join(got.NextSteps, "\n"), "next:") {
+		t.Fatalf("next steps/backend = backend:%q steps:%+v", got.Data.SecretBackend, got.NextSteps)
+	}
+	for _, leaked := range []string{"must-not-return", "secretRef", "rawJson", "RawJSON"} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("json leaked %q: %s", leaked, out.String())
 		}
 	}
 }
