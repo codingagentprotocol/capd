@@ -381,15 +381,19 @@ function renderReadinessDiagnosticResult({ result, route, routeError = "", readi
 }
 
 function readinessSummaryText({ result, accounts, freshCount, autoRoute, route, requireNativeSecret = false }) {
-  const checked = result.checkedAccounts || 0;
-  const required = 2;
-  const missing = Math.max(0, required - checked);
-  const stale = accounts.filter(a => a.quotaState === "stale").length;
-  const missingQuota = accounts.filter(a => !a.quotaState || a.quotaState === "missing").length;
-  const secretBackend = result.secretBackend || "unknown";
+  const summary = result.summary || {};
+  const checked = summary.checkedAccounts ?? result.checkedAccounts ?? 0;
+  const required = summary.requiredAccounts || 2;
+  const missing = summary.missingAccounts ?? Math.max(0, required - checked);
+  const stale = summary.staleQuotaAccounts ?? accounts.filter(a => a.quotaState === "stale").length;
+  const missingQuota = summary.missingQuotaAccounts ?? accounts.filter(a => !a.quotaState || a.quotaState === "missing").length;
+  const fresh = summary.freshQuotaAccounts ?? freshCount;
+  const secretBackend = summary.secretBackend || result.secretBackend || "unknown";
   const routeOK = !!(route && route.accountRoute);
-  const secretOK = !requireNativeSecret || secretBackend === "native";
-  return `summary ready ${missing === 0 && accounts.length > 0 && freshCount === accounts.length && !!(autoRoute && autoRoute.fresh) && routeOK && secretOK} accounts ${checked}/${required} missing ${missing} quota fresh ${freshCount} stale ${stale} missing quota ${missingQuota} auto fresh ${!!(autoRoute && autoRoute.fresh)} route decision ${routeOK} secret ok ${secretOK}`;
+  const secretOK = typeof summary.secretBackendOk === "boolean" ? summary.secretBackendOk : (!requireNativeSecret || secretBackend === "native");
+  const autoFresh = typeof summary.autoRouteFresh === "boolean" ? summary.autoRouteFresh : !!(autoRoute && autoRoute.fresh);
+  const ready = missing === 0 && checked > 0 && fresh === checked && autoFresh && routeOK && secretOK;
+  return `summary ready ${ready} accounts ${checked}/${required} missing ${missing} quota fresh ${fresh} stale ${stale} missing quota ${missingQuota} auto fresh ${autoFresh} route decision ${routeOK} secret ok ${secretOK}`;
 }
 
 function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError = "", requireNativeSecret = false }) {

@@ -64,6 +64,7 @@ type probeDataSummary struct {
 	SecretBackend         string `json:"secretBackend,omitempty"`
 	RequiredSecretBackend string `json:"requiredSecretBackend,omitempty"`
 	SecretBackendOK       bool   `json:"secretBackendOk"`
+	QuotaRefreshed        bool   `json:"quotaRefreshed,omitempty"`
 }
 
 type probeDataCheck struct {
@@ -171,10 +172,12 @@ func probeDataSummaryFor(result probeDataResult, readiness bool, requireSecretBa
 	accounts := []protocol.AccountCheckEvidence{}
 	secretBackend := ""
 	checked := 0
+	accountSummary := protocol.AccountsCheckSummary{}
 	if result.AccountsCheck != nil {
 		accounts = result.AccountsCheck.Accounts
 		secretBackend = result.AccountsCheck.SecretBackend
 		checked = result.AccountsCheck.CheckedAccounts
+		accountSummary = result.AccountsCheck.Summary
 	}
 	if secretBackend == "" {
 		if raw, ok := result.Health["secretBackend"].(string); ok {
@@ -201,21 +204,47 @@ func probeDataSummaryFor(result probeDataResult, readiness bool, requireSecretBa
 	summary := probeDataSummary{
 		Ready:                 result.OK,
 		Readiness:             readiness,
-		CheckedAccounts:       checked,
-		RequiredAccounts:      2,
-		MissingAccounts:       missingAccounts,
-		FreshQuotaAccounts:    freshQuota,
-		StaleQuotaAccounts:    staleQuota,
-		MissingQuotaAccounts:  missingQuota,
-		AutoRouteFresh:        result.AutoRoute != nil && result.AutoRoute.Fresh,
-		RouteDecisionOK:       result.RouteDecision != nil,
-		RouteCandidates:       len(result.RouteCandidates),
-		SecretBackend:         secretBackend,
-		RequiredSecretBackend: requireSecretBackend,
-		SecretBackendOK:       requireSecretBackend == "" || secretBackend == requireSecretBackend,
+		CheckedAccounts:       accountSummary.CheckedAccounts,
+		RequiredAccounts:      accountSummary.RequiredAccounts,
+		MissingAccounts:       accountSummary.MissingAccounts,
+		FreshQuotaAccounts:    accountSummary.FreshQuotaAccounts,
+		StaleQuotaAccounts:    accountSummary.StaleQuotaAccounts,
+		MissingQuotaAccounts:  accountSummary.MissingQuotaAccounts,
+		AutoRouteAccountID:    accountSummary.AutoRouteAccountID,
+		AutoRouteFresh:        accountSummary.AutoRouteFresh,
+		RouteCandidates:       accountSummary.RouteCandidates,
+		SecretBackend:         accountSummary.SecretBackend,
+		RequiredSecretBackend: accountSummary.RequiredSecretBackend,
+		SecretBackendOK:       accountSummary.SecretBackendOK,
+		QuotaRefreshed:        accountSummary.QuotaRefreshed,
+	}
+	if summary.RequiredAccounts == 0 {
+		summary.CheckedAccounts = checked
+		summary.RequiredAccounts = 2
+		summary.MissingAccounts = missingAccounts
+		summary.FreshQuotaAccounts = freshQuota
+		summary.StaleQuotaAccounts = staleQuota
+		summary.MissingQuotaAccounts = missingQuota
+		summary.SecretBackend = secretBackend
+		summary.RequiredSecretBackend = requireSecretBackend
+		summary.SecretBackendOK = requireSecretBackend == "" || secretBackend == requireSecretBackend
+	}
+	summary.RouteDecisionOK = result.RouteDecision != nil
+	if len(result.RouteCandidates) > 0 {
+		summary.RouteCandidates = len(result.RouteCandidates)
 	}
 	if result.AutoRoute != nil {
 		summary.AutoRouteAccountID = result.AutoRoute.AccountID
+		summary.AutoRouteFresh = result.AutoRoute.Fresh
+	}
+	if summary.SecretBackend == "" {
+		summary.SecretBackend = secretBackend
+	}
+	if summary.RequiredSecretBackend == "" {
+		summary.RequiredSecretBackend = requireSecretBackend
+	}
+	if requireSecretBackend != "" {
+		summary.SecretBackendOK = summary.SecretBackend == requireSecretBackend
 	}
 	return summary
 }

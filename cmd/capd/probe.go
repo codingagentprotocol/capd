@@ -100,6 +100,7 @@ type probeDataResponse struct {
 		RouteCandidates      int    `json:"routeCandidates"`
 		SecretBackend        string `json:"secretBackend"`
 		SecretBackendOK      bool   `json:"secretBackendOk"`
+		QuotaRefreshed       bool   `json:"quotaRefreshed"`
 	} `json:"summary"`
 	Health struct {
 		Version         string `json:"version"`

@@ -262,6 +262,9 @@ func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
 	if got.Summary.Ready || !got.Summary.Readiness || got.Summary.CheckedAccounts != 1 || got.Summary.MissingAccounts != 1 || got.Summary.FreshQuotaAccounts != 1 || got.Summary.RequiredSecretBackend != "file" || got.Summary.SecretBackend != "file" || !got.Summary.SecretBackendOK {
 		t.Fatalf("partial summary = %+v", got.Summary)
 	}
+	if !got.Summary.QuotaRefreshed || got.Summary.QuotaRefreshed != got.AccountsCheck.Summary.QuotaRefreshed {
+		t.Fatalf("partial summary did not reuse accounts/check quota refresh evidence: probe=%+v accounts=%+v", got.Summary, got.AccountsCheck.Summary)
+	}
 	if len(got.Errors) == 0 || !strings.Contains(got.Errors[0].Message, "expected multiple Codex accounts") {
 		t.Fatalf("errors = %+v", got.Errors)
 	}
