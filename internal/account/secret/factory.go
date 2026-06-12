@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 )
 
 const (
@@ -18,6 +19,7 @@ func Open(root, backend string) (Store, error) {
 	if backend == "" {
 		backend = os.Getenv(EnvBackend)
 	}
+	backend = strings.TrimSpace(backend)
 	switch backend {
 	case "", BackendFile:
 		return NewFileStore(root), nil
