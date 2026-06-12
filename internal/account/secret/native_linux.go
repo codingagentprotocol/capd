@@ -82,6 +82,9 @@ func (st nativeStore) run(ctx context.Context, stdin []byte, args ...string) err
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
 	if out, err := cmd.CombinedOutput(); err != nil {
+		if stdin != nil {
+			return fmt.Errorf("%s %s: %w: command output omitted because secret stdin was provided", defaultSecretTool, safeArgs(args), err)
+		}
 		return fmt.Errorf("%s %s: %w%s", defaultSecretTool, safeArgs(args), err, safeCommandOutput(out))
 	}
 	return nil

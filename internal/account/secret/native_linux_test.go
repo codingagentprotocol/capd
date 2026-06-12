@@ -67,3 +67,42 @@ esac
 		t.Fatalf("store call = %s", calls)
 	}
 }
+
+func TestLinuxNativeStoreOmitsSecretStdinFromStoreErrors(t *testing.T) {
+	dir := t.TempDir()
+	toolPath := filepath.Join(dir, "secret-tool")
+	script := `#!/bin/sh
+set -eu
+case "$1" in
+  store)
+    cat >&2
+    exit 7
+    ;;
+  *)
+    exit 9
+    ;;
+esac
+`
+	if err := os.WriteFile(toolPath, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	st := nativeStore{tool: toolPath}
+	_, err := st.Put(context.Background(), "acct/error", Bundle{
+		Provider:     "codex",
+		AuthMode:     "oauth",
+		AccessToken:  "linux-access-secret",
+		RefreshToken: "linux-refresh-secret",
+	})
+	if err == nil {
+		t.Fatal("expected store failure")
+	}
+	text := err.Error()
+	for _, leaked := range []string{"linux-access-secret", "linux-refresh-secret"} {
+		if strings.Contains(text, leaked) {
+			t.Fatalf("store error leaked %q: %s", leaked, text)
+		}
+	}
+	if !strings.Contains(text, "command output omitted") {
+		t.Fatalf("store error missing omission note: %s", text)
+	}
+}
