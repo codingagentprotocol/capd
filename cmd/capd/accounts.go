@@ -346,6 +346,14 @@ func accountsCheckReadinessCommand(requireSecretBackend string) string {
 	return cmd + " --timeout 2m"
 }
 
+func accountsCheckReadinessCommandFromEnv() string {
+	backend, err := secret.NormalizeBackend(os.Getenv(secret.EnvBackend))
+	if err != nil {
+		backend = ""
+	}
+	return accountsCheckReadinessCommand(backend)
+}
+
 func accountsCheckHasSecretState(result protocol.AccountsCheckResult, state string) bool {
 	for _, row := range result.Accounts {
 		if row.SecretState == state {

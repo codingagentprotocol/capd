@@ -388,7 +388,7 @@ func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error
 		}
 	}
 	lines = append(lines,
-		"next: refresh and verify daemon-side readiness with: capd accounts check --json --readiness",
+		"next: refresh and verify daemon-side readiness with: "+accountsCheckReadinessCommandFromEnv(),
 		"next: preview routing with: capd agents route --account auto --require-fresh-quota --json",
 	)
 	return fmt.Errorf("%s", strings.Join(lines, "\n"))
