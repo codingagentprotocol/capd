@@ -68,6 +68,7 @@ type doctorReport struct {
 	Daemon     doctorDaemonReport  `json:"daemon"`
 	Agents     []doctorAgentReport `json:"agents"`
 	Codex      doctorCodexReport   `json:"codex"`
+	Checks     []doctorCheckReport `json:"checks"`
 	Issues     []string            `json:"issues,omitempty"`
 	NextSteps  []string            `json:"nextSteps,omitempty"`
 	CheckedAt  int64               `json:"checkedAt"`
@@ -116,6 +117,13 @@ type doctorCodexAccountReport struct {
 	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
 }
 
+type doctorCheckReport struct {
+	Name     string `json:"name"`
+	OK       bool   `json:"ok"`
+	Evidence string `json:"evidence"`
+	NextStep string `json:"nextStep,omitempty"`
+}
+
 func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, error) {
 	cfg := config.Load()
 	report := doctorReport{
@@ -136,6 +144,12 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	} else {
 		report.Daemon.OK = true
 	}
+	report.Checks = append(report.Checks, doctorCheckReport{
+		Name:     "daemon health",
+		OK:       report.Daemon.OK,
+		Evidence: doctorBoolEvidence(report.Daemon.OK, "daemon /healthz ok", "daemon /healthz failed"),
+		NextStep: doctorCheckNextStep(!report.Daemon.OK, "start the daemon with: capd start"),
+	})
 
 	infos := discovery.Discover(ctx, daemon.Registry())
 	for _, info := range infos {
@@ -154,6 +168,12 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		report.Issues = append(report.Issues, "Codex CLI is not available")
 		report.NextSteps = append(report.NextSteps, "install Codex CLI or put codex on PATH")
 	}
+	report.Checks = append(report.Checks, doctorCheckReport{
+		Name:     "Codex CLI",
+		OK:       report.Codex.CLIAvailable,
+		Evidence: doctorBoolEvidence(report.Codex.CLIAvailable, "codex CLI available", "codex CLI unavailable"),
+		NextStep: doctorCheckNextStep(!report.Codex.CLIAvailable, "install Codex CLI or put codex on PATH"),
+	})
 
 	accounts, secrets, err := openAccountDeps()
 	if err != nil {
@@ -165,6 +185,13 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		report.Issues = append(report.Issues, fmt.Sprintf("secret backend is %q, want %q", report.Codex.SecretBackend, opts.RequireSecretBackend))
 		report.NextSteps = append(report.NextSteps, fmt.Sprintf("set CAPD_SECRET_BACKEND=%s or pass --secret-backend %s for account commands", opts.RequireSecretBackend, opts.RequireSecretBackend))
 	}
+	secretOK := opts.RequireSecretBackend == "" || opts.RequireSecretBackend == report.Codex.SecretBackend
+	report.Checks = append(report.Checks, doctorCheckReport{
+		Name:     "SecretStore backend",
+		OK:       secretOK,
+		Evidence: fmt.Sprintf("secret backend %s", report.Codex.SecretBackend),
+		NextStep: doctorCheckNextStep(!secretOK, fmt.Sprintf("set CAPD_SECRET_BACKEND=%s or pass --secret-backend %s for account commands", opts.RequireSecretBackend, opts.RequireSecretBackend)),
+	})
 	current, err := accounts.CurrentAccount(codexauth.Provider)
 	if err != nil {
 		return doctorReport{}, err
@@ -184,6 +211,12 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		report.Issues = append(report.Issues, "multi-account readiness requires at least two imported Codex accounts")
 		report.NextSteps = append(report.NextSteps, doctorSecondImportNextStep(report.Daemon.OK))
 	}
+	report.Checks = append(report.Checks, doctorCheckReport{
+		Name:     "Codex multi-account import",
+		OK:       len(list) >= 2,
+		Evidence: fmt.Sprintf("imported %d Codex account(s)", len(list)),
+		NextStep: doctorCheckNextStep(len(list) < 2, doctorAccountImportCheckNextStep(len(list), report.Daemon.OK)),
+	})
 
 	for _, acc := range list {
 		row := doctorCodexAccountReport{
@@ -220,6 +253,13 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		report.Issues = append(report.Issues, "not every imported Codex account has fresh quota evidence")
 		report.NextSteps = append(report.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --readiness")
 	}
+	allQuotaFresh := len(list) > 0 && report.Codex.FreshQuotaAccounts == len(list)
+	report.Checks = append(report.Checks, doctorCheckReport{
+		Name:     "Codex quota freshness",
+		OK:       allQuotaFresh,
+		Evidence: fmt.Sprintf("fresh %d/%d, stale %d, missing %d", report.Codex.FreshQuotaAccounts, len(list), report.Codex.StaleQuotaAccounts, report.Codex.MissingQuotaAccounts),
+		NextStep: doctorCheckNextStep(!allQuotaFresh, doctorQuotaCheckNextStep(len(list), report.Daemon.OK)),
+	})
 	if len(list) > 0 {
 		route, err := account.SelectQuotaRouteAccount(accounts, codexauth.Provider)
 		if err != nil {
@@ -239,10 +279,35 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			}
 		}
 	}
+	autoRouteOK := report.Codex.AutoRouteAccountID != "" && report.Codex.AutoRouteFresh
+	autoRouteEvidence := "auto route missing"
+	if report.Codex.AutoRouteAccountID != "" {
+		autoRouteEvidence = fmt.Sprintf("auto route %s quota=%s fresh=%t", report.Codex.AutoRouteAccountID, report.Codex.AutoRouteQuotaState, report.Codex.AutoRouteFresh)
+	}
+	report.Checks = append(report.Checks, doctorCheckReport{
+		Name:     "Codex auto route freshness",
+		OK:       autoRouteOK,
+		Evidence: autoRouteEvidence,
+		NextStep: doctorCheckNextStep(!autoRouteOK, doctorRouteCheckNextStep(len(list), report.Daemon.OK)),
+	})
 	report.NextSteps = compactStrings(report.NextSteps)
 	report.Issues = compactStrings(report.Issues)
 	report.OK = len(report.Issues) == 0
 	return report, nil
+}
+
+func doctorBoolEvidence(ok bool, yes, no string) string {
+	if ok {
+		return yes
+	}
+	return no
+}
+
+func doctorCheckNextStep(include bool, step string) string {
+	if include {
+		return step
+	}
+	return ""
 }
 
 func doctorImportNextStep(daemonOK bool) string {
@@ -257,6 +322,27 @@ func doctorSecondImportNextStep(daemonOK bool) string {
 		return "import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-readiness"
 	}
 	return "start the daemon, import a second Codex account, then run: make live-codex-readiness"
+}
+
+func doctorAccountImportCheckNextStep(imported int, daemonOK bool) string {
+	if imported == 0 {
+		return doctorImportNextStep(daemonOK)
+	}
+	return doctorSecondImportNextStep(daemonOK)
+}
+
+func doctorQuotaCheckNextStep(imported int, daemonOK bool) string {
+	if imported == 0 {
+		return doctorImportNextStep(daemonOK)
+	}
+	return "refresh and verify daemon-side readiness with: capd accounts check --readiness"
+}
+
+func doctorRouteCheckNextStep(imported int, daemonOK bool) string {
+	if imported == 0 {
+		return doctorImportNextStep(daemonOK)
+	}
+	return "refresh quota and verify routing with: capd accounts check --readiness"
 }
 
 func printDoctorReport(cmd *cobra.Command, report doctorReport) {
@@ -305,6 +391,18 @@ func printDoctorReport(cmd *cobra.Command, report doctorReport) {
 				checkedAt = time.Unix(a.QuotaCheckedAt, 0).Format(time.RFC3339)
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%t\t%s\t%s\n", a.ID, current, a.Email, a.Plan, a.QuotaState, a.QuotaFresh, primary, checkedAt)
+		}
+		_ = w.Flush()
+	}
+	if len(report.Checks) > 0 {
+		w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
+		fmt.Fprintln(w, "CHECK\tSTATUS\tEVIDENCE\tNEXT_STEP")
+		for _, check := range report.Checks {
+			status := "fail"
+			if check.OK {
+				status = "pass"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", check.Name, status, check.Evidence, check.NextStep)
 		}
 		_ = w.Flush()
 	}

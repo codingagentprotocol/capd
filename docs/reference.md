@@ -56,6 +56,10 @@ time, and the same human-readable reason used by routing previews. The
 `codex.accounts` JSON array lists safe per-account quota evidence (id, email,
 current marker, plan, quota state, freshness, primary usage, checked time) and
 never includes SecretStore refs, token material, runtime paths, or raw auth JSON.
+The top-level `checks` array is a stable readiness checklist with
+`name`, `ok`, `evidence`, and optional `nextStep` fields for daemon health,
+Codex CLI availability, SecretStore backend, multi-account import, quota
+freshness, and auto-route freshness.
 When accounts are missing and the daemon is healthy, doctor next steps point to
 `capd accounts import` so the fix exercises the same CAP/WebSocket import path
 as web clients; the local `capd accounts codex import` remains a fallback when

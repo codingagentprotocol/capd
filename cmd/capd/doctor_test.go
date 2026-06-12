@@ -40,6 +40,19 @@ func TestDoctorJSONReportsMissingReadinessWithoutSecrets(t *testing.T) {
 	if got.Daemon.OK || got.Codex.ImportedAccounts != 0 {
 		t.Fatalf("report = %+v", got)
 	}
+	if len(got.Checks) == 0 {
+		t.Fatalf("missing readiness checks: %+v", got)
+	}
+	for _, want := range []doctorCheckReport{
+		{Name: "daemon health", OK: false, Evidence: "daemon /healthz failed", NextStep: "start the daemon with: capd start"},
+		{Name: "Codex multi-account import", OK: false, Evidence: "imported 0 Codex account(s)", NextStep: "after starting the daemon, import through CAP with: capd accounts import (local fallback: capd accounts codex import)"},
+		{Name: "Codex quota freshness", OK: false, Evidence: "fresh 0/0, stale 0, missing 0", NextStep: "after starting the daemon, import through CAP with: capd accounts import (local fallback: capd accounts codex import)"},
+		{Name: "Codex auto route freshness", OK: false, Evidence: "auto route missing", NextStep: "after starting the daemon, import through CAP with: capd accounts import (local fallback: capd accounts codex import)"},
+	} {
+		if !containsDoctorCheck(got.Checks, want) {
+			t.Fatalf("missing check %+v in %+v", want, got.Checks)
+		}
+	}
 	body := out.String()
 	for _, leaked := range []string{"tok-doctor-secret", home} {
 		if strings.Contains(body, leaked) {
@@ -76,7 +89,7 @@ func TestDoctorTextReturnsErrorWhenNotReady(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	text := out.String()
-	for _, want := range []string{"capd doctor: needs attention", "daemon:", "codex:", "issues:", "next steps:"} {
+	for _, want := range []string{"capd doctor: needs attention", "daemon:", "codex:", "CHECK", "daemon health", "fail", "issues:", "next steps:"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("doctor text missing %q: %s", want, text)
 		}
@@ -323,9 +336,26 @@ func TestDoctorReportsStaleAndMissingAccountQuota(t *testing.T) {
 	if !containsString(report.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --readiness") {
 		t.Fatalf("missing readiness next step: %+v", report.NextSteps)
 	}
+	if !containsDoctorCheck(report.Checks, doctorCheckReport{
+		Name:     "Codex quota freshness",
+		OK:       false,
+		Evidence: "fresh 1/3, stale 1, missing 1",
+		NextStep: "refresh and verify daemon-side readiness with: capd accounts check --readiness",
+	}) {
+		t.Fatalf("missing quota freshness check: %+v", report.Checks)
+	}
 }
 
 func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsDoctorCheck(values []doctorCheckReport, want doctorCheckReport) bool {
 	for _, value := range values {
 		if value == want {
 			return true
