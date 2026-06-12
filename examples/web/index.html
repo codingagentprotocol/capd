@@ -292,13 +292,33 @@ function lightweightAccountsResult(listResult, healthInfo = null) {
     quotaCheckedAt: (a.quota && a.quota.checkedAt) || 0,
     primaryUsedPercent: a.quota ? a.quota.primaryUsedPercent : undefined
   }));
+  const secretBackend = (healthInfo && healthInfo.secretBackend) || "";
   return {
     provider: "codex",
     checkedAccounts: accounts.length,
-    secretBackend: (healthInfo && healthInfo.secretBackend) || "",
+    secretBackend,
     quotaRefreshed: false,
     promptFree: true,
+    summary: lightweightAccountsSummary(accounts, secretBackend),
     accounts
+  };
+}
+
+function lightweightAccountsSummary(accounts, secretBackend) {
+  const checked = accounts.length;
+  const required = 2;
+  const fresh = accounts.filter(a => a.quotaFresh).length;
+  const stale = accounts.filter(a => a.quotaState === "stale").length;
+  const missingQuota = accounts.filter(a => !a.quotaState || a.quotaState === "missing").length;
+  return {
+    ready: false,
+    checkedAccounts: checked,
+    requiredAccounts: required,
+    missingAccounts: Math.max(0, required - checked),
+    freshQuotaAccounts: fresh,
+    staleQuotaAccounts: stale,
+    missingQuotaAccounts: missingQuota,
+    secretBackend
   };
 }
 
