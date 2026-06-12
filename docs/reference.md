@@ -50,12 +50,14 @@ Runs a read-only readiness preflight across daemon health, local agent
 discovery, imported Codex account count, cached quota freshness, auto-route
 freshness, and the active SecretStore backend. Use
 `--require-secret-backend native` to turn native SecretStore into an explicit
-readiness issue. Text output returns a non-zero exit code when readiness issues
-are found. `--json` prints safe machine-readable evidence and next steps without
-token material or local secret paths; add `--fail` when JSON output should also
-return non-zero on readiness issues. Auto-route evidence includes the selected
-account id, quota state, freshness, primary quota usage, routing score, checked
-time, and the same human-readable reason used by routing previews. The
+readiness issue. When the daemon is healthy, doctor also calls daemon-side
+`accounts/check` over CAP/WebSocket to confirm the same account evidence that
+the Web Console uses. Text output returns a non-zero exit code when readiness
+issues are found. `--json` prints safe machine-readable evidence and next steps
+without token material or local secret paths; add `--fail` when JSON output
+should also return non-zero on readiness issues. Auto-route evidence includes
+the selected account id, quota state, freshness, primary quota usage, routing
+score, checked time, and the same human-readable reason used by routing previews. The
 `codex.accounts` JSON array lists safe per-account quota evidence (id, email,
 current marker, plan, quota state, freshness, primary usage, checked time) and
 never includes SecretStore refs, token material, runtime paths, or raw auth JSON.

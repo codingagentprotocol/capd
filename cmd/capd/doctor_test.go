@@ -2,15 +2,21 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
+	"github.com/codingagentprotocol/capd/internal/server"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
@@ -177,6 +183,77 @@ func TestDoctorRecommendsDaemonImportWhenDaemonHealthy(t *testing.T) {
 	if containsString(report.NextSteps, "import a Codex account with: capd accounts codex import") {
 		t.Fatalf("old local-only next step should not be used when daemon is healthy: %+v", report.NextSteps)
 	}
+	if report.Codex.DaemonCheckError != "daemon token unavailable" {
+		t.Fatalf("daemon check error = %q", report.Codex.DaemonCheckError)
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), home) {
+		t.Fatalf("doctor daemon check leaked home path: %s", data)
+	}
+}
+
+func TestDoctorChecksDaemonAccountsThroughCAP(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	token := "tok-doctor-cap"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	accounts, secrets := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 9}); err != nil {
+		t.Fatal(err)
+	}
+	port := freeTCPPort(t)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", fmt.Sprint(port))
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	s := server.New(server.Options{
+		Host: "127.0.0.1", Port: port, Token: token, Version: "it",
+		Accounts: accounts, Secrets: secrets, RuntimeRoot: filepath.Join(home, "runtimes"),
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	go func() { errCh <- s.Run(ctx) }()
+	waitForHealthz(t, port)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("server shutdown: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("server did not shut down")
+		}
+	})
+
+	report, err := buildDoctorReport(t.Context(), doctorOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Codex.DaemonCheckOK || report.Codex.DaemonCheckedAccounts != 1 || report.Codex.DaemonSecretBackend != "file" || report.Codex.DaemonCheckError != "" {
+		t.Fatalf("daemon check = %+v", report.Codex)
+	}
+	if !containsDoctorCheck(report.Checks, doctorCheckReport{
+		Name:     "CAP accounts/check",
+		OK:       true,
+		Evidence: "checked 1 via daemon, secret backend file",
+	}) {
+		t.Fatalf("missing CAP accounts/check: %+v", report.Checks)
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leaked := range []string{token, "access-secret", "refresh-secret", "secretRef", filepath.Join(home, "runtimes")} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("doctor CAP report leaked %q: %s", leaked, data)
+		}
+	}
 }
 
 func TestDoctorRejectsInvalidRequiredSecretBackend(t *testing.T) {
@@ -270,8 +347,16 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 			t.Fatalf("unexpected issue %q in %+v", forbidden, report.Issues)
 		}
 	}
-	if report.Codex.CLIAvailable && !report.OK {
-		t.Fatalf("doctor should be ok when CLI, daemon, accounts, quota, and route are ready: %+v", report.Issues)
+	if report.Codex.DaemonCheckError == "" || !containsString(report.Issues, "daemon-side accounts/check failed") {
+		t.Fatalf("missing daemon-side check issue: %+v", report)
+	}
+	if !containsDoctorCheck(report.Checks, doctorCheckReport{
+		Name:     "CAP accounts/check",
+		OK:       false,
+		Evidence: report.Codex.DaemonCheckError,
+		NextStep: "inspect daemon-side account evidence with: capd accounts check --json --readiness",
+	}) {
+		t.Fatalf("missing CAP accounts/check failure: %+v", report.Checks)
 	}
 	if !report.Codex.CLIAvailable && !containsString(report.Issues, "Codex CLI is not available") {
 		t.Fatalf("missing CLI issue: %+v", report.Issues)

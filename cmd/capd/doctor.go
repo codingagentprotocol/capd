@@ -89,21 +89,25 @@ type doctorAgentReport struct {
 }
 
 type doctorCodexReport struct {
-	CLIAvailable         bool                       `json:"cliAvailable"`
-	ImportedAccounts     int                        `json:"importedAccounts"`
-	CurrentAccountID     string                     `json:"currentAccountId,omitempty"`
-	SecretBackend        string                     `json:"secretBackend,omitempty"`
-	FreshQuotaAccounts   int                        `json:"freshQuotaAccounts"`
-	StaleQuotaAccounts   int                        `json:"staleQuotaAccounts"`
-	MissingQuotaAccounts int                        `json:"missingQuotaAccounts"`
-	Accounts             []doctorCodexAccountReport `json:"accounts,omitempty"`
-	AutoRouteAccountID   string                     `json:"autoRouteAccountId,omitempty"`
-	AutoRouteQuotaState  string                     `json:"autoRouteQuotaState,omitempty"`
-	AutoRouteFresh       bool                       `json:"autoRouteFresh"`
-	AutoRouteScore       float64                    `json:"autoRouteScore,omitempty"`
-	AutoRouteReason      string                     `json:"autoRouteReason,omitempty"`
-	AutoRouteCheckedAt   int64                      `json:"autoRouteCheckedAt,omitempty"`
-	AutoRoutePrimary     *float64                   `json:"autoRoutePrimaryUsedPercent,omitempty"`
+	CLIAvailable          bool                       `json:"cliAvailable"`
+	ImportedAccounts      int                        `json:"importedAccounts"`
+	CurrentAccountID      string                     `json:"currentAccountId,omitempty"`
+	SecretBackend         string                     `json:"secretBackend,omitempty"`
+	DaemonCheckOK         bool                       `json:"daemonCheckOk"`
+	DaemonCheckedAccounts int                        `json:"daemonCheckedAccounts,omitempty"`
+	DaemonSecretBackend   string                     `json:"daemonSecretBackend,omitempty"`
+	DaemonCheckError      string                     `json:"daemonCheckError,omitempty"`
+	FreshQuotaAccounts    int                        `json:"freshQuotaAccounts"`
+	StaleQuotaAccounts    int                        `json:"staleQuotaAccounts"`
+	MissingQuotaAccounts  int                        `json:"missingQuotaAccounts"`
+	Accounts              []doctorCodexAccountReport `json:"accounts,omitempty"`
+	AutoRouteAccountID    string                     `json:"autoRouteAccountId,omitempty"`
+	AutoRouteQuotaState   string                     `json:"autoRouteQuotaState,omitempty"`
+	AutoRouteFresh        bool                       `json:"autoRouteFresh"`
+	AutoRouteScore        float64                    `json:"autoRouteScore,omitempty"`
+	AutoRouteReason       string                     `json:"autoRouteReason,omitempty"`
+	AutoRouteCheckedAt    int64                      `json:"autoRouteCheckedAt,omitempty"`
+	AutoRoutePrimary      *float64                   `json:"autoRoutePrimaryUsedPercent,omitempty"`
 }
 
 type doctorCodexAccountReport struct {
@@ -292,10 +296,65 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		Evidence: autoRouteEvidence,
 		NextStep: doctorCheckNextStep(!autoRouteOK, doctorRouteCheckNextStep(len(list), report.Daemon.OK)),
 	})
+	if report.Daemon.OK {
+		capResult, capErr := doctorDaemonAccountsCheck(ctx, opts.RequireSecretBackend)
+		if capErr != "" {
+			report.Codex.DaemonCheckError = capErr
+			report.Issues = append(report.Issues, "daemon-side accounts/check failed")
+			report.NextSteps = append(report.NextSteps, "inspect daemon-side account evidence with: "+doctorReadinessCommand)
+		} else {
+			report.Codex.DaemonCheckOK = true
+			report.Codex.DaemonCheckedAccounts = capResult.CheckedAccounts
+			report.Codex.DaemonSecretBackend = capResult.SecretBackend
+		}
+		evidence := "daemon accounts/check ok"
+		if capErr != "" {
+			evidence = capErr
+		} else {
+			evidence = fmt.Sprintf("checked %d via daemon, secret backend %s", capResult.CheckedAccounts, capResult.SecretBackend)
+		}
+		report.Checks = append(report.Checks, doctorCheckReport{
+			Name:     "CAP accounts/check",
+			OK:       capErr == "",
+			Evidence: evidence,
+			NextStep: doctorCheckNextStep(capErr != "", "inspect daemon-side account evidence with: "+doctorReadinessCommand),
+		})
+	}
 	report.NextSteps = compactStrings(report.NextSteps)
 	report.Issues = compactStrings(report.Issues)
 	report.OK = len(report.Issues) == 0
 	return report, nil
+}
+
+func doctorDaemonAccountsCheck(ctx context.Context, requireSecretBackend string) (protocol.AccountsCheckResult, string) {
+	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	raw, err := daemonRPCCall(checkCtx, "capd-doctor", protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider:             codexauth.Provider,
+		RequireSecretBackend: requireSecretBackend,
+	})
+	if err != nil {
+		return protocol.AccountsCheckResult{}, safeDoctorDaemonError(err)
+	}
+	var result protocol.AccountsCheckResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return protocol.AccountsCheckResult{}, "decode daemon accounts/check response failed"
+	}
+	return result, ""
+}
+
+func safeDoctorDaemonError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "no daemon token") {
+		return "daemon token unavailable"
+	}
+	if strings.Contains(msg, "context deadline exceeded") {
+		return "daemon accounts/check timed out"
+	}
+	return msg
 }
 
 func doctorBoolEvidence(ok bool, yes, no string) string {
