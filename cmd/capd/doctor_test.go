@@ -545,6 +545,9 @@ func TestDoctorReportsUnreadableAccountSecretsSafely(t *testing.T) {
 	if report.Codex.SecretReadableAccounts != 0 || report.Codex.SecretUnreadableAccounts != 1 {
 		t.Fatalf("secret readability = %+v", report.Codex)
 	}
+	if len(report.Codex.Accounts) != 1 || report.Codex.Accounts[0].SecretState != "backend-mismatch" || report.Codex.Accounts[0].SecretBackendOK || report.Codex.Accounts[0].SecretReadable {
+		t.Fatalf("account secret state = %+v", report.Codex.Accounts)
+	}
 	if report.Summary.SecretReadableAccounts != 0 || report.Summary.SecretUnreadableAccounts != 1 {
 		t.Fatalf("summary secret readability = %+v", report.Summary)
 	}
@@ -566,6 +569,40 @@ func TestDoctorReportsUnreadableAccountSecretsSafely(t *testing.T) {
 	for _, leaked := range []string{"secretRef", "native:codex-test", "access-secret", "refresh-secret", home} {
 		if strings.Contains(string(data), leaked) {
 			t.Fatalf("doctor secret readability leaked %q: %s", leaked, data)
+		}
+	}
+}
+
+func TestDoctorReportsMalformedSecretRefsSafely(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = "file:"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := buildDoctorReport(t.Context(), doctorOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Codex.Accounts) != 1 || report.Codex.Accounts[0].SecretState != "malformed-ref" || report.Codex.Accounts[0].SecretReadable {
+		t.Fatalf("account secret state = %+v", report.Codex.Accounts)
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leaked := range []string{"secretRef", "file:", "access-secret", "refresh-secret", home} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("doctor malformed secret state leaked %q: %s", leaked, data)
 		}
 	}
 }

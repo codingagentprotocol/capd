@@ -84,9 +84,11 @@ JSON output should also return non-zero on readiness issues. Auto-route evidence
 includes the selected account id, quota state, freshness, primary quota usage,
 routing score, checked time, and the same human-readable reason used by routing previews. The
 `codex.accounts` JSON array lists safe per-account credential and quota evidence
-(id, email, current marker, plan, `secretBackendOk`, `secretReadable`, quota
-state, freshness, primary usage, checked time) and never includes SecretStore
-refs, token material, runtime paths, or raw auth JSON.
+(id, email, current marker, plan, `secretBackendOk`, `secretReadable`,
+`secretState`, quota state, freshness, primary usage, checked time) and never
+includes SecretStore refs, token material, runtime paths, or raw auth JSON.
+`secretState` is a safe enum such as `readable`, `backend-mismatch`, `missing`,
+`timeout`, `malformed-ref`, or `unreadable`.
 The top-level `summary` object gives CI and Web clients a compact readiness
 view: required/missing account counts, readable/unreadable SecretStore credential
 counts, fresh/stale/missing quota counts, auto-route freshness, daemon CAP

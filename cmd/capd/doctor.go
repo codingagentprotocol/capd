@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -153,6 +155,7 @@ type doctorCodexAccountReport struct {
 	Plan               string   `json:"plan,omitempty"`
 	SecretBackendOK    bool     `json:"secretBackendOk"`
 	SecretReadable     bool     `json:"secretReadable"`
+	SecretState        string   `json:"secretState,omitempty"`
 	QuotaState         string   `json:"quotaState"`
 	QuotaFresh         bool     `json:"quotaFresh"`
 	QuotaCheckedAt     int64    `json:"quotaCheckedAt,omitempty"`
@@ -167,6 +170,15 @@ type doctorCheckReport struct {
 }
 
 const doctorReadinessCommand = "capd accounts check --json --readiness"
+
+const (
+	doctorSecretStateReadable        = "readable"
+	doctorSecretStateBackendMismatch = "backend-mismatch"
+	doctorSecretStateMalformedRef    = "malformed-ref"
+	doctorSecretStateMissing         = "missing"
+	doctorSecretStateTimeout         = "timeout"
+	doctorSecretStateUnreadable      = "unreadable"
+)
 
 func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, error) {
 	cfg := config.Load()
@@ -286,19 +298,9 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			Plan:       acc.Plan,
 			QuotaState: protocol.AccountQuotaStateMissing,
 		}
-		ref, err := secret.ParseRef(acc.SecretRef)
-		if err == nil {
-			if err := secret.EnsureRefBackend(secrets, ref); err == nil {
-				row.SecretBackendOK = true
-				if _, err := secrets.Get(ctx, ref); err == nil {
-					row.SecretReadable = true
-					report.Codex.SecretReadableAccounts++
-				} else {
-					report.Codex.SecretUnreadableAccounts++
-				}
-			} else {
-				report.Codex.SecretUnreadableAccounts++
-			}
+		row.SecretBackendOK, row.SecretReadable, row.SecretState = doctorAccountSecretReadiness(ctx, secrets, acc.SecretRef)
+		if row.SecretReadable {
+			report.Codex.SecretReadableAccounts++
 		} else {
 			report.Codex.SecretUnreadableAccounts++
 		}
@@ -487,6 +489,33 @@ func doctorSecretStoreRoundTrip(ctx context.Context, secrets secret.Store) error
 		return err
 	}
 	return nil
+}
+
+func doctorAccountSecretReadiness(ctx context.Context, secrets secret.Store, secretRef string) (bool, bool, string) {
+	ref, err := secret.ParseRef(secretRef)
+	if err != nil {
+		return false, false, doctorSecretStateMalformedRef
+	}
+	if err := secret.EnsureRefBackend(secrets, ref); err != nil {
+		return false, false, doctorSecretStateBackendMismatch
+	}
+	if _, err := secrets.Get(ctx, ref); err != nil {
+		return true, false, doctorSecretErrorState(err)
+	}
+	return true, true, doctorSecretStateReadable
+}
+
+func doctorSecretErrorState(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		return doctorSecretStateTimeout
+	case os.IsNotExist(err):
+		return doctorSecretStateMissing
+	case strings.Contains(err.Error(), "macOS keychain status -25300"):
+		return doctorSecretStateMissing
+	default:
+		return doctorSecretStateUnreadable
+	}
 }
 
 func safeDoctorDaemonError(err error) string {
