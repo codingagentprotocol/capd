@@ -24,6 +24,11 @@ func TestPolicyValidateSessionCreate(t *testing.T) {
 	}); perr == nil || !strings.Contains(perr.Message, protocol.PermissionFull) {
 		t.Fatalf("full permission at root should be rejected, got %v", perr)
 	}
+	if perr := policy.validateSessionCreate(protocol.SessionCreateParams{
+		AgentID: "codex", AccountID: "codex-test", RequireFreshQuota: true,
+	}); perr == nil || !strings.Contains(perr.Message, "accountId \"auto\"") {
+		t.Fatalf("requireFreshQuota without auto should be rejected, got %v", perr)
+	}
 }
 
 func TestPolicyValidateTaskSend(t *testing.T) {

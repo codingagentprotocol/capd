@@ -665,6 +665,21 @@ func TestAgentsRouteAutoAccountRequireFreshQuota(t *testing.T) {
 	}
 }
 
+func TestAgentsRouteRejectsFreshQuotaGateWithoutAutoAccount(t *testing.T) {
+	ts, _, _ := newCodexAccountIntegration(t)
+	c := initialized(t, ts)
+
+	for _, params := range []protocol.AgentRouteParams{
+		{RequireFreshQuota: true},
+		{AccountID: "codex-test", RequireFreshQuota: true},
+	} {
+		resp := c.call(protocol.MethodAgentsRoute, params)
+		if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, `accountId "auto"`) {
+			t.Fatalf("params=%+v response=%+v", params, resp)
+		}
+	}
+}
+
 func TestAgentsRouteAutoAccountIgnoresStaleLowQuota(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
 	addCodexAccountForTest(t, accounts, "codex-fresh", "fresh@example.com")
