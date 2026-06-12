@@ -583,6 +583,59 @@ func TestAccountsCheckRefreshQuotaFailureDoesNotLeakSecrets(t *testing.T) {
 	}
 }
 
+func TestAccountsCheckRequireAllFreshQuotaFailsWithoutAccounts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	token := "tok-no-accounts"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := account.OpenStore(filepath.Join(home, "accounts.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secrets := secret.NewFileStore(filepath.Join(home, "secrets", "codex"))
+	port := freeTCPPort(t)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", strconv.Itoa(port))
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	s := server.New(server.Options{
+		Host: "127.0.0.1", Port: port, Token: token, Version: "it",
+		Accounts: accounts, Secrets: secrets, RuntimeRoot: filepath.Join(home, "runtimes"),
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	go func() { errCh <- s.Run(ctx) }()
+	waitForHealthz(t, port)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("server shutdown: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("server did not shut down")
+		}
+		accounts.Close()
+	})
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--require-all-fresh-quota"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "no Codex accounts checked") {
+		t.Fatalf("err = %v", err)
+	}
+	for _, leaked := range []string{token, "CODEX_HOME", filepath.Join(home, "runtimes"), filepath.Join(home, "accounts.db")} {
+		if strings.Contains(err.Error(), leaked) || strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts check empty gate leaked %q: err=%v out=%s", leaked, err, out.String())
+		}
+	}
+}
+
 func TestAccountsListShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)

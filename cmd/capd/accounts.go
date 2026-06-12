@@ -126,6 +126,9 @@ func newAccountsCmd() *cobra.Command {
 				return fmt.Errorf("auto route does not have fresh cached quota; refresh quota first")
 			}
 			if requireAllFreshQuota {
+				if result.CheckedAccounts == 0 {
+					return fmt.Errorf("no Codex accounts checked; import accounts first")
+				}
 				for _, row := range result.Accounts {
 					if !row.QuotaFresh {
 						return fmt.Errorf("%s: quota is %s; refresh every account first", row.ID, row.QuotaState)
