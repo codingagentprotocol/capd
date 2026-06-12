@@ -99,6 +99,38 @@ func TestRunTaskConnectErrorDoesNotLeakToken(t *testing.T) {
 	}
 }
 
+func TestRunTaskRequireFreshQuotaFailsFastWithoutAutoAccount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cmd := newRunCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	err := runTask(cmd, runOpts{
+		agent:             "codex",
+		requireFreshQuota: true,
+		prompt:            "hello",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--account auto") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestRunTaskRequireFreshQuotaFailsFastForExistingSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cmd := newRunCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	err := runTask(cmd, runOpts{
+		agent:             "codex",
+		session:           "s_existing",
+		account:           protocol.AccountAuto,
+		requireFreshQuota: true,
+		prompt:            "hello",
+	})
+	if err == nil || !strings.Contains(err.Error(), "only valid when creating a new session") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestRunTaskSendsRequireFreshQuotaForAutoAccount(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

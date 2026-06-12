@@ -74,6 +74,15 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 	ctx := cmd.Context()
 	out := cmd.OutOrStdout()
 
+	if o.requireFreshQuota {
+		if sessionID != "" {
+			return fmt.Errorf("--require-fresh-quota is only valid when creating a new session")
+		}
+		if o.account != protocol.AccountAuto {
+			return fmt.Errorf("--require-fresh-quota requires --account %s", protocol.AccountAuto)
+		}
+	}
+
 	cfg := config.Load()
 	home, err := daemon.Home()
 	if err != nil {
@@ -157,9 +166,6 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 	} else {
 		if o.account != "" {
 			return fmt.Errorf("--account is only valid when creating a new session")
-		}
-		if o.requireFreshQuota {
-			return fmt.Errorf("--require-fresh-quota is only valid when creating a new session")
 		}
 		if _, err := call(protocol.MethodSessionAttach, protocol.SessionAttachParams{
 			SessionID: sessionID, FromSeq: ^uint64(0), // live tail only, no replay
