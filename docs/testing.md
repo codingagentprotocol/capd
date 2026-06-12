@@ -32,7 +32,8 @@ Secret Service session.
 To verify Codex account smoke is actually using the native backend:
 
 ```bash
-CAPD_SECRET_BACKEND=native capd accounts codex smoke --require-secret-backend native --json
+capd accounts --secret-backend native codex import
+capd accounts --secret-backend native codex smoke --require-secret-backend native --json
 ```
 
 ## Codex Account Smoke

@@ -414,6 +414,37 @@ func TestCodexAccountsSmokeRequireSecretBackendMismatch(t *testing.T) {
 	}
 }
 
+func TestAccountsSecretBackendFlagSelectsBackend(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"--secret-backend", secret.BackendFile, "codex", "smoke", "--require-secret-backend", secret.BackendFile})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "secret backend: file") {
+		t.Fatalf("output = %s", out.String())
+	}
+}
+
+func TestAccountsSecretBackendFlagRejectsUnknownBackend(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"--secret-backend", "mystery", "list"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "unknown secret backend") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestCodexAccountsSmokeFailsWithoutAccounts(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	var out bytes.Buffer

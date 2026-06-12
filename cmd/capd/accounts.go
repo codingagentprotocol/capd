@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
@@ -22,13 +23,14 @@ func newAccountsCmd() *cobra.Command {
 		Use:   "accounts",
 		Short: "Manage local agent accounts",
 	}
+	cmd.PersistentFlags().String("secret-backend", "", "secret storage backend for account token material (file or native; default CAPD_SECRET_BACKEND/file)")
 
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List imported accounts across all providers",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			jsonOut, _ := cmd.Flags().GetBool("json")
-			accounts, _, err := openAccountDeps()
+			accounts, _, err := accountDepsFromCmd(cmd)
 			if err != nil {
 				return err
 			}
@@ -107,7 +109,7 @@ func newCodexAccountsCmd() *cobra.Command {
 					return err
 				}
 			}
-			accounts, secrets, err := openAccountDeps()
+			accounts, secrets, err := accountDepsFromCmd(cmd)
 			if err != nil {
 				return err
 			}
@@ -130,7 +132,7 @@ func newCodexAccountsCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List Codex accounts imported into capd",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			accounts, _, err := openAccountDeps()
+			accounts, _, err := accountDepsFromCmd(cmd)
 			if err != nil {
 				return err
 			}
@@ -169,7 +171,7 @@ func newCodexAccountsCmd() *cobra.Command {
 		Short: "Show or set the current Codex account",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			accounts, _, err := openAccountDeps()
+			accounts, _, err := accountDepsFromCmd(cmd)
 			if err != nil {
 				return err
 			}
@@ -199,7 +201,7 @@ func newCodexAccountsCmd() *cobra.Command {
 		Short: "Create or refresh a capd-managed Codex CODEX_HOME projection",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			accounts, secrets, err := openAccountDeps()
+			accounts, secrets, err := accountDepsFromCmd(cmd)
 			if err != nil {
 				return err
 			}
@@ -243,7 +245,7 @@ func newCodexAccountsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			baseURL, _ := cmd.Flags().GetString("base-url")
 			rawOut, _ := cmd.Flags().GetBool("raw")
-			accounts, secrets, err := openAccountDeps()
+			accounts, secrets, err := accountDepsFromCmd(cmd)
 			if err != nil {
 				return err
 			}
@@ -301,7 +303,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			requireFreshQuota, _ := cmd.Flags().GetBool("require-fresh-quota")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			jsonOut, _ := cmd.Flags().GetBool("json")
-			accounts, secrets, err := openAccountDeps()
+			accounts, secrets, err := accountDepsFromCmd(cmd)
 			if err != nil {
 				return err
 			}
@@ -582,6 +584,27 @@ func formatPercent(value float64) string {
 }
 
 func openAccountDeps() (*account.Store, secret.Store, error) {
+	return openAccountDepsWithBackend("")
+}
+
+func accountDepsFromCmd(cmd *cobra.Command) (*account.Store, secret.Store, error) {
+	backend := accountSecretBackendFlag(cmd)
+	return openAccountDepsWithBackend(backend)
+}
+
+func accountSecretBackendFlag(cmd *cobra.Command) string {
+	for _, flags := range []*pflag.FlagSet{cmd.Flags(), cmd.InheritedFlags(), cmd.Root().PersistentFlags()} {
+		if flags == nil {
+			continue
+		}
+		if f := flags.Lookup("secret-backend"); f != nil {
+			return f.Value.String()
+		}
+	}
+	return ""
+}
+
+func openAccountDepsWithBackend(backend string) (*account.Store, secret.Store, error) {
 	home, err := daemon.Home()
 	if err != nil {
 		return nil, nil, err
@@ -590,7 +613,7 @@ func openAccountDeps() (*account.Store, secret.Store, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	secrets, err := secret.Open(filepath.Join(home, "secrets", "codex"), "")
+	secrets, err := secret.Open(filepath.Join(home, "secrets", "codex"), backend)
 	if err != nil {
 		accounts.Close()
 		return nil, nil, err

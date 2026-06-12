@@ -68,6 +68,10 @@ running in the daemon), find it with `capd sessions`, re-join with
 
 ### `capd accounts` — local account control plane
 
+Common flag: `--secret-backend <file|native>` selects where account token
+material is read/written for the command. Empty uses `CAPD_SECRET_BACKEND`, then
+the file backend.
+
 | Command | Meaning |
 |---------|---------|
 | `capd accounts list [--json]` | List imported account metadata across all providers; provider-scoped current accounts are marked with `*`. |
