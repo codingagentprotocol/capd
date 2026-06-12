@@ -680,6 +680,29 @@ func TestAgentsRouteRejectsFreshQuotaGateWithoutAutoAccount(t *testing.T) {
 	}
 }
 
+func TestAccountAllIsReservedOutsideQuotaBatchRefresh(t *testing.T) {
+	_, ts, _, _ := newCodexAccountIntegrationServer(t)
+	c := initialized(t, ts)
+
+	cases := []struct {
+		method string
+		params any
+	}{
+		{protocol.MethodAgentsRoute, protocol.AgentRouteParams{AccountID: protocol.AccountAll}},
+		{protocol.MethodAgentsUsage, protocol.AgentsUsageParams{AgentID: codexAgentID, AccountID: protocol.AccountAll}},
+		{protocol.MethodAccountsCurrent, protocol.AccountsCurrentParams{Provider: codexauth.Provider, AccountID: protocol.AccountAll}},
+		{protocol.MethodAccountsProject, protocol.AccountsProjectParams{Provider: codexauth.Provider, AccountID: protocol.AccountAll}},
+		{protocol.MethodAccountsRemove, protocol.AccountsRemoveParams{Provider: codexauth.Provider, AccountID: protocol.AccountAll}},
+		{protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: codexAgentID, AccountID: protocol.AccountAll}},
+	}
+	for _, tc := range cases {
+		resp := c.call(tc.method, tc.params)
+		if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "reserved for accounts/quota") {
+			t.Fatalf("%s response = %+v", tc.method, resp)
+		}
+	}
+}
+
 func TestAgentsRouteAutoAccountIgnoresStaleLowQuota(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
 	addCodexAccountForTest(t, accounts, "codex-fresh", "fresh@example.com")

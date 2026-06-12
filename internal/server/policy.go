@@ -27,6 +27,9 @@ func (e *policyEngine) validateSessionCreate(params protocol.SessionCreateParams
 	if params.RequireFreshQuota && params.AccountID != protocol.AccountAuto {
 		return protocol.NewError(protocol.CodeInvalidParams, "requireFreshQuota is supported only with accountId %q", protocol.AccountAuto)
 	}
+	if perr := rejectReservedAccountID(params.AccountID); perr != nil {
+		return perr
+	}
 	if params.PermissionMode == protocol.PermissionFull && isFilesystemRoot(params.Cwd) {
 		return protocol.NewError(protocol.CodeInvalidParams, "permissionMode %q is not allowed at filesystem root", protocol.PermissionFull)
 	}

@@ -48,6 +48,9 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 	if params.RequireFreshQuota && accountID != protocol.AccountAuto {
 		return protocol.AgentRouteResult{}, protocol.NewError(protocol.CodeInvalidParams, "requireFreshQuota is supported only with accountId %q", protocol.AccountAuto)
 	}
+	if perr := rejectReservedAccountID(accountID); perr != nil {
+		return protocol.AgentRouteResult{}, perr
+	}
 	var selectedAccountID string
 	var accountReason string
 	var selectedAccount account.Account

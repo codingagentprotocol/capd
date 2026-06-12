@@ -27,6 +27,9 @@ func (s *Server) runtimeEnvForAccount(ctx context.Context, agentID, accountID st
 	if strings.TrimSpace(accountID) == "" {
 		return nil, protocol.NewError(protocol.CodeInvalidParams, "accountId is required")
 	}
+	if perr := rejectReservedAccountID(accountID); perr != nil {
+		return nil, perr
+	}
 	acc, err := s.opts.Accounts.LoadAccount(accountID)
 	if err != nil {
 		return nil, protocol.NewError(protocol.CodeInvalidParams, "unknown accountId %q", accountID)
@@ -47,6 +50,13 @@ func (s *Server) runtimeEnvForAccount(ctx context.Context, agentID, accountID st
 		return nil, protocol.NewError(protocol.CodeInternalError, "%v", fmt.Errorf("empty runtime environment for account %q", accountID))
 	}
 	return profile.Env, nil
+}
+
+func rejectReservedAccountID(accountID string) *protocol.Error {
+	if strings.TrimSpace(accountID) == protocol.AccountAll {
+		return protocol.NewError(protocol.CodeInvalidParams, "accountId %q is reserved for accounts/quota batch refresh", protocol.AccountAll)
+	}
+	return nil
 }
 
 func (s *Server) lockAccountRuntime(accountID string) func() {
@@ -156,6 +166,9 @@ func (s *Server) currentAccount(params protocol.AccountsCurrentParams) (protocol
 	}
 	accountID := strings.TrimSpace(params.AccountID)
 	if accountID != "" {
+		if perr := rejectReservedAccountID(accountID); perr != nil {
+			return protocol.AccountsCurrentResult{}, perr
+		}
 		acc, err := s.opts.Accounts.LoadAccount(accountID)
 		if err != nil {
 			return protocol.AccountsCurrentResult{}, protocol.NewError(protocol.CodeInvalidParams, "unknown accountId %q", accountID)
@@ -440,6 +453,9 @@ func (s *Server) removeAccount(ctx context.Context, params protocol.AccountsRemo
 	accountID := strings.TrimSpace(params.AccountID)
 	if accountID == "" {
 		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInvalidParams, "accountId is required")
+	}
+	if perr := rejectReservedAccountID(accountID); perr != nil {
+		return protocol.AccountsRemoveResult{}, perr
 	}
 	acc, err := s.opts.Accounts.LoadAccount(accountID)
 	if err != nil {

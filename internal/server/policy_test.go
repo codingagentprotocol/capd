@@ -29,6 +29,11 @@ func TestPolicyValidateSessionCreate(t *testing.T) {
 	}); perr == nil || !strings.Contains(perr.Message, "accountId \"auto\"") {
 		t.Fatalf("requireFreshQuota without auto should be rejected, got %v", perr)
 	}
+	if perr := policy.validateSessionCreate(protocol.SessionCreateParams{
+		AgentID: "codex", AccountID: protocol.AccountAll,
+	}); perr == nil || !strings.Contains(perr.Message, "reserved") {
+		t.Fatalf("reserved account id should be rejected, got %v", perr)
+	}
 }
 
 func TestPolicyValidateTaskSend(t *testing.T) {
