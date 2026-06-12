@@ -239,7 +239,7 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
   const routeEvidence = routeText(route);
   const candidatesEvidence = routeCandidateText((routeDecision && routeDecision.routeCandidates) || (result && result.routeCandidates));
   const nativeSecretOK = !readiness || !requireNative || secretBackend === "native";
-  const nativeSecretNextStep = !readiness || !requireNative ? "" : (secretBackend === "native" ? "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native" : "restart daemon with: CAPD_SECRET_BACKEND=native capd start");
+  const nativeSecretNextStep = !readiness || !requireNative ? "" : (secretBackend === "native" ? "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native" : "restart daemon with: capd start --secret-backend native");
   const rows = [
     { name:"daemon health", ok:!!healthOK, evidence:healthEvidence(healthOK), nextStep:healthOK ? "" : "start capd with: capd start" },
     { name:"accounts/check data", ok:!!result, evidence:result ? `${result.checkedAccounts || 0} account(s), secret ${secretBackend}, secretState ${secretStates}` : "accounts/check failed", nextStep:result ? "" : "check daemon logs and retry accounts/check" },

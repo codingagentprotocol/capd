@@ -88,7 +88,7 @@ CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-b
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native --timeout 2m
 
 # In another terminal, keep the daemon running for CAP/WebSocket checks:
-CAPD_SECRET_BACKEND=native capd start
+capd start --secret-backend native
 
 capd console --probe
 capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail

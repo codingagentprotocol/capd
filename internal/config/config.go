@@ -14,8 +14,9 @@ const (
 )
 
 type Config struct {
-	Host string
-	Port int
+	Host          string
+	Port          int
+	SecretBackend string
 	// Origins are extra browser origins allowed to open WebSocket
 	// connections (localhost is always allowed). Comma-separated in
 	// CAPD_ORIGINS, e.g. "app.example.com,*.internal.corp".
@@ -33,6 +34,9 @@ func Load() Config {
 		if p, err := strconv.Atoi(v); err == nil {
 			cfg.Port = p
 		}
+	}
+	if v := os.Getenv("CAPD_SECRET_BACKEND"); v != "" {
+		cfg.SecretBackend = strings.TrimSpace(v)
 	}
 	if v := os.Getenv("CAPD_ORIGINS"); v != "" {
 		for _, o := range strings.Split(v, ",") {

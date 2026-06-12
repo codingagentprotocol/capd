@@ -103,7 +103,7 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return err
 	}
 	defer accountStore.Close()
-	secrets, err := secret.Open(filepath.Join(home, "secrets", "codex"), "")
+	secrets, err := secret.Open(filepath.Join(home, "secrets", "codex"), cfg.SecretBackend)
 	if err != nil {
 		return err
 	}

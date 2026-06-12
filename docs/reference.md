@@ -22,6 +22,7 @@ environment variable and file. For a guided tour, read the [README](../README.md
 | `--host` | `127.0.0.1` | bind address; `0.0.0.0` for server deployments (put TLS in front) |
 | `--port` | `7777` | listen port |
 | `--origins` | _(empty)_ | extra browser origins allowed for WebSocket, comma-separated or repeated; localhost is always allowed |
+| `--secret-backend` | `CAPD_SECRET_BACKEND`, then `file` | account SecretStore backend for the daemon (`file` or `native`) |
 
 The daemon also serves the local web console at `/console/` and a compact data
 probe at `/probe/`; both connect back to `/ws` with the daemon token, so opening

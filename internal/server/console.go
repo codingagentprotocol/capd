@@ -292,7 +292,7 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 			Name:     "SecretStore backend",
 			OK:       secretBackend == requireSecretBackend,
 			Evidence: "secret " + secretBackend + ", want " + requireSecretBackend,
-			NextStep: missingStep(secretBackend == requireSecretBackend, "restart daemon with: CAPD_SECRET_BACKEND="+requireSecretBackend+" capd start"),
+			NextStep: missingStep(secretBackend == requireSecretBackend, "restart daemon with: capd start --secret-backend "+requireSecretBackend),
 		})
 	}
 	return checks

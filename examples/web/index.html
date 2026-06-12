@@ -414,7 +414,7 @@ function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, ro
   const checked = result.checkedAccounts || 0;
   const secretBackend = result.secretBackend || "unknown";
   const secretOK = !requireNativeSecret || secretBackend === "native";
-  const secretNextStep = !secretOK ? "restart daemon with: CAPD_SECRET_BACKEND=native capd start" : "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native";
+  const secretNextStep = !secretOK ? "restart daemon with: capd start --secret-backend native" : "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native";
   return [
     { name: "daemon health", ok: true, evidence: "health ok", nextStep: "" },
     { name: "Codex multi-account import", ok: checked >= 2, evidence: `checked ${checked}, need 2`, nextStep: checked >= 2 ? "" : "导入至少两个账号: capd accounts import --auth /path/a --auth /path/b" },
@@ -539,7 +539,7 @@ function accountDiagnosticNextStep(result) {
   const accounts = result.accounts || [];
   const summary = result.summary || {};
   if ((result.checkedAccounts || 0) < 2) return "import a second Codex account, then run 就绪门禁";
-  if (summary.requiredSecretBackend && !summary.secretBackendOk) return `restart daemon with CAPD_SECRET_BACKEND=${summary.requiredSecretBackend}`;
+  if (summary.requiredSecretBackend && !summary.secretBackendOk) return `restart daemon with capd start --secret-backend ${summary.requiredSecretBackend}`;
   if (accounts.some(a => !a.secretBackendOk || !a.credentialReadable)) return "fix SecretStore access or re-import failing accounts";
   if (accounts.some(a => !a.runtimeReady)) return "project each failing account runtime, then rerun accounts/check";
   if (accounts.some(a => !a.quotaFresh)) return "refresh quota for all accounts";
