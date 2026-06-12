@@ -280,17 +280,17 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	report.Codex.ImportedAccounts = len(list)
 	if len(list) == 0 {
 		report.Issues = append(report.Issues, "no imported Codex accounts")
-		report.NextSteps = append(report.NextSteps, doctorImportNextStep(report.Daemon.OK))
+		report.NextSteps = append(report.NextSteps, doctorImportNextStep(report.Daemon.OK, opts.RequireSecretBackend))
 	}
 	if len(list) < 2 {
 		report.Issues = append(report.Issues, "multi-account readiness requires at least two imported Codex accounts")
-		report.NextSteps = append(report.NextSteps, doctorSecondImportNextStep(report.Daemon.OK))
+		report.NextSteps = append(report.NextSteps, doctorSecondImportNextStep(report.Daemon.OK, opts.RequireSecretBackend))
 	}
 	report.Checks = append(report.Checks, doctorCheckReport{
 		Name:     "Codex multi-account import",
 		OK:       len(list) >= 2,
 		Evidence: fmt.Sprintf("imported %d Codex account(s)", len(list)),
-		NextStep: doctorCheckNextStep(len(list) < 2, doctorAccountImportCheckNextStep(len(list), report.Daemon.OK)),
+		NextStep: doctorCheckNextStep(len(list) < 2, doctorAccountImportCheckNextStep(len(list), report.Daemon.OK, opts.RequireSecretBackend)),
 	})
 
 	for _, acc := range list {
@@ -347,14 +347,14 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	})
 	if len(list) > 0 && report.Codex.FreshQuotaAccounts < len(list) {
 		report.Issues = append(report.Issues, "not every imported Codex account has fresh quota evidence")
-		report.NextSteps = append(report.NextSteps, doctorReadinessNextStep())
+		report.NextSteps = append(report.NextSteps, doctorReadinessNextStep(report.Daemon.OK, opts.RequireSecretBackend))
 	}
 	allQuotaFresh := len(list) > 0 && report.Codex.FreshQuotaAccounts == len(list)
 	report.Checks = append(report.Checks, doctorCheckReport{
 		Name:     "Codex quota freshness",
 		OK:       allQuotaFresh,
 		Evidence: fmt.Sprintf("fresh %d/%d, stale %d, missing %d", report.Codex.FreshQuotaAccounts, len(list), report.Codex.StaleQuotaAccounts, report.Codex.MissingQuotaAccounts),
-		NextStep: doctorCheckNextStep(!allQuotaFresh, doctorQuotaCheckNextStep(len(list), report.Daemon.OK)),
+		NextStep: doctorCheckNextStep(!allQuotaFresh, doctorQuotaCheckNextStep(len(list), report.Daemon.OK, opts.RequireSecretBackend)),
 	})
 	if len(list) > 0 {
 		route, err := account.SelectQuotaRouteAccount(accounts, codexauth.Provider)
@@ -371,7 +371,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			report.Codex.AutoRouteReason = account.QuotaRouteReason(accounts, route)
 			if !report.Codex.AutoRouteFresh {
 				report.Issues = append(report.Issues, "auto account route is not backed by fresh quota")
-				report.NextSteps = append(report.NextSteps, doctorRouteReadinessNextStep())
+				report.NextSteps = append(report.NextSteps, doctorRouteReadinessNextStep(report.Daemon.OK, opts.RequireSecretBackend))
 			}
 		}
 		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil {
@@ -387,7 +387,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		Name:     "Codex auto route freshness",
 		OK:       autoRouteOK,
 		Evidence: autoRouteEvidence,
-		NextStep: doctorCheckNextStep(!autoRouteOK, doctorRouteCheckNextStep(len(list), report.Daemon.OK)),
+		NextStep: doctorCheckNextStep(!autoRouteOK, doctorRouteCheckNextStep(len(list), report.Daemon.OK, opts.RequireSecretBackend)),
 	})
 	if report.Daemon.OK {
 		capResult, capErr := doctorDaemonAccountsCheck(ctx, opts.RequireSecretBackend)
@@ -554,32 +554,32 @@ func doctorCheckNextStep(include bool, step string) string {
 	return ""
 }
 
-func doctorImportNextStep(daemonOK bool) string {
+func doctorImportNextStep(daemonOK bool, requireSecretBackend string) string {
 	if daemonOK {
 		return "import a Codex account through CAP with: capd accounts import"
 	}
-	return "after starting the daemon, import through CAP with: capd accounts import (local fallback: capd accounts codex import)"
+	return doctorStartDaemonNextStep(requireSecretBackend) + ", then import through CAP with: capd accounts import (local fallback: capd accounts codex import)"
 }
 
-func doctorSecondImportNextStep(daemonOK bool) string {
+func doctorSecondImportNextStep(daemonOK bool, requireSecretBackend string) string {
 	if daemonOK {
 		return "import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-preflight"
 	}
-	return "start the daemon, import a second Codex account, then run: make live-codex-preflight"
+	return doctorStartDaemonNextStep(requireSecretBackend) + ", then import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-preflight"
 }
 
-func doctorAccountImportCheckNextStep(imported int, daemonOK bool) string {
+func doctorAccountImportCheckNextStep(imported int, daemonOK bool, requireSecretBackend string) string {
 	if imported == 0 {
-		return doctorImportNextStep(daemonOK)
+		return doctorImportNextStep(daemonOK, requireSecretBackend)
 	}
-	return doctorSecondImportNextStep(daemonOK)
+	return doctorSecondImportNextStep(daemonOK, requireSecretBackend)
 }
 
-func doctorQuotaCheckNextStep(imported int, daemonOK bool) string {
+func doctorQuotaCheckNextStep(imported int, daemonOK bool, requireSecretBackend string) string {
 	if imported == 0 {
-		return doctorImportNextStep(daemonOK)
+		return doctorImportNextStep(daemonOK, requireSecretBackend)
 	}
-	return doctorReadinessNextStep()
+	return doctorReadinessNextStep(daemonOK, requireSecretBackend)
 }
 
 func doctorSecretReadinessEvidence(readable, total, unreadable int, states map[string]int) string {
@@ -631,18 +631,24 @@ func doctorSecretReadinessNextStep(daemonOK bool, states map[string]int) string 
 	}
 }
 
-func doctorRouteCheckNextStep(imported int, daemonOK bool) string {
+func doctorRouteCheckNextStep(imported int, daemonOK bool, requireSecretBackend string) string {
 	if imported == 0 {
-		return doctorImportNextStep(daemonOK)
+		return doctorImportNextStep(daemonOK, requireSecretBackend)
 	}
-	return doctorRouteReadinessNextStep()
+	return doctorRouteReadinessNextStep(daemonOK, requireSecretBackend)
 }
 
-func doctorReadinessNextStep() string {
+func doctorReadinessNextStep(daemonOK bool, requireSecretBackend string) string {
+	if !daemonOK {
+		return doctorStartDaemonNextStep(requireSecretBackend) + ", then run: " + doctorReadinessCommand
+	}
 	return "refresh and verify daemon-side readiness with: " + doctorReadinessCommand
 }
 
-func doctorRouteReadinessNextStep() string {
+func doctorRouteReadinessNextStep(daemonOK bool, requireSecretBackend string) string {
+	if !daemonOK {
+		return doctorStartDaemonNextStep(requireSecretBackend) + ", then run: " + doctorReadinessCommand
+	}
 	return "refresh quota and verify routing with: " + doctorReadinessCommand
 }
 

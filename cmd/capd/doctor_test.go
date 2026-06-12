@@ -55,9 +55,9 @@ func TestDoctorJSONReportsMissingReadinessWithoutSecrets(t *testing.T) {
 	}
 	for _, want := range []doctorCheckReport{
 		{Name: "daemon health", OK: false, Evidence: "daemon /healthz failed", NextStep: "start the daemon with: capd start"},
-		{Name: "Codex multi-account import", OK: false, Evidence: "imported 0 Codex account(s)", NextStep: "after starting the daemon, import through CAP with: capd accounts import (local fallback: capd accounts codex import)"},
-		{Name: "Codex quota freshness", OK: false, Evidence: "fresh 0/0, stale 0, missing 0", NextStep: "after starting the daemon, import through CAP with: capd accounts import (local fallback: capd accounts codex import)"},
-		{Name: "Codex auto route freshness", OK: false, Evidence: "auto route missing", NextStep: "after starting the daemon, import through CAP with: capd accounts import (local fallback: capd accounts codex import)"},
+		{Name: "Codex multi-account import", OK: false, Evidence: "imported 0 Codex account(s)", NextStep: "start the daemon with: capd start, then import through CAP with: capd accounts import (local fallback: capd accounts codex import)"},
+		{Name: "Codex quota freshness", OK: false, Evidence: "fresh 0/0, stale 0, missing 0", NextStep: "start the daemon with: capd start, then import through CAP with: capd accounts import (local fallback: capd accounts codex import)"},
+		{Name: "Codex auto route freshness", OK: false, Evidence: "auto route missing", NextStep: "start the daemon with: capd start, then import through CAP with: capd accounts import (local fallback: capd accounts codex import)"},
 	} {
 		if !containsDoctorCheck(got.Checks, want) {
 			t.Fatalf("missing check %+v in %+v", want, got.Checks)
@@ -75,9 +75,9 @@ func TestDoctorJSONReportsMissingReadinessWithoutSecrets(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"after starting the daemon, import through CAP with: capd accounts import",
+		"start the daemon with: capd start, then import through CAP with: capd accounts import",
 		"local fallback: capd accounts codex import",
-		"start the daemon, import a second Codex account, then run: make live-codex-preflight",
+		"start the daemon with: capd start, then import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-preflight",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("doctor JSON missing next step %q: %s", want, body)
@@ -133,6 +133,15 @@ func TestDoctorDaemonNextStepHonorsRequiredSecretBackend(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "start the daemon with: capd start\"") {
 		t.Fatalf("doctor JSON kept generic daemon start step: %s", out.String())
+	}
+	if got := doctorReadinessNextStep(false, "native"); got != "start the daemon with: capd start --secret-backend native, then run: capd accounts check --json --readiness" {
+		t.Fatalf("readiness next step = %q", got)
+	}
+	if got := doctorRouteReadinessNextStep(false, "native"); got != "start the daemon with: capd start --secret-backend native, then run: capd accounts check --json --readiness" {
+		t.Fatalf("route next step = %q", got)
+	}
+	if got := doctorReadinessNextStep(true, "native"); got != "refresh and verify daemon-side readiness with: capd accounts check --json --readiness" {
+		t.Fatalf("daemon-ready readiness next step = %q", got)
 	}
 }
 
