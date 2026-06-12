@@ -51,6 +51,7 @@
   <input id="prompt" placeholder="让 agent 干点什么…" />
   <label><input id="requireFreshQuota" type="checkbox" /> fresh quota</label>
   <button id="previewRoute">预览路由</button>
+  <button id="importCodex">导入 Codex</button>
   <button id="refreshSelectedQuota">刷新所选 quota</button>
   <button id="send">发送</button>
   <button id="cancel">中断</button>
@@ -166,6 +167,24 @@ async function loadAccounts() {
     accountsEl.textContent = "";
     routePreviewEl.textContent = "";
     line("ev-sys", "· accounts/list 不可用");
+  }
+}
+
+async function importCodexAccount() {
+  const authPath = prompt("Codex auth.json 路径（留空使用默认）", "");
+  if (authPath === null) return;
+  const button = document.getElementById("importCodex");
+  button.disabled = true;
+  try {
+    const params = { provider: "codex" };
+    if (authPath.trim()) params.authPath = authPath.trim();
+    const { account } = await call("accounts/import", params);
+    line("ev-sys", `· 已导入 Codex 账号 ${account.email || account.id}`);
+    await loadAccounts();
+  } catch (e) {
+    line("ev-err", `✗ 导入 Codex 失败: ${e.message || JSON.stringify(e)}`);
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -444,6 +463,7 @@ document.getElementById("send").onclick = async () => {
 document.getElementById("cancel").onclick = () => sessionId && call("task/cancel", { sessionId });
 document.getElementById("refreshSessions").onclick = loadSessions;
 document.getElementById("previewRoute").onclick = previewRoute;
+document.getElementById("importCodex").onclick = importCodexAccount;
 document.getElementById("refreshSelectedQuota").onclick = refreshSelectedQuota;
 document.getElementById("account").onchange = () => { markActiveAccount(); previewRoute(); };
 document.getElementById("requireFreshQuota").onchange = previewRoute;

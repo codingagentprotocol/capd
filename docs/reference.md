@@ -193,6 +193,16 @@ snapshots include server-classified `quotaState` (`fresh`, `stale`, or
 `secret_ref`, access tokens, refresh tokens, ID tokens, API keys, or raw quota
 JSON.
 
+### `accounts/import`
+
+`{"provider": "codex", "authPath": "/path/to/auth.json"}` →
+`{"currentAccountId", "account": {...}}`.
+
+Imports a local Codex `auth.json` from the daemon host into capd. Omit
+`authPath` to use the daemon host default `~/.codex/auth.json`. The response
+returns the same safe account summary shape as `accounts/list` and never
+returns token material, `secret_ref`, raw auth JSON, or the auth file path.
+
 ### `accounts/current`
 
 Read or set the provider-scoped current account without exposing secrets.

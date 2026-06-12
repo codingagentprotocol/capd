@@ -7,6 +7,7 @@ const (
 	MethodAgentsRoute     = "agents/route"     // choose an agent for requested capabilities
 	MethodAgentsUsage     = "agents/usage"     // account usage / rate-limit data for one agent
 	MethodAccountsList    = "accounts/list"    // list imported agent accounts, without secrets
+	MethodAccountsImport  = "accounts/import"  // import a local account auth file into the daemon
 	MethodAccountsCurrent = "accounts/current" // show or set provider-scoped current account, without secrets
 	MethodAccountsQuota   = "accounts/quota"   // refresh one imported account quota, without secrets
 	MethodAccountsRemove  = "accounts/remove"  // remove an imported account and local token material
@@ -140,6 +141,16 @@ type AccountsListParams struct {
 type AccountsListResult struct {
 	CurrentAccountID string           `json:"currentAccountId,omitempty"`
 	Accounts         []AccountSummary `json:"accounts"`
+}
+
+type AccountsImportParams struct {
+	Provider string `json:"provider,omitempty"` // empty = codex
+	AuthPath string `json:"authPath,omitempty"` // empty = provider default on daemon host
+}
+
+type AccountsImportResult struct {
+	CurrentAccountID string         `json:"currentAccountId,omitempty"`
+	Account          AccountSummary `json:"account"`
 }
 
 type AccountsCurrentParams struct {

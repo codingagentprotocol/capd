@@ -111,6 +111,13 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		}
 		return s.listAccounts(params)
 
+	case protocol.MethodAccountsImport:
+		var params protocol.AccountsImportParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		return s.importAccount(ctx, params)
+
 	case protocol.MethodAccountsCurrent:
 		var params protocol.AccountsCurrentParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {

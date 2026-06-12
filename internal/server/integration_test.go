@@ -902,6 +902,102 @@ func TestAccountsListJSONIncludesZeroQuota(t *testing.T) {
 	}
 }
 
+func TestAccountsImportCodexAuthJSONWithoutLeakingSecrets(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	dir := t.TempDir()
+	authPath := filepath.Join(dir, "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{
+		"auth_mode": "chatgpt",
+		"email": "imported@example.com",
+		"tokens": {
+			"access_token": "import-access-secret",
+			"refresh_token": "import-refresh-secret",
+			"account_id": "acct_imported"
+		}
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var result protocol.AccountsImportResult
+	c.mustResult(c.call(protocol.MethodAccountsImport, protocol.AccountsImportParams{
+		Provider: codexauth.Provider,
+		AuthPath: authPath,
+	}), &result)
+	if result.Account.ID != "codex-acct_imported" || result.Account.Email != "imported@example.com" || result.Account.AccountID != "acct_imported" {
+		t.Fatalf("result = %+v", result)
+	}
+	if result.Account.AuthMode != "chatgpt" || result.Account.Quota != nil {
+		t.Fatalf("account = %+v", result.Account)
+	}
+	if result.CurrentAccountID != "codex-test" {
+		t.Fatalf("current account = %q", result.CurrentAccountID)
+	}
+	acc, err := accounts.LoadAccount(result.Account.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acc.SecretRef == "" || strings.Contains(acc.SecretRef, "import-access-secret") {
+		t.Fatalf("secret ref = %q", acc.SecretRef)
+	}
+	ref, err := secret.ParseRef(acc.SecretRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := s.opts.Secrets.Get(context.Background(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bundle.AccessToken != "import-access-secret" || bundle.RefreshToken != "import-refresh-secret" {
+		t.Fatalf("bundle = %+v", bundle)
+	}
+	data, _ := json.Marshal(result)
+	for _, leaked := range []string{"import-access-secret", "import-refresh-secret", "secretRef", "secret_ref", authPath} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("accounts/import leaked %q: %s", leaked, data)
+		}
+	}
+}
+
+func TestAccountsImportRejectsUnsupportedProviderAndInvalidAuth(t *testing.T) {
+	_, ts, _, _ := newCodexAccountIntegrationServer(t)
+	dir := t.TempDir()
+	authPath := filepath.Join(dir, "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"email":"dev@example.com"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsImport, protocol.AccountsImportParams{
+		Provider: "gemini",
+		AuthPath: authPath,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "supported only for provider") {
+		t.Fatalf("provider response = %+v", resp)
+	}
+	resp = c.call(protocol.MethodAccountsImport, protocol.AccountsImportParams{
+		Provider: codexauth.Provider,
+		AuthPath: authPath,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "supported token field") {
+		t.Fatalf("invalid auth response = %+v", resp)
+	}
+	if strings.Contains(resp.Error.Message, authPath) {
+		t.Fatalf("import error leaked auth path: %v", resp.Error)
+	}
+	missingPath := filepath.Join(dir, "missing-auth.json")
+	resp = c.call(protocol.MethodAccountsImport, protocol.AccountsImportParams{
+		Provider: codexauth.Provider,
+		AuthPath: missingPath,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "read auth json failed") {
+		t.Fatalf("missing auth response = %+v", resp)
+	}
+	if strings.Contains(resp.Error.Message, missingPath) {
+		t.Fatalf("missing auth error leaked path: %v", resp.Error)
+	}
+}
+
 func TestAccountsCurrentShowsAndSetsCurrentWithoutSecrets(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
 	addCodexAccountForTest(t, accounts, "codex-alt", "alt@example.com")

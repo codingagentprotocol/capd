@@ -101,6 +101,50 @@ func (s *Server) listAccounts(params protocol.AccountsListParams) (protocol.Acco
 	return result, nil
 }
 
+func (s *Server) importAccount(ctx context.Context, params protocol.AccountsImportParams) (protocol.AccountsImportResult, *protocol.Error) {
+	if s.opts.Accounts == nil || s.opts.Secrets == nil {
+		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
+	}
+	provider := strings.TrimSpace(params.Provider)
+	if provider == "" {
+		provider = codexauth.Provider
+	}
+	if provider != codexauth.Provider {
+		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInvalidParams, "account import is currently supported only for provider %q", codexauth.Provider)
+	}
+	authPath := strings.TrimSpace(params.AuthPath)
+	if authPath == "" {
+		var err error
+		authPath, err = codexauth.DefaultAuthPath("")
+		if err != nil {
+			return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInternalError, "default auth path: %v", err)
+		}
+	}
+	result, err := codexauth.Importer{Accounts: s.opts.Accounts, Secrets: s.opts.Secrets}.ImportAuthJSON(ctx, authPath)
+	if err != nil {
+		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInvalidParams, "import account: %s", safeImportError(err, authPath))
+	}
+	current, err := s.opts.Accounts.CurrentAccount(provider)
+	if err != nil {
+		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
+	}
+	return protocol.AccountsImportResult{
+		CurrentAccountID: current,
+		Account:          accountSummary(result.Account, account.QuotaSnapshot{}),
+	}, nil
+}
+
+func safeImportError(err error, authPath string) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if authPath != "" && strings.Contains(msg, authPath) {
+		return "read auth json failed"
+	}
+	return msg
+}
+
 func (s *Server) currentAccount(params protocol.AccountsCurrentParams) (protocol.AccountsCurrentResult, *protocol.Error) {
 	if s.opts.Accounts == nil {
 		return protocol.AccountsCurrentResult{}, nil
@@ -268,9 +312,11 @@ func accountSummary(acc account.Account, quota account.QuotaSnapshot) protocol.A
 		Email:     acc.Email,
 		AccountID: acc.AccountID,
 		Plan:      acc.Plan,
-		Quota:     quotaSummary(quota),
 	}
-	if summary.Plan == "" {
+	if quota.AccountID != "" {
+		summary.Quota = quotaSummary(quota)
+	}
+	if summary.Plan == "" && quota.AccountID != "" {
 		summary.Plan = quota.Plan
 	}
 	return summary
