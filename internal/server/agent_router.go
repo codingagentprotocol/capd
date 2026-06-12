@@ -23,28 +23,34 @@ var defaultRoutePreference = []string{
 
 func routeParamsForCreate(params protocol.SessionCreateParams) protocol.AgentRouteParams {
 	required := protocol.AgentCapabilities{}
-	if params.Model != "" {
+	model := strings.TrimSpace(params.Model)
+	effort := strings.TrimSpace(params.Effort)
+	if model != "" {
 		required.Model = true
 	}
-	if params.Effort != "" {
+	if effort != "" {
 		required.Effort = true
 	}
 	return protocol.AgentRouteParams{
-		Model:             params.Model,
-		Effort:            params.Effort,
-		AccountID:         params.AccountID,
+		Model:             model,
+		Effort:            effort,
+		AccountID:         strings.TrimSpace(params.AccountID),
 		Capabilities:      required,
 		RequireFreshQuota: params.RequireFreshQuota,
 	}
 }
 
 func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParams) (protocol.AgentRouteResult, *protocol.Error) {
+	params.Model = strings.TrimSpace(params.Model)
+	params.Effort = strings.TrimSpace(params.Effort)
+	params.AccountID = strings.TrimSpace(params.AccountID)
+	params.Prefer = trimRoutePreference(params.Prefer)
 	required := routeRequirements(params)
 	prefer := params.Prefer
 	if len(prefer) == 0 {
 		prefer = defaultRoutePreference
 	}
-	accountID := strings.TrimSpace(params.AccountID)
+	accountID := params.AccountID
 	if params.RequireFreshQuota && accountID != protocol.AccountAuto {
 		return protocol.AgentRouteResult{}, protocol.NewError(protocol.CodeInvalidParams, "requireFreshQuota is supported only with accountId %q", protocol.AccountAuto)
 	}
@@ -175,6 +181,19 @@ func routeScore(agent protocol.AgentInfo, prefer []string) int {
 		score += 1000 - idx
 	}
 	return score
+}
+
+func trimRoutePreference(prefer []string) []string {
+	if len(prefer) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(prefer))
+	for _, raw := range prefer {
+		if item := strings.TrimSpace(raw); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func countCapabilities(c protocol.AgentCapabilities) int {

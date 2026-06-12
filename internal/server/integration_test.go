@@ -498,6 +498,27 @@ func TestAgentsRouteAndAutoCreate(t *testing.T) {
 	}
 }
 
+func TestAgentsRouteTrimsPreference(t *testing.T) {
+	reg := adapter.NewRegistry(&scriptedAdapter{id: "alpha"}, &scriptedAdapter{id: "beta"})
+	s := New(Options{
+		Token:    "it-token",
+		Version:  "it",
+		Registry: reg,
+		Sessions: session.NewManager(reg, nil),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+
+	routed, perr := s.routeAgent(context.Background(), protocol.AgentRouteParams{
+		Prefer: []string{" beta ", " alpha "},
+	})
+	if perr != nil {
+		t.Fatal(perr)
+	}
+	if routed.Agent.ID != "beta" {
+		t.Fatalf("route = %+v", routed)
+	}
+}
+
 func TestSessionCreateWithCodexAccountProjectsRuntime(t *testing.T) {
 	ts, fake, accounts := newCodexAccountIntegration(t)
 	c := initialized(t, ts)

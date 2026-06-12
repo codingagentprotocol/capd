@@ -26,6 +26,22 @@ func TestRouteCLIPrefersRequestedCapabilities(t *testing.T) {
 	}
 }
 
+func TestRouteCLITrimsPreference(t *testing.T) {
+	infos := []protocol.AgentInfo{
+		{ID: "codex", Available: true, Capabilities: protocol.AgentCapabilities{Streaming: true}},
+		{ID: "opencode", Available: true, Capabilities: protocol.AgentCapabilities{Streaming: true}},
+	}
+	result, err := routeCLI(infos, nil, routeCLIParams{
+		Prefer: []string{" opencode ", " codex "},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Agent.ID != "opencode" {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
 func TestRouteCLIAccountAutoSelectsFreshLowestQuotaCodex(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)

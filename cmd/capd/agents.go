@@ -175,6 +175,8 @@ func routeCLIParamsFromFlags(cmd *cobra.Command) (routeCLIParams, error) {
 	if err != nil {
 		return routeCLIParams{}, err
 	}
+	model = strings.TrimSpace(model)
+	effort = strings.TrimSpace(effort)
 	if model != "" {
 		required.Model = true
 	}
@@ -186,7 +188,7 @@ func routeCLIParamsFromFlags(cmd *cobra.Command) (routeCLIParams, error) {
 		Model:        model,
 		Effort:       effort,
 		Capabilities: required,
-		Prefer:       prefer,
+		Prefer:       trimCLIStringList(prefer),
 		RequireFresh: requireFresh,
 		JSON:         jsonOut,
 	}, nil
@@ -232,12 +234,16 @@ func agentCapabilitiesFromNames(names []string) (protocol.AgentCapabilities, err
 }
 
 func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeCLIParams) (protocol.AgentRouteResult, error) {
+	params.Model = strings.TrimSpace(params.Model)
+	params.Effort = strings.TrimSpace(params.Effort)
+	params.AccountID = strings.TrimSpace(params.AccountID)
+	params.Prefer = trimCLIStringList(params.Prefer)
 	required := params.Capabilities
 	prefer := params.Prefer
 	if len(prefer) == 0 {
 		prefer = cliDefaultRoutePreference
 	}
-	accountID := strings.TrimSpace(params.AccountID)
+	accountID := params.AccountID
 	selectedAccountID := ""
 	accountReason := ""
 	var selectedAccount account.Account
@@ -306,6 +312,19 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 		result.AccountRoute = &evidence
 	}
 	return result, nil
+}
+
+func trimCLIStringList(items []string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, raw := range items {
+		if item := strings.TrimSpace(raw); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func hasCLICapabilities(got, want protocol.AgentCapabilities) bool {
