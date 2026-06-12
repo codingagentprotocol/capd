@@ -68,8 +68,9 @@ When accounts are missing and the daemon is healthy, doctor next steps point to
 as web clients; the local `capd accounts codex import` remains a fallback when
 the daemon is not running.
 When quota or auto-route freshness is missing, doctor next steps point to
-`capd accounts check --readiness` so the same daemon-side refresh-and-verify
-gate used by web clients can confirm the fix.
+`capd accounts check --json --readiness` so the same daemon-side
+refresh-and-verify gate used by web clients can confirm the fix while returning
+safe partial evidence on failure.
 
 ### `capd run <prompt>` — send one task and stream it
 

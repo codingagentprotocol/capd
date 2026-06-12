@@ -124,6 +124,8 @@ type doctorCheckReport struct {
 	NextStep string `json:"nextStep,omitempty"`
 }
 
+const doctorReadinessCommand = "capd accounts check --json --readiness"
+
 func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, error) {
 	cfg := config.Load()
 	report := doctorReport{
@@ -251,7 +253,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	}
 	if len(list) > 0 && report.Codex.FreshQuotaAccounts < len(list) {
 		report.Issues = append(report.Issues, "not every imported Codex account has fresh quota evidence")
-		report.NextSteps = append(report.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --readiness")
+		report.NextSteps = append(report.NextSteps, doctorReadinessNextStep())
 	}
 	allQuotaFresh := len(list) > 0 && report.Codex.FreshQuotaAccounts == len(list)
 	report.Checks = append(report.Checks, doctorCheckReport{
@@ -275,7 +277,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			report.Codex.AutoRouteReason = account.QuotaRouteReason(accounts, route)
 			if !report.Codex.AutoRouteFresh {
 				report.Issues = append(report.Issues, "auto account route is not backed by fresh quota")
-				report.NextSteps = append(report.NextSteps, "refresh quota and verify routing with: capd accounts check --readiness")
+				report.NextSteps = append(report.NextSteps, doctorRouteReadinessNextStep())
 			}
 		}
 	}
@@ -335,14 +337,22 @@ func doctorQuotaCheckNextStep(imported int, daemonOK bool) string {
 	if imported == 0 {
 		return doctorImportNextStep(daemonOK)
 	}
-	return "refresh and verify daemon-side readiness with: capd accounts check --readiness"
+	return doctorReadinessNextStep()
 }
 
 func doctorRouteCheckNextStep(imported int, daemonOK bool) string {
 	if imported == 0 {
 		return doctorImportNextStep(daemonOK)
 	}
-	return "refresh quota and verify routing with: capd accounts check --readiness"
+	return doctorRouteReadinessNextStep()
+}
+
+func doctorReadinessNextStep() string {
+	return "refresh and verify daemon-side readiness with: " + doctorReadinessCommand
+}
+
+func doctorRouteReadinessNextStep() string {
+	return "refresh quota and verify routing with: " + doctorReadinessCommand
 }
 
 func printDoctorReport(cmd *cobra.Command, report doctorReport) {

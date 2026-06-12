@@ -333,14 +333,14 @@ func TestDoctorReportsStaleAndMissingAccountQuota(t *testing.T) {
 	if !containsString(report.Issues, "not every imported Codex account has fresh quota evidence") {
 		t.Fatalf("missing quota freshness issue: %+v", report.Issues)
 	}
-	if !containsString(report.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --readiness") {
+	if !containsString(report.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness") {
 		t.Fatalf("missing readiness next step: %+v", report.NextSteps)
 	}
 	if !containsDoctorCheck(report.Checks, doctorCheckReport{
 		Name:     "Codex quota freshness",
 		OK:       false,
 		Evidence: "fresh 1/3, stale 1, missing 1",
-		NextStep: "refresh and verify daemon-side readiness with: capd accounts check --readiness",
+		NextStep: "refresh and verify daemon-side readiness with: capd accounts check --json --readiness",
 	}) {
 		t.Fatalf("missing quota freshness check: %+v", report.Checks)
 	}

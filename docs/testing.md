@@ -128,8 +128,9 @@ preflight before the live chain. It does not refresh quota or read token
 material into the output; it reports daemon health, Codex CLI availability,
 imported account count, cached quota freshness, auto-route freshness,
 SecretStore backend, readiness issues, and concrete next steps. After fixing
-account or quota issues, use `capd accounts check --readiness` to refresh and
-verify the daemon-side readiness gate before the final live run.
+account or quota issues, use `capd accounts check --json --readiness` to
+refresh and verify the daemon-side readiness gate before the final live run,
+with safe partial evidence printed on failure.
 
 The smoke command verifies imported account metadata, SecretStore readability,
 per-account `CODEX_HOME` projection, runtime `CODEX_HOME` env, private
@@ -156,9 +157,10 @@ running with `capd start` in another terminal before invoking it. Unlike
 `--refresh-quota` is set; it checks cached quota freshness, SecretStore
 readability, runtime projection, and auto-route evidence without returning
 runtime paths or token material.
-Use `capd accounts check --readiness` when you want a single daemon-side
+Use `capd accounts check --json --readiness` when you want a single daemon-side
 readiness gate to refresh every imported Codex account through `accounts/quota`
-before checking cached freshness, without printing raw backend usage JSON.
+before checking cached freshness, without printing raw backend usage JSON. The
+JSON form preserves safe partial evidence when a gate fails.
 It exits non-zero when too few accounts are imported, auto-route quota is stale
 or missing, any checked account lacks fresh cached quota, or the daemon is not
 using the expected native SecretStore backend. Override that backend with

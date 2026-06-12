@@ -321,10 +321,10 @@ flowchart TB
 - `capd accounts check --json` exercises the running daemon's CAP
   `accounts/check` RPC and therefore requires `capd start`; `capd accounts
   codex smoke` performs a direct local CLI smoke check without the daemon.
-- `capd accounts check --readiness` is the daemon-side shortcut for live Codex
-  work: it refreshes quota, requires multiple accounts, requires fresh
-  auto-route and per-account quota evidence, and requires native SecretStore by
-  default.
+- `capd accounts check --json --readiness` is the recommended daemon-side
+  shortcut for live Codex work: it refreshes quota, requires multiple accounts,
+  requires fresh auto-route and per-account quota evidence, and requires native
+  SecretStore by default while preserving safe partial evidence on failure.
 - The Web Console exposes the same daemon-side evidence with an `accounts/check`
   readiness gate for multi-account, fresh-quota, and optional native SecretStore
   checks; that gate can refresh quota for every imported Codex account before it
