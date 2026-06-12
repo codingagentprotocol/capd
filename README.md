@@ -145,6 +145,7 @@ capd agents usage codex --account auto
 capd agents route --account auto --require-fresh-quota --json
 
 capd accounts codex import   # import local ~/.codex/auth.json into capd
+CAPD_CODEX_AUTH_PATHS="/tmp/a/auth.json:/tmp/b/auth.json" capd accounts codex import # batch import on macOS/Linux
 capd accounts codex list     # imported Codex accounts, current account marked
 capd accounts codex project  # create a per-account CODEX_HOME projection
 capd accounts codex quota    # refresh quota and print a safe summary

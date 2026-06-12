@@ -113,7 +113,7 @@ the file backend.
 
 | Command | Meaning |
 |---------|---------|
-| `capd accounts codex import [--auth path]` | Import a Codex `auth.json` into capd. Defaults to `~/.codex/auth.json`. |
+| `capd accounts codex import [--auth path]` | Import one or more Codex `auth.json` files into capd. `--auth` imports one explicit path. Without `--auth`, `CAPD_CODEX_AUTH_PATHS` can provide an OS path-list of auth files (`:` on macOS/Linux, `;` on Windows); otherwise it defaults to `~/.codex/auth.json`. |
 | `capd accounts codex list` | List imported Codex account metadata; the current account is marked with `*`; quota state is reported as `fresh`, `stale`, or `missing`. |
 | `capd accounts codex current [account-id]` | Show or set the current Codex account. |
 | `capd accounts codex project [account-id]` | Create or refresh a capd-managed per-account `CODEX_HOME`; prints the path. |

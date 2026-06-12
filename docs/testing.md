@@ -54,9 +54,13 @@ Import at least one Codex `auth.json`, then run the local smoke check:
 
 ```bash
 capd accounts codex import
+CAPD_CODEX_AUTH_PATHS="/tmp/acct-a/auth.json:/tmp/acct-b/auth.json" capd accounts codex import
 capd accounts codex smoke
 capd accounts codex smoke --json
 ```
+
+`CAPD_CODEX_AUTH_PATHS` uses the OS path-list separator (`:` on macOS/Linux,
+`;` on Windows) and is only used when `--auth` is not supplied.
 
 For real quota validation:
 

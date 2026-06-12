@@ -132,6 +132,80 @@ func TestCodexAccountsImportMissingAuthDoesNotLeakPath(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsImportUsesAuthPathListEnv(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := t.TempDir()
+	firstPath := filepath.Join(dir, "first-auth.json")
+	secondPath := filepath.Join(dir, "second-auth.json")
+	if err := os.WriteFile(firstPath, []byte(`{
+		"auth_mode": "chatgpt",
+		"email": "first@example.com",
+		"tokens": {
+			"access_token": "first-access-secret",
+			"refresh_token": "first-refresh-secret",
+			"account_id": "acct_first"
+		}
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(secondPath, []byte(`{
+		"auth_mode": "chatgpt",
+		"email": "second@example.com",
+		"tokens": {
+			"access_token": "second-access-secret",
+			"refresh_token": "second-refresh-secret",
+			"account_id": "acct_second"
+		}
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CAPD_CODEX_AUTH_PATHS", strings.Join([]string{"", firstPath, secondPath}, string(os.PathListSeparator)))
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "import"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{"imported codex-acct_first <first@example.com>", "imported codex-acct_second <second@example.com>"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("output missing %q: %s", want, text)
+		}
+	}
+	for _, leaked := range []string{firstPath, secondPath, "first-access-secret", "first-refresh-secret", "second-access-secret", "second-refresh-secret", "secretRef", "secret_ref"} {
+		if strings.Contains(text, leaked) {
+			t.Fatalf("import output leaked %q: %s", leaked, text)
+		}
+	}
+	accounts, err := account.OpenStore(filepath.Join(home, ".capd", "accounts.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer accounts.Close()
+	list, err := accounts.ListAccounts(codexauth.Provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]account.Account{}
+	for _, acc := range list {
+		byID[acc.ID] = acc
+	}
+	if len(list) != 2 || byID["codex-acct_first"].Email != "first@example.com" || byID["codex-acct_second"].Email != "second@example.com" {
+		t.Fatalf("accounts = %+v", list)
+	}
+	current, err := accounts.CurrentAccount(codexauth.Provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != "codex-acct_first" {
+		t.Fatalf("current = %q", current)
+	}
+}
+
 func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
