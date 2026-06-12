@@ -1325,6 +1325,9 @@ func TestAccountsCheckCanRefreshQuotaAndEnforceReadiness(t *testing.T) {
 	if result.CheckedAccounts != 2 || !result.QuotaRefreshed || result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-low" || !result.AutoRoute.Fresh {
 		t.Fatalf("result = %+v", result)
 	}
+	if len(result.Accounts) != 2 || result.Accounts[0].ID != "codex-low" || result.Accounts[1].ID != "codex-test" {
+		t.Fatalf("accounts not sorted by account id: %+v", result.Accounts)
+	}
 	if seen["Bearer test-token"] != "acct_test" || seen["Bearer low-token"] != "acct_low" {
 		t.Fatalf("headers = %+v", seen)
 	}

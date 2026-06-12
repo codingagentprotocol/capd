@@ -293,6 +293,9 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 	if err != nil {
 		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "list accounts: %v", err)
 	}
+	sort.Slice(accounts, func(i, j int) bool {
+		return accounts[i].ID < accounts[j].ID
+	})
 	if perr := validateAccountsCheckPreflight(s.opts.Secrets.Backend(), len(accounts), params); perr != nil {
 		return protocol.AccountsCheckResult{}, perr
 	}
