@@ -46,7 +46,7 @@ live-codex-preflight:
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd doctor --json --fail --verify-secretstore --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
 	@echo "checking daemon CAP/WebSocket readiness"
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd console --probe --url --require-secret-backend $(LIVE_SECRET_BACKEND) >/dev/null
+	@probe_url=$$(CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd console --probe --url --require-secret-backend $(LIVE_SECRET_BACKEND)); curl -fsS "$$probe_url" >/dev/null
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts check --json --timeout 2m
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts check --json --readiness --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd probe data --json --readiness --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m --fail
