@@ -218,8 +218,8 @@ func TestRunTaskSendsRequireFreshQuotaForAutoAccount(t *testing.T) {
 	cmd.SetContext(ctx)
 	cmd.SetOut(&bytes.Buffer{})
 	if err := runTask(cmd, runOpts{
-		agent:             "codex",
-		account:           protocol.AccountAuto,
+		agent:             " codex ",
+		account:           " " + protocol.AccountAuto + " ",
 		requireFreshQuota: true,
 		prompt:            "hello",
 	}); err != nil {

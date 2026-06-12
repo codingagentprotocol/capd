@@ -70,7 +70,14 @@ type runOpts struct {
 }
 
 func runTask(cmd *cobra.Command, o runOpts) error {
-	agentID, cwd, permission, sessionID, prompt, showJSON := o.agent, o.cwd, o.permission, o.session, o.prompt, o.json
+	agentID := strings.TrimSpace(o.agent)
+	cwd := strings.TrimSpace(o.cwd)
+	permission := strings.TrimSpace(o.permission)
+	sessionID := strings.TrimSpace(o.session)
+	accountID := strings.TrimSpace(o.account)
+	model := strings.TrimSpace(o.model)
+	effort := strings.TrimSpace(o.effort)
+	prompt, showJSON := o.prompt, o.json
 	ctx := cmd.Context()
 	out := cmd.OutOrStdout()
 
@@ -78,7 +85,7 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 		if sessionID != "" {
 			return fmt.Errorf("--require-fresh-quota is only valid when creating a new session")
 		}
-		if o.account != protocol.AccountAuto {
+		if accountID != protocol.AccountAuto {
 			return fmt.Errorf("--require-fresh-quota requires --account %s", protocol.AccountAuto)
 		}
 	}
@@ -153,8 +160,8 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 			cwd, _ = os.Getwd()
 		}
 		res, err := call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
-			AgentID: agentID, AccountID: o.account, RequireFreshQuota: o.requireFreshQuota,
-			Cwd: cwd, PermissionMode: permission, Model: o.model, Effort: o.effort,
+			AgentID: agentID, AccountID: accountID, RequireFreshQuota: o.requireFreshQuota,
+			Cwd: cwd, PermissionMode: permission, Model: model, Effort: effort,
 		})
 		if err != nil {
 			return err
@@ -164,7 +171,7 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 		sessionID = created.SessionID
 		fmt.Fprintf(out, "session %s (%s)\n", sessionID, agentID)
 	} else {
-		if o.account != "" {
+		if accountID != "" {
 			return fmt.Errorf("--account is only valid when creating a new session")
 		}
 		if _, err := call(protocol.MethodSessionAttach, protocol.SessionAttachParams{
