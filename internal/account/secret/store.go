@@ -120,8 +120,15 @@ func (st *FileStore) Get(_ context.Context, ref Ref) (Bundle, error) {
 	if ref.Backend != "" && ref.Backend != st.Backend() {
 		return Bundle{}, fmt.Errorf("secret backend %q is not %q", ref.Backend, st.Backend())
 	}
-	data, err := os.ReadFile(st.path(ref))
+	if err := os.Chmod(st.root, 0o700); err != nil && !os.IsNotExist(err) {
+		return Bundle{}, err
+	}
+	path := st.path(ref)
+	data, err := os.ReadFile(path)
 	if err != nil {
+		return Bundle{}, err
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
 		return Bundle{}, err
 	}
 	var bundle Bundle

@@ -2,6 +2,7 @@ package secret
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -64,6 +65,54 @@ func TestFileStoreTightensExistingRootPermissions(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o700 {
 		t.Fatalf("root mode = %o", info.Mode().Perm())
+	}
+}
+
+func TestFileStoreGetTightensExistingPermissions(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "secrets")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ref := Ref{Backend: BackendFile, ID: "codex-a"}
+	data, err := json.Marshal(Bundle{
+		Provider:    "codex",
+		AuthMode:    "oauth",
+		AccessToken: "access-secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, ref.ID+".json")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := NewFileStore(root).Get(context.Background(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AccessToken != "access-secret" {
+		t.Fatalf("bundle = %+v", got)
+	}
+	rootInfo, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rootInfo.Mode().Perm() != 0o700 {
+		t.Fatalf("root mode = %o", rootInfo.Mode().Perm())
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %o", info.Mode().Perm())
 	}
 }
 
