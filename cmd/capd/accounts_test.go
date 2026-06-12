@@ -2086,6 +2086,18 @@ func TestCodexAccountsSmokeRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "fresh cached quota") {
 		t.Fatalf("err = %v", err)
 	}
+	if !strings.Contains(out.String(), "next: refresh quota and rerun smoke with: capd accounts codex smoke --json --quota --require-fresh-quota --require-secret-backend file --timeout 2m") {
+		t.Fatalf("next step missing quota recovery command: %s", out.String())
+	}
+}
+
+func TestCodexAccountsSmokeQuotaNextStepsPreserveSecretBackend(t *testing.T) {
+	if got := codexSmokeQuotaNextStep(secret.BackendFile, false); got != "refresh quota and rerun smoke with: capd accounts codex smoke --json --quota --require-fresh-quota --require-secret-backend file --timeout 2m" {
+		t.Fatalf("file quota next step = %q", got)
+	}
+	if got := codexSmokeQuotaNextStep(secret.BackendNative, true); got != "refresh quota and rerun smoke with: capd accounts --secret-backend native codex smoke --json --quota --require-all-fresh-quota --require-secret-backend native --timeout 2m" {
+		t.Fatalf("native quota next step = %q", got)
+	}
 }
 
 func TestCodexAccountsSmokeJSONMarksAutoRouteMissingQuota(t *testing.T) {
@@ -2316,6 +2328,9 @@ func TestCodexAccountsSmokeRequireAllFreshQuota(t *testing.T) {
 	err = cmd.Execute()
 	if err == nil || !strings.Contains(err.Error(), "quota is not fresh for codex-low=stale") {
 		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(out.String(), "refresh quota and rerun smoke with: capd accounts codex smoke --json --quota --require-all-fresh-quota --require-secret-backend file --timeout 2m") {
+		t.Fatalf("next step missing quota recovery command: %s", out.String())
 	}
 
 	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", Plan: "pro", PrimaryUsedPercent: 3}); err != nil {

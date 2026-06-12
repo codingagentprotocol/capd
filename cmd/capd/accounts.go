@@ -875,11 +875,11 @@ the native OS backend and keeps the source secret as a rollback path. Add
 					}
 				}
 				if len(stale) > 0 {
-					return codexSmokeFail(cmd, jsonOut, result, "quota is not fresh for "+strings.Join(stale, ", "), "run with --quota or refresh every account first")
+					return codexSmokeFail(cmd, jsonOut, result, "quota is not fresh for "+strings.Join(stale, ", "), codexSmokeQuotaNextStep(result.SecretBackend, true))
 				}
 			}
 			if requireFreshQuota && (result.AutoRoute == nil || !result.AutoRoute.Fresh) {
-				return codexSmokeFail(cmd, jsonOut, result, "auto route does not have fresh cached quota", "run with --quota or refresh quota first")
+				return codexSmokeFail(cmd, jsonOut, result, "auto route does not have fresh cached quota", codexSmokeQuotaNextStep(result.SecretBackend, false))
 			}
 			if jsonOut {
 				out, _ := json.MarshalIndent(result, "", "  ")
@@ -1012,6 +1012,8 @@ func codexSmokeFail(cmd *cobra.Command, jsonOut bool, result codexSmokeResult, i
 		cmd.SilenceErrors = true
 		out, _ := json.MarshalIndent(result, "", "  ")
 		fmt.Fprintln(cmd.OutOrStdout(), string(out))
+	} else if nextStep != "" {
+		fmt.Fprintf(cmd.ErrOrStderr(), "next: %s\n", nextStep)
 	}
 	if issue == "" {
 		issue = "Codex account smoke check failed"
@@ -1058,6 +1060,20 @@ func codexSmokeSecretNextStep(state, backend string) string {
 	default:
 		return "re-import the failing Codex account with: " + codexAccountsCommand(backend, "codex import --auth /path/to/auth.json")
 	}
+}
+
+func codexSmokeQuotaNextStep(backend string, requireAll bool) string {
+	args := "codex smoke --json --quota"
+	if requireAll {
+		args += " --require-all-fresh-quota"
+	} else {
+		args += " --require-fresh-quota"
+	}
+	if backend != "" {
+		args += " --require-secret-backend " + backend
+	}
+	args += " --timeout 2m"
+	return "refresh quota and rerun smoke with: " + codexAccountsCommand(backend, args)
 }
 
 func populateCodexSmokeCachedEvidence(result *codexSmokeResult, accounts *account.Store, list []account.Account) {
