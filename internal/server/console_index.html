@@ -196,6 +196,10 @@ async function checkAccounts(readinessGate = false) {
   const button = document.getElementById(readinessGate ? "checkReady" : "checkAccounts");
   button.disabled = true;
   try {
+    if (readinessGate) {
+      const refreshed = await call("accounts/quota", { provider: "codex", accountId: "all" });
+      line("ev-sys", `· readiness quota refreshed ${(refreshed.accounts || []).length}`);
+    }
     const result = await call("accounts/check", { provider: "codex" });
     const route = result.autoRoute ? ` · auto ${result.autoRoute.accountId || ""} ${result.autoRoute.quotaState}` : "";
     if (readinessGate) assertAccountsReady(result);
