@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -17,16 +18,19 @@ import (
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
-func daemonWSURL(cfg config.Config, token string) string {
+func daemonWSURL(cfg config.Config) string {
 	u := url.URL{
 		Scheme: "ws",
 		Host:   daemonAddr(cfg),
 		Path:   "/ws",
 	}
-	q := u.Query()
-	q.Set("token", token)
-	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+func daemonDialOptions(token string) *websocket.DialOptions {
+	h := http.Header{}
+	h.Set("Authorization", "Bearer "+token)
+	return &websocket.DialOptions{HTTPHeader: h}
 }
 
 func consoleURL(cfg config.Config, token string) string {
@@ -80,7 +84,7 @@ func daemonRPCCall(ctx context.Context, clientName, method string, params any) (
 		return nil, fmt.Errorf("no daemon token (is capd started?): %w", err)
 	}
 	token := strings.TrimSpace(string(tokenBytes))
-	conn, _, err := websocket.Dial(ctx, daemonWSURL(cfg, token), nil)
+	conn, _, err := websocket.Dial(ctx, daemonWSURL(cfg), daemonDialOptions(token))
 	if err != nil {
 		return nil, daemonConnectError(cfg, token, err)
 	}

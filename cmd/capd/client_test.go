@@ -20,8 +20,8 @@ import (
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
-func TestDaemonWSURLEncodesToken(t *testing.T) {
-	raw := daemonWSURL(config.Config{Host: "127.0.0.1", Port: 7777}, "tok &with?chars")
+func TestDaemonWSURLOmitsToken(t *testing.T) {
+	raw := daemonWSURL(config.Config{Host: "127.0.0.1", Port: 7777})
 	u, err := url.Parse(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -29,22 +29,29 @@ func TestDaemonWSURLEncodesToken(t *testing.T) {
 	if u.Scheme != "ws" || u.Host != "127.0.0.1:7777" || u.Path != "/ws" {
 		t.Fatalf("url = %q", raw)
 	}
-	if got := u.Query().Get("token"); got != "tok &with?chars" {
-		t.Fatalf("token = %q", got)
-	}
-	if u.RawQuery == "token=tok &with?chars" {
-		t.Fatalf("token was not escaped: %q", raw)
+	if u.RawQuery != "" || strings.Contains(raw, "token") {
+		t.Fatalf("url contains auth material: %q", raw)
 	}
 }
 
 func TestDaemonWSURLHandlesIPv6Host(t *testing.T) {
-	raw := daemonWSURL(config.Config{Host: "::1", Port: 7777}, "tok")
+	raw := daemonWSURL(config.Config{Host: "::1", Port: 7777})
 	u, err := url.Parse(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Host != "[::1]:7777" || u.Query().Get("token") != "tok" {
+	if u.Host != "[::1]:7777" || u.RawQuery != "" {
 		t.Fatalf("url = %q", raw)
+	}
+}
+
+func TestDaemonDialOptionsUseAuthorizationHeader(t *testing.T) {
+	opts := daemonDialOptions("tok &with?chars")
+	if opts == nil {
+		t.Fatal("nil options")
+	}
+	if got := opts.HTTPHeader.Get("Authorization"); got != "Bearer tok &with?chars" {
+		t.Fatalf("Authorization = %q", got)
 	}
 }
 
@@ -154,8 +161,11 @@ func TestRunTaskSendsRequireFreshQuotaForAutoAccount(t *testing.T) {
 	}
 	seenCreate := make(chan protocol.SessionCreateParams, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.URL.Query().Get("token"); got != token {
-			t.Errorf("token = %q", got)
+		if got := r.URL.RawQuery; got != "" {
+			t.Errorf("query leaked auth material: %q", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer "+token {
+			t.Errorf("Authorization = %q", got)
 		}
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {

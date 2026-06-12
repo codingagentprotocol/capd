@@ -352,6 +352,45 @@ func TestInitializeHandshakeWithSubprotocolToken(t *testing.T) {
 	}
 }
 
+func TestInitializeHandshakeWithAuthorizationHeader(t *testing.T) {
+	_, ts := newTestServer(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	wsURL := strings.Replace(ts.URL, "http://", "ws://", 1)
+	h := http.Header{}
+	h.Set("Authorization", "Bearer test-token")
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: h})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseNow()
+
+	id := json.RawMessage(`1`)
+	params, _ := json.Marshal(protocol.InitializeParams{
+		ProtocolVersion: protocol.Version,
+		Client:          protocol.ClientInfo{Name: "test"},
+	})
+	req, _ := json.Marshal(protocol.Request{
+		JSONRPC: protocol.JSONRPCVersion, ID: &id,
+		Method: protocol.MethodInitialize, Params: params,
+	})
+	if err := conn.Write(ctx, websocket.MessageText, req); err != nil {
+		t.Fatal(err)
+	}
+	_, data, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp protocol.Response
+	if err := json.Unmarshal(data, &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Error != nil {
+		t.Fatalf("initialize error: %+v", resp.Error)
+	}
+}
+
 func TestInitializeHandshake(t *testing.T) {
 	_, ts := newTestServer(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

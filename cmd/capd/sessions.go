@@ -33,8 +33,8 @@ func newSessionsCmd() *cobra.Command {
 				return fmt.Errorf("no daemon token (is capd started?): %w", err)
 			}
 			token := strings.TrimSpace(string(tokenBytes))
-			wsURL := daemonWSURL(cfg, token)
-			conn, _, err := websocket.Dial(ctx, wsURL, nil)
+			wsURL := daemonWSURL(cfg)
+			conn, _, err := websocket.Dial(ctx, wsURL, daemonDialOptions(token))
 			if err != nil {
 				return daemonConnectError(cfg, token, err)
 			}

@@ -101,8 +101,8 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 	}
 	token := strings.TrimSpace(string(tokenBytes))
 
-	wsURL := daemonWSURL(cfg, token)
-	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	wsURL := daemonWSURL(cfg)
+	conn, _, err := websocket.Dial(ctx, wsURL, daemonDialOptions(token))
 	if err != nil {
 		return daemonConnectError(cfg, token, err)
 	}
