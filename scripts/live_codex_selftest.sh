@@ -4,6 +4,7 @@ set -eu
 backend="${LIVE_SECRET_BACKEND:-native}"
 prompt="${LIVE_PROMPT:-say ready}"
 run_prompt="${LIVE_RUN_PROMPT:-0}"
+diagnose_secretstore="${LIVE_DIAGNOSE_SECRETSTORE:-0}"
 host="${CAPD_HOST:-127.0.0.1}"
 port="${CAPD_PORT:-7777}"
 log="${CAPD_LIVE_DAEMON_LOG:-${TMPDIR:-/tmp}/capd-live-daemon-$$.log}"
@@ -70,10 +71,15 @@ fi
 
 if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then
 	echo "live-codex-preflight failed; safe diagnostics follow" >&2
-	"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true
+	"$bin" doctor --json --fail --require-secret-backend "$backend" --timeout 2m || true
 	if health; then
 		"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true
 	fi
+	case "$diagnose_secretstore" in
+		1|true|TRUE|yes|YES)
+			"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true
+			;;
+	esac
 	exit 1
 fi
 

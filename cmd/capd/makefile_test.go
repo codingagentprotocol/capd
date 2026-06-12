@@ -164,8 +164,11 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`if [ "$bin_owned" -eq 1 ]; then`,
 		`rm -f "$bin"`,
 		"live-codex-preflight failed; safe diagnostics follow",
-		`"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true`,
+		`diagnose_secretstore="${LIVE_DIAGNOSE_SECRETSTORE:-0}"`,
+		`"$bin" doctor --json --fail --require-secret-backend "$backend" --timeout 2m || true`,
 		`"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true`,
+		`case "$diagnose_secretstore" in`,
+		`"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true`,
 		`LIVE_RUN_PROMPT`,
 		`if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then`,
 		`"$bin" run --agent codex --account auto --require-fresh-quota "$prompt"`,
@@ -176,6 +179,11 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 	}
 	if strings.Contains(script, `if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend"; then`) {
 		t.Fatal("live selftest must pass CAPD_BIN so preflight reuses the tested binary")
+	}
+	defaultDoctor := `"$bin" doctor --json --fail --require-secret-backend "$backend" --timeout 2m || true`
+	optionalDoctor := `"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true`
+	if strings.Index(script, defaultDoctor) < 0 || strings.Index(script, optionalDoctor) < strings.Index(script, `case "$diagnose_secretstore" in`) {
+		t.Fatal("live selftest must keep prompt-free diagnostics before optional SecretStore roundtrip")
 	}
 }
 
