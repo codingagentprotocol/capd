@@ -71,13 +71,15 @@ fi
 
 if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then
 	echo "live-codex-preflight failed; safe diagnostics follow" >&2
-	"$bin" doctor --json --fail --require-secret-backend "$backend" --timeout 2m || true
-	if health; then
-		"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true
-	fi
+	"$bin" health --json --require-secret-backend "$backend" || true
+	"$bin" accounts --secret-backend "$backend" codex list --json || true
+	"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true
 	case "$diagnose_secretstore" in
 		1|true|TRUE|yes|YES)
 			"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true
+			if health; then
+				"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true
+			fi
 			;;
 	esac
 	exit 1

@@ -195,11 +195,12 @@ checks that should not depend on a second terminal. It reuses an already healthy
 daemon when one is listening on `CAPD_HOST`/`CAPD_PORT`; otherwise it starts a
 temporary foreground daemon in the background, waits for health with the
 requested SecretStore backend, and cleans up that temporary process on exit.
-If the live preflight fails, the selftest prints safe `capd doctor --json
---fail` diagnostics without forcing a native SecretStore roundtrip, and, while
-the daemon is still reachable, authenticated `/probe/data` readiness diagnostics
-before cleaning up. Set `LIVE_DIAGNOSE_SECRETSTORE=1` when you want failure
-diagnostics to also run `capd doctor --json --fail --verify-secretstore`.
+If the live preflight fails, the selftest prints prompt-free diagnostics:
+daemon health, safe `capd accounts codex list --json` metadata, and the
+multi-account smoke gate. Set `LIVE_DIAGNOSE_SECRETSTORE=1` when you want
+failure diagnostics to also run SecretStore-reading checks such as
+`capd doctor --json --fail --verify-secretstore` and authenticated
+`/probe/data` readiness.
 If a daemon is already healthy on the target port but reports a different
 SecretStore backend, the selftest fails immediately and asks you to restart
 that daemon instead of trying to start a second process on the same port.
