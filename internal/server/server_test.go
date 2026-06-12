@@ -641,6 +641,22 @@ func TestConsoleStaticContract(t *testing.T) {
 	}
 }
 
+func TestConsoleApprovalRendererHasSingleBoxDeclaration(t *testing.T) {
+	const declaration = `const box = document.createElement("div");`
+	start := strings.Index(consoleHTML, "function renderApproval(d) {")
+	if start < 0 {
+		t.Fatal("console HTML missing renderApproval")
+	}
+	end := strings.Index(consoleHTML[start:], "\nfunction clearLog()")
+	if end < 0 {
+		t.Fatal("console HTML missing renderApproval terminator")
+	}
+	got := strings.Count(consoleHTML[start:start+end], declaration)
+	if got != 1 {
+		t.Fatalf("console approval renderer box declaration count = %d, want 1", got)
+	}
+}
+
 func TestConsoleExampleMatchesEmbedded(t *testing.T) {
 	data, err := os.ReadFile("../../examples/web/index.html")
 	if err != nil {
