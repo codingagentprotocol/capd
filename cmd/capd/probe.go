@@ -122,6 +122,14 @@ type probeDataResponse struct {
 		Fresh      bool     `json:"fresh"`
 		Primary    *float64 `json:"primaryUsedPercent"`
 	} `json:"autoRoute"`
+	RouteCandidates []struct {
+		AccountID  string   `json:"accountId"`
+		QuotaState string   `json:"quotaState"`
+		Fresh      bool     `json:"fresh"`
+		Primary    *float64 `json:"primaryUsedPercent"`
+		Score      float64  `json:"score"`
+		Reason     string   `json:"reason"`
+	} `json:"routeCandidates"`
 	Checks []struct {
 		Name     string `json:"name"`
 		OK       bool   `json:"ok"`
@@ -220,6 +228,20 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 	}
 	if result.AutoRoute != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s fresh=%t\n", result.AutoRoute.AccountID, result.AutoRoute.QuotaState, result.AutoRoute.Fresh)
+	}
+	if len(result.RouteCandidates) > 0 {
+		parts := make([]string, 0, len(result.RouteCandidates))
+		for _, candidate := range result.RouteCandidates {
+			part := fmt.Sprintf("%s %s fresh=%t", candidate.AccountID, candidate.QuotaState, candidate.Fresh)
+			if candidate.Primary != nil {
+				part += fmt.Sprintf(" primary=%.1f%%", *candidate.Primary)
+			}
+			if candidate.Reason != "" {
+				part += " " + candidate.Reason
+			}
+			parts = append(parts, part)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "route candidates: %s\n", strings.Join(parts, "; "))
 	}
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "CHECK\tOK\tEVIDENCE\tNEXT_STEP")

@@ -222,6 +222,8 @@ status.
 Both `agents/route --account auto --json` and daemon-side `accounts/check`
 include `routeCandidates`, sorted by the same conservative quota score used for
 auto routing, so clients can verify why one account was selected. The
+`capd probe data --readiness` text view also prints the same safe route
+candidate summary when the Web diagnostics path has partial evidence. The
 `accounts/check.summary` object is the shared machine-readable readiness view
 for CLI, Web, Probe, and automation clients.
 

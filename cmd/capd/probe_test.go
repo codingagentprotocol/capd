@@ -89,6 +89,47 @@ func TestProbeDataTextPrintsReadinessSummary(t *testing.T) {
 	}
 }
 
+func TestProbeDataTextPrintsPartialRouteCandidates(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	token := "tok-probe-candidates"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusFailedDependency)
+		w.Write([]byte(`{"ok":false,"summary":{"ready":false,"readiness":true,"checkedAccounts":2,"requiredAccounts":2,"missingAccounts":0,"freshQuotaAccounts":0,"staleQuotaAccounts":1,"missingQuotaAccounts":1,"autoRouteAccountId":"codex-a","autoRouteFresh":false,"routeDecisionOk":false,"routeCandidates":2,"secretBackend":"native","requiredSecretBackend":"native","secretBackendOk":true},"health":{"version":"test","protocolVersion":"0.1","secretBackend":"native"},"autoRoute":{"accountId":"codex-a","quotaState":"stale","fresh":false,"primaryUsedPercent":34.5},"routeCandidates":[{"accountId":"codex-a","quotaState":"stale","fresh":false,"primaryUsedPercent":34.5,"score":50,"reason":"stale quota"},{"accountId":"codex-b","quotaState":"missing","fresh":false,"score":50,"reason":"missing quota"}],"checks":[{"name":"Codex auto route freshness","ok":false,"evidence":"codex-a stale fresh=false","nextStep":"refresh quota"}],"errors":[{"source":"agents/route","code":-32602,"message":"auto account codex-a without fresh cached quota"}]}`))
+	}))
+	defer ts.Close()
+	host, port := splitTestURL(t, ts.URL)
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+
+	var out bytes.Buffer
+	cmd := newProbeCmd()
+	cmd.SetArgs([]string{"data", "--readiness"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{
+		"status: 424",
+		"auto route: codex-a stale fresh=false",
+		"route candidates: codex-a stale fresh=false primary=34.5% stale quota; codex-b missing fresh=false missing quota",
+		"error: agents/route code=-32602 auto account codex-a without fresh cached quota",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("text missing %q: %s", want, text)
+		}
+	}
+	if strings.Contains(text, token) {
+		t.Fatalf("output leaked token: %s", text)
+	}
+}
+
 func TestProbeDataReadinessCanOverrideRequiredSecretBackend(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
