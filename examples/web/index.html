@@ -196,13 +196,17 @@ async function checkAccounts(readinessGate = false) {
   const button = document.getElementById(readinessGate ? "checkReady" : "checkAccounts");
   button.disabled = true;
   try {
+    const params = { provider: "codex" };
     if (readinessGate) {
-      const refreshed = await call("accounts/quota", { provider: "codex", accountId: "all" });
-      line("ev-sys", `· readiness quota refreshed ${(refreshed.accounts || []).length}`);
+      params.refreshQuota = true;
+      params.requireMultiple = true;
+      params.requireFreshQuota = true;
+      params.requireAllFreshQuota = true;
+      if (document.getElementById("requireNativeSecret").checked) params.requireSecretBackend = "native";
     }
-    const result = await call("accounts/check", { provider: "codex" });
+    const result = await call("accounts/check", params);
     const route = result.autoRoute ? ` · auto ${result.autoRoute.accountId || ""} ${result.autoRoute.quotaState}` : "";
-    if (readinessGate) assertAccountsReady(result);
+    if (readinessGate) line("ev-sys", `· readiness quota refreshed ${result.checkedAccounts || 0}`);
     line("ev-sys", `· 账号检查完成 ${result.checkedAccounts} 个${route}`);
     await loadAccounts();
   } catch (e) {
@@ -210,16 +214,6 @@ async function checkAccounts(readinessGate = false) {
     line("ev-err", `✗ ${label}: ${e.message || JSON.stringify(e)}`);
   } finally {
     button.disabled = false;
-  }
-}
-
-function assertAccountsReady(result) {
-  const requireNative = document.getElementById("requireNativeSecret").checked;
-  if ((result.checkedAccounts || 0) < 2) throw new Error(`expected multiple Codex accounts, found ${result.checkedAccounts || 0}`);
-  if (requireNative && result.secretBackend !== "native") throw new Error(`secret backend = ${result.secretBackend || "unknown"}, want native`);
-  if (!result.autoRoute || !result.autoRoute.fresh) throw new Error("auto route does not have fresh cached quota");
-  for (const row of result.accounts || []) {
-    if (!row.quotaFresh) throw new Error(`${row.id}: quota is ${row.quotaState || "missing"}`);
   }
 }
 

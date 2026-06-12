@@ -280,6 +280,14 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 	if provider != codexauth.Provider {
 		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInvalidParams, "account check is currently supported only for provider %q", codexauth.Provider)
 	}
+	if strings.TrimSpace(params.RequireSecretBackend) != "" {
+		params.RequireSecretBackend = strings.TrimSpace(params.RequireSecretBackend)
+	}
+	if params.RefreshQuota {
+		if _, perr := s.refreshAccountQuota(ctx, protocol.AccountsQuotaParams{Provider: provider, AccountID: protocol.AccountAll}); perr != nil {
+			return protocol.AccountsCheckResult{}, protocol.NewError(perr.Code, "refresh quota: %s", perr.Message)
+		}
+	}
 	current, err := s.opts.Accounts.CurrentAccount(provider)
 	if err != nil {
 		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
@@ -310,7 +318,33 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		evidence := account.QuotaRouteEvidence(s.opts.Accounts, selected)
 		result.AutoRoute = &evidence
 	}
+	if perr := validateAccountsCheckResult(result, params); perr != nil {
+		return protocol.AccountsCheckResult{}, perr
+	}
 	return result, nil
+}
+
+func validateAccountsCheckResult(result protocol.AccountsCheckResult, params protocol.AccountsCheckParams) *protocol.Error {
+	if params.RequireSecretBackend != "" && result.SecretBackend != params.RequireSecretBackend {
+		return protocol.NewError(protocol.CodeInvalidParams, "secret backend = %q, want %q", result.SecretBackend, params.RequireSecretBackend)
+	}
+	if params.RequireMultiple && result.CheckedAccounts < 2 {
+		return protocol.NewError(protocol.CodeInvalidParams, "expected multiple Codex accounts, found %d", result.CheckedAccounts)
+	}
+	if params.RequireFreshQuota && (result.AutoRoute == nil || !result.AutoRoute.Fresh) {
+		return protocol.NewError(protocol.CodeInvalidParams, "auto route does not have fresh cached quota; refresh quota first")
+	}
+	if params.RequireAllFreshQuota {
+		if result.CheckedAccounts == 0 {
+			return protocol.NewError(protocol.CodeInvalidParams, "no Codex accounts checked; import accounts first")
+		}
+		for _, row := range result.Accounts {
+			if !row.QuotaFresh {
+				return protocol.NewError(protocol.CodeInvalidParams, "%s: quota is %s; refresh every account first", row.ID, row.QuotaState)
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Server) checkAccount(ctx context.Context, acc account.Account, current string) (protocol.AccountCheckEvidence, *protocol.Error) {

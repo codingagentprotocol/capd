@@ -292,9 +292,10 @@ flowchart TB
 - `capd accounts check --json` exercises the running daemon's CAP
   `accounts/check` RPC, while `capd accounts codex smoke` performs a direct
   local CLI smoke check.
-- The Web Console exposes the same daemon-side evidence with a readiness gate
-  for multi-account, fresh-quota, and optional native SecretStore checks; it
-  can also refresh quota for every imported Codex account before that gate.
+- The Web Console exposes the same daemon-side evidence with an `accounts/check`
+  readiness gate for multi-account, fresh-quota, and optional native SecretStore
+  checks; that gate can refresh quota for every imported Codex account before it
+  validates freshness.
 - Codex account support is split into a control plane and a runtime plane:
   SQLite stores account metadata and quota snapshots, while each runtime can
   use its own `CODEX_HOME` and app-server profile.

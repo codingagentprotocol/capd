@@ -104,37 +104,20 @@ func newAccountsCmd() *cobra.Command {
 			requireAllFreshQuota, _ := cmd.Flags().GetBool("require-all-fresh-quota")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			refreshQuota, _ := cmd.Flags().GetBool("refresh-quota")
-			if refreshQuota {
-				if _, err := daemonRPCCall(cmd.Context(), "capd-accounts-quota", protocol.MethodAccountsQuota, protocol.AccountsQuotaParams{Provider: provider, AccountID: protocol.AccountAll}); err != nil {
-					return err
-				}
-			}
-			raw, err := daemonRPCCall(cmd.Context(), "capd-accounts-check", protocol.MethodAccountsCheck, protocol.AccountsCheckParams{Provider: provider})
+			raw, err := daemonRPCCall(cmd.Context(), "capd-accounts-check", protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+				Provider:             provider,
+				RefreshQuota:         refreshQuota,
+				RequireMultiple:      requireMultiple,
+				RequireFreshQuota:    requireFreshQuota,
+				RequireAllFreshQuota: requireAllFreshQuota,
+				RequireSecretBackend: strings.TrimSpace(requireSecretBackend),
+			})
 			if err != nil {
 				return err
 			}
 			var result protocol.AccountsCheckResult
 			if err := json.Unmarshal(raw, &result); err != nil {
 				return err
-			}
-			if requireSecretBackend != "" && result.SecretBackend != requireSecretBackend {
-				return fmt.Errorf("secret backend = %q, want %q", result.SecretBackend, requireSecretBackend)
-			}
-			if requireMultiple && result.CheckedAccounts < 2 {
-				return fmt.Errorf("expected multiple Codex accounts, found %d", result.CheckedAccounts)
-			}
-			if requireFreshQuota && (result.AutoRoute == nil || !result.AutoRoute.Fresh) {
-				return fmt.Errorf("auto route does not have fresh cached quota; refresh quota first")
-			}
-			if requireAllFreshQuota {
-				if result.CheckedAccounts == 0 {
-					return fmt.Errorf("no Codex accounts checked; import accounts first")
-				}
-				for _, row := range result.Accounts {
-					if !row.QuotaFresh {
-						return fmt.Errorf("%s: quota is %s; refresh every account first", row.ID, row.QuotaState)
-					}
-				}
 			}
 			if jsonOut {
 				out, _ := json.MarshalIndent(result, "", "  ")

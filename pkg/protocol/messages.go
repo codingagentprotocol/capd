@@ -182,7 +182,12 @@ type AccountsProjectResult struct {
 }
 
 type AccountsCheckParams struct {
-	Provider string `json:"provider,omitempty"` // empty = codex
+	Provider             string `json:"provider,omitempty"` // empty = codex
+	RefreshQuota         bool   `json:"refreshQuota,omitempty"`
+	RequireMultiple      bool   `json:"requireMultiple,omitempty"`
+	RequireFreshQuota    bool   `json:"requireFreshQuota,omitempty"`
+	RequireAllFreshQuota bool   `json:"requireAllFreshQuota,omitempty"`
+	RequireSecretBackend string `json:"requireSecretBackend,omitempty"`
 }
 
 type AccountsCheckResult struct {

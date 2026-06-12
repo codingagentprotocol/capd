@@ -229,15 +229,19 @@ or local filesystem paths.
 
 ### `accounts/check`
 
-`{"provider": "codex"}` →
+`{"provider": "codex", "refreshQuota": true, "requireMultiple": true, "requireFreshQuota": true, "requireAllFreshQuota": true, "requireSecretBackend": "native"}` →
 `{"provider", "currentAccountId", "secretBackend", "checkedAccounts", "autoRoute", "accounts"}`.
 
 Runs a safe local smoke check for imported Codex accounts: verifies SecretStore
 backend matching, credential readability, per-account runtime projection,
 private `auth.json`, projection marker integrity, cached quota freshness, and
-auto-route evidence including the selected `autoRoute.accountId`. It does not
-refresh remote quota. The response never
-returns token material, `secret_ref`, raw auth JSON, or local filesystem paths.
+auto-route evidence including the selected `autoRoute.accountId`. By default it
+reads cached quota only; set `refreshQuota:true` to refresh every imported Codex
+account first inside the daemon. The `require*` fields turn the same RPC into a
+failing readiness gate for multi-account checks, fresh auto-route quota, fresh
+quota on every checked account, and a specific SecretStore backend. The response
+never returns token material, `secret_ref`, raw auth JSON, or local filesystem
+paths.
 
 ### `accounts/quota`
 

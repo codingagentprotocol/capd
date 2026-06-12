@@ -1248,6 +1248,102 @@ func TestAccountsCheckReturnsSafeSmokeEvidence(t *testing.T) {
 	}
 }
 
+func TestAccountsCheckCanRefreshQuotaAndEnforceReadiness(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	ref, err := s.opts.Secrets.Put(context.Background(), "codex-low", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "low-token",
+		AccountID:   "acct_low",
+		Email:       "low@example.com",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"low-token","account_id":"acct_low","secret":"backend-secret"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-low",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "low@example.com",
+		AccountID: "acct_low",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]string{}
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		seen[auth] = r.Header.Get("ChatGPT-Account-Id")
+		used := 44
+		if auth == "Bearer low-token" {
+			used = 7
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": "team",
+			"debug":    "must-not-return",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": used},
+			},
+		})
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+	c := initialized(t, ts)
+
+	var result protocol.AccountsCheckResult
+	c.mustResult(c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider:             codexauth.Provider,
+		RefreshQuota:         true,
+		RequireMultiple:      true,
+		RequireFreshQuota:    true,
+		RequireAllFreshQuota: true,
+		RequireSecretBackend: secret.BackendFile,
+	}), &result)
+	if result.CheckedAccounts != 2 || result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-low" || !result.AutoRoute.Fresh {
+		t.Fatalf("result = %+v", result)
+	}
+	if seen["Bearer test-token"] != "acct_test" || seen["Bearer low-token"] != "acct_low" {
+		t.Fatalf("headers = %+v", seen)
+	}
+	for _, row := range result.Accounts {
+		if !row.QuotaFresh || row.QuotaState != protocol.AccountQuotaStateFresh {
+			t.Fatalf("row = %+v", row)
+		}
+	}
+	data, _ := json.Marshal(result)
+	for _, leaked := range []string{"test-token", "low-token", "backend-secret", "must-not-return", "secretRef", "secret_ref", "CODEX_HOME", s.opts.RuntimeRoot} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("accounts/check readiness leaked %q: %s", leaked, data)
+		}
+	}
+}
+
+func TestAccountsCheckReadinessFailureIsDaemonSideAndSafe(t *testing.T) {
+	s, ts, _, _ := newCodexAccountIntegrationServer(t)
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "backend-secret test-token secretRef=file:codex-test", http.StatusTooManyRequests)
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider:             codexauth.Provider,
+		RefreshQuota:         true,
+		RequireFreshQuota:    true,
+		RequireAllFreshQuota: true,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeAgentUnavailable || !strings.Contains(resp.Error.Message, "refresh quota: codex-test") || !strings.Contains(resp.Error.Message, "HTTP 429") {
+		t.Fatalf("response = %+v", resp)
+	}
+	for _, leaked := range []string{"test-token", "backend-secret", "secretRef", "file:codex-test", "CODEX_HOME", s.opts.RuntimeRoot} {
+		if strings.Contains(resp.Error.Message, leaked) {
+			t.Fatalf("accounts/check readiness error leaked %q: %s", leaked, resp.Error.Message)
+		}
+	}
+}
+
 func TestAccountsCheckHandlesEmptyAndRejectsBackendMismatch(t *testing.T) {
 	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
 	c := initialized(t, ts)
