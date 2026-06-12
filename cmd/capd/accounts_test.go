@@ -674,18 +674,23 @@ func TestAccountsCheckRequireAllFreshQuotaFailsWithoutAccounts(t *testing.T) {
 		accounts.Close()
 	})
 
-	var out bytes.Buffer
-	cmd := newAccountsCmd()
-	cmd.SetArgs([]string{"check", "--require-all-fresh-quota"})
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	err = cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "no Codex accounts checked") {
-		t.Fatalf("err = %v", err)
-	}
-	for _, leaked := range []string{token, "CODEX_HOME", filepath.Join(home, "runtimes"), filepath.Join(home, "accounts.db")} {
-		if strings.Contains(err.Error(), leaked) || strings.Contains(out.String(), leaked) {
-			t.Fatalf("accounts check empty gate leaked %q: err=%v out=%s", leaked, err, out.String())
+	for _, args := range [][]string{
+		{"check", "--require-fresh-quota"},
+		{"check", "--require-all-fresh-quota"},
+	} {
+		var out bytes.Buffer
+		cmd := newAccountsCmd()
+		cmd.SetArgs(args)
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		err = cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "no Codex accounts checked") {
+			t.Fatalf("%v err = %v", args, err)
+		}
+		for _, leaked := range []string{token, "CODEX_HOME", filepath.Join(home, "runtimes"), filepath.Join(home, "accounts.db")} {
+			if strings.Contains(err.Error(), leaked) || strings.Contains(out.String(), leaked) {
+				t.Fatalf("accounts check empty gate leaked %q: err=%v out=%s", leaked, err, out.String())
+			}
 		}
 	}
 }

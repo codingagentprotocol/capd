@@ -350,13 +350,13 @@ func validateAccountsCheckResult(result protocol.AccountsCheckResult, params pro
 	if params.RequireMultiple && result.CheckedAccounts < 2 {
 		return protocol.NewError(protocol.CodeInvalidParams, "expected multiple Codex accounts, found %d", result.CheckedAccounts)
 	}
+	if (params.RequireFreshQuota || params.RequireAllFreshQuota) && result.CheckedAccounts == 0 {
+		return protocol.NewError(protocol.CodeInvalidParams, "no Codex accounts checked; import accounts first")
+	}
 	if params.RequireFreshQuota && (result.AutoRoute == nil || !result.AutoRoute.Fresh) {
 		return protocol.NewError(protocol.CodeInvalidParams, "auto route does not have fresh cached quota; refresh quota first")
 	}
 	if params.RequireAllFreshQuota {
-		if result.CheckedAccounts == 0 {
-			return protocol.NewError(protocol.CodeInvalidParams, "no Codex accounts checked; import accounts first")
-		}
 		for _, row := range result.Accounts {
 			if !row.QuotaFresh {
 				return protocol.NewError(protocol.CodeInvalidParams, "%s: quota is %s; refresh every account first", row.ID, row.QuotaState)

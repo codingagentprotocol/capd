@@ -1418,6 +1418,15 @@ func TestAccountsCheckHandlesEmptyAndRejectsBackendMismatch(t *testing.T) {
 	if empty.CheckedAccounts != 0 || len(empty.Accounts) != 0 || empty.AutoRoute != nil {
 		t.Fatalf("empty = %+v", empty)
 	}
+	for _, params := range []protocol.AccountsCheckParams{
+		{Provider: codexauth.Provider, RequireFreshQuota: true},
+		{Provider: codexauth.Provider, RequireAllFreshQuota: true},
+	} {
+		resp := c.call(protocol.MethodAccountsCheck, params)
+		if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "no Codex accounts checked") {
+			t.Fatalf("empty gate response = %+v", resp)
+		}
+	}
 
 	ref, err := s.opts.Secrets.Put(context.Background(), "codex-test", secret.Bundle{
 		Provider:    codexauth.Provider,
