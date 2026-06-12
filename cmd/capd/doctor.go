@@ -195,10 +195,11 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	healthCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
 	_, healthErr := daemonHealth(healthCtx, cfg)
 	cancel()
+	startDaemonStep := doctorStartDaemonNextStep(opts.RequireSecretBackend)
 	if healthErr != nil {
 		report.Daemon.Error = healthErr.Error()
 		report.Issues = append(report.Issues, "daemon health check failed")
-		report.NextSteps = append(report.NextSteps, "start the daemon with: capd start")
+		report.NextSteps = append(report.NextSteps, startDaemonStep)
 	} else {
 		report.Daemon.OK = true
 	}
@@ -206,7 +207,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		Name:     "daemon health",
 		OK:       report.Daemon.OK,
 		Evidence: doctorBoolEvidence(report.Daemon.OK, "daemon /healthz ok", "daemon /healthz failed"),
-		NextStep: doctorCheckNextStep(!report.Daemon.OK, "start the daemon with: capd start"),
+		NextStep: doctorCheckNextStep(!report.Daemon.OK, startDaemonStep),
 	})
 
 	infos := discovery.Discover(ctx, daemon.Registry())
@@ -643,6 +644,13 @@ func doctorReadinessNextStep() string {
 
 func doctorRouteReadinessNextStep() string {
 	return "refresh quota and verify routing with: " + doctorReadinessCommand
+}
+
+func doctorStartDaemonNextStep(requireSecretBackend string) string {
+	if requireSecretBackend == "" {
+		return "start the daemon with: capd start"
+	}
+	return "start the daemon with: capd start --secret-backend " + requireSecretBackend
 }
 
 func printDoctorReport(cmd *cobra.Command, report doctorReport) {

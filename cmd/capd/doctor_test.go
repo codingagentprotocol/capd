@@ -106,6 +106,36 @@ func TestDoctorTextReturnsErrorWhenNotReady(t *testing.T) {
 	}
 }
 
+func TestDoctorDaemonNextStepHonorsRequiredSecretBackend(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+
+	var out bytes.Buffer
+	cmd := newDoctorCmd()
+	cmd.SetArgs([]string{"--json", "--require-secret-backend", "native"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var got doctorReport
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	want := "start the daemon with: capd start --secret-backend native"
+	if !containsString(got.NextSteps, want) {
+		t.Fatalf("next steps missing backend-specific daemon start: %+v", got.NextSteps)
+	}
+	if !containsDoctorCheck(got.Checks, doctorCheckReport{Name: "daemon health", OK: false, Evidence: "daemon /healthz failed", NextStep: want}) {
+		t.Fatalf("daemon health check missing backend-specific next step: %+v", got.Checks)
+	}
+	if strings.Contains(out.String(), "start the daemon with: capd start\"") {
+		t.Fatalf("doctor JSON kept generic daemon start step: %s", out.String())
+	}
+}
+
 func TestDoctorHelpIncludesTimeout(t *testing.T) {
 	var out bytes.Buffer
 	cmd := newDoctorCmd()
