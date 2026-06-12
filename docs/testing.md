@@ -14,6 +14,12 @@ go test -count=5 ./internal/server ./internal/account/...
 go run ./cmd/capd agents list
 ```
 
+The same deterministic core suite is available as:
+
+```bash
+make verify
+```
+
 ## Native SecretStore
 
 The default test suite compiles every native backend but only touches real OS
@@ -24,6 +30,12 @@ CAPD_TEST_NATIVE_SECRET=1 go test ./internal/account/secret -run TestNativeStore
 GOOS=linux GOARCH=amd64 go test -c ./internal/account/secret -o /tmp/capd-secret-linux.test
 GOOS=windows GOARCH=amd64 go test -c ./internal/account/secret -o /tmp/capd-secret-windows.test.exe
 CGO_ENABLED=0 go test ./internal/account/secret
+```
+
+Or:
+
+```bash
+make verify-secretstore
 ```
 
 Linux native storage requires `secret-tool` from libsecret and an unlocked
@@ -66,6 +78,13 @@ capd accounts check --refresh-quota --require-multiple --require-fresh-quota --r
 capd agents usage codex --account auto
 capd agents route --account auto --require-fresh-quota
 capd run --agent codex --account auto --require-fresh-quota "say ready"
+```
+
+After importing multiple accounts and starting the daemon in another terminal,
+the same live chain is available as:
+
+```bash
+make live-codex-readiness
 ```
 
 The smoke command verifies imported account metadata, SecretStore readability,
