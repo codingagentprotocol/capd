@@ -23,6 +23,15 @@
   #readiness { color:#8b949e; font-size:12px; margin:-4px 0 10px; min-height:18px; }
   #readiness.ok { color:#3fb950; }
   #readiness.warn { color:#d29922; }
+  #accountDiagnostics { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:8px; margin:0 0 12px; }
+  .acctdiag { border:1px solid #30363d; border-radius:6px; padding:8px; background:#010409; font-size:12px; }
+  .acctdiag.pass { border-color:#238636; }
+  .acctdiag.fail { border-color:#8b5a12; }
+  .acctdiag .head { color:#e6edf3; word-break:break-all; }
+  .acctdiag .meta { color:#8b949e; margin-top:2px; }
+  .acctdiag .bad { color:#f85149; }
+  .acctdiag .good { color:#3fb950; }
+  .acctdiag .next { color:#d29922; margin-top:4px; }
   #readinessChecks { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:6px; margin:-2px 0 12px; }
   .check { border:1px solid #30363d; border-radius:6px; padding:6px 8px; background:#010409; font-size:12px; }
   .check.pass { border-color:#238636; }
@@ -74,6 +83,7 @@
 <div id="accounts"></div>
 <div id="routePreview"></div>
 <div id="readiness">诊断等待连接…</div>
+<div id="accountDiagnostics"></div>
 <div id="readinessChecks"></div>
 <div id="main">
   <div id="sessions">
@@ -100,6 +110,7 @@ const sessionsEl = document.getElementById("sessions");
 const accountsEl = document.getElementById("accounts");
 const routePreviewEl = document.getElementById("routePreview");
 const readinessEl = document.getElementById("readiness");
+const accountDiagnosticsEl = document.getElementById("accountDiagnostics");
 const readinessChecksEl = document.getElementById("readinessChecks");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
@@ -292,6 +303,7 @@ async function checkAccounts(readinessGate = false) {
     line("ev-sys", `· 账号检查完成 ${result.checkedAccounts} 个${route}`);
     const evidence = accountCheckSummary(result.accounts || []);
     if (evidence) line("ev-sys", `· quota evidence ${evidence}`);
+    renderAccountDiagnostics(result);
     await loadAccounts();
   } catch (e) {
     const label = readinessGate ? "就绪门禁失败" : "账号检查失败";
@@ -301,6 +313,7 @@ async function checkAccounts(readinessGate = false) {
       line("ev-sys", `· partial evidence ${e.data.checkedAccounts || 0} 个${route}`);
       const evidence = accountCheckSummary(e.data.accounts || []);
       if (evidence) line("ev-sys", `· partial quota evidence ${evidence}`);
+      renderAccountDiagnostics(e.data);
     }
   } finally {
     button.disabled = false;
@@ -378,6 +391,7 @@ function renderReadinessDiagnosticResult({ result, route, routeError = "", readi
   readinessEl.className = issues.length ? "warn" : "ok";
   readinessEl.textContent = issues.length ? `${parts.join(" · ")} · ${issues.join(" · ")}` : `${parts.join(" · ")} · ready`;
   renderReadinessChecks(checks);
+  renderAccountDiagnostics(result);
 }
 
 function readinessSummaryText({ result, accounts, freshCount, autoRoute, route, requireNativeSecret = false }) {
@@ -433,6 +447,107 @@ function renderReadinessChecks(checks) {
     }
     readinessChecksEl.appendChild(box);
   }
+}
+
+function renderAccountDiagnostics(result) {
+  accountDiagnosticsEl.textContent = "";
+  if (!result) return;
+  const summary = result.summary || {};
+  const header = document.createElement("div");
+  header.className = "acctdiag " + (summary.ready ? "pass" : "fail");
+  const title = document.createElement("div");
+  title.className = "head";
+  title.textContent = `accounts/check · ${result.checkedAccounts || 0} checked · ${summary.ready ? "ready" : "not ready"}`;
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = accountDiagnosticSummary(result);
+  header.append(title, meta);
+  if (!summary.ready) {
+    const next = document.createElement("div");
+    next.className = "next";
+    next.textContent = accountDiagnosticNextStep(result);
+    header.appendChild(next);
+  }
+  accountDiagnosticsEl.appendChild(header);
+  const accounts = result.accounts || [];
+  for (const account of accounts) accountDiagnosticsEl.appendChild(accountDiagnosticCard(account));
+  if (accounts.length === 0 && (result.checkedAccounts || 0) > 0) {
+    const empty = document.createElement("div");
+    empty.className = "acctdiag fail";
+    empty.textContent = "accounts/check failed before per-account evidence was available";
+    accountDiagnosticsEl.appendChild(empty);
+  }
+}
+
+function accountDiagnosticSummary(result) {
+  const summary = result.summary || {};
+  const parts = [
+    `secret ${result.secretBackend || summary.secretBackend || "unknown"}`,
+    `quota refreshed ${result.quotaRefreshed ? "yes" : "no"}`,
+    `fresh ${summary.freshQuotaAccounts ?? 0}/${result.checkedAccounts || 0}`,
+    `stale ${summary.staleQuotaAccounts ?? 0}`,
+    `missing quota ${summary.missingQuotaAccounts ?? 0}`
+  ];
+  if (summary.requiredSecretBackend) parts.push(`required secret ${summary.requiredSecretBackend}`);
+  if (result.autoRoute) parts.push(`auto ${result.autoRoute.accountId || "unknown"} ${routeEvidenceSummary(result.autoRoute)}`);
+  return parts.join(" · ");
+}
+
+function accountDiagnosticCard(account) {
+  const ok = account.secretBackendOk && account.credentialReadable && account.runtimeReady && account.quotaFresh;
+  const card = document.createElement("div");
+  card.className = "acctdiag " + (ok ? "pass" : "fail");
+  const head = document.createElement("div");
+  head.className = "head";
+  head.textContent = `${account.current ? "* " : ""}${account.email || account.id || "unknown"}`;
+  const secret = document.createElement("div");
+  secret.className = account.secretBackendOk && account.credentialReadable ? "meta good" : "meta bad";
+  secret.textContent = `secret ${account.secretState || "unknown"} · backend ${boolWord(account.secretBackendOk)} · readable ${boolWord(account.credentialReadable)}`;
+  const runtime = document.createElement("div");
+  runtime.className = account.runtimeReady ? "meta good" : "meta bad";
+  runtime.textContent = `runtime ${boolWord(account.runtimeReady)} · auth ${boolWord(account.authJsonPrivate)} · marker ${boolWord(account.projectionMarkerOk)}`;
+  const quota = document.createElement("div");
+  quota.className = account.quotaFresh ? "meta good" : "meta bad";
+  quota.textContent = accountQuotaDiagnosticText(account);
+  card.append(head, secret, runtime, quota);
+  const next = accountDiagnosticIssue(account);
+  if (next) {
+    const el = document.createElement("div");
+    el.className = "next";
+    el.textContent = next;
+    card.appendChild(el);
+  }
+  return card;
+}
+
+function accountQuotaDiagnosticText(account) {
+  const parts = [`quota ${account.quotaState || "missing"}`, account.quotaFresh ? "fresh" : "not-fresh"];
+  if (hasNumber(account.primaryUsedPercent)) parts.push(`primary ${account.primaryUsedPercent}%`);
+  if (account.quotaCheckedAt) parts.push(`checked ${new Date(account.quotaCheckedAt * 1000).toLocaleString()}`);
+  return parts.join(" · ");
+}
+
+function accountDiagnosticIssue(account) {
+  if (!account.secretBackendOk) return `secret backend ${account.secretState || "not ready"}; align CAPD_SECRET_BACKEND or re-import account`;
+  if (!account.credentialReadable) return `credential ${account.secretState || "unreadable"}; unlock SecretStore or re-import account`;
+  if (!account.runtimeReady) return "project account runtime with 准备运行 or rerun accounts/check";
+  if (!account.quotaFresh) return "refresh quota for this account or run 就绪门禁";
+  return "";
+}
+
+function accountDiagnosticNextStep(result) {
+  const accounts = result.accounts || [];
+  const summary = result.summary || {};
+  if ((result.checkedAccounts || 0) < 2) return "import a second Codex account, then run 就绪门禁";
+  if (summary.requiredSecretBackend && !summary.secretBackendOk) return `restart daemon with CAPD_SECRET_BACKEND=${summary.requiredSecretBackend}`;
+  if (accounts.some(a => !a.secretBackendOk || !a.credentialReadable)) return "fix SecretStore access or re-import failing accounts";
+  if (accounts.some(a => !a.runtimeReady)) return "project each failing account runtime, then rerun accounts/check";
+  if (accounts.some(a => !a.quotaFresh)) return "refresh quota for all accounts";
+  return "rerun 就绪门禁 after fixing the failed check";
+}
+
+function boolWord(value) {
+  return value ? "ok" : "fail";
 }
 
 function accountCheckSummary(accounts) {
