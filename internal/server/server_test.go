@@ -60,7 +60,7 @@ func TestConsoleServedWithSecurityHeaders(t *testing.T) {
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 		t.Fatalf("cache = %q", got)
 	}
-	if got := rec.Header().Get("Content-Security-Policy"); !strings.Contains(got, "default-src 'none'") || !strings.Contains(got, "connect-src 'self' ws:") || !strings.Contains(got, "frame-ancestors 'none'") {
+	if got := rec.Header().Get("Content-Security-Policy"); !strings.Contains(got, "default-src 'none'") || !strings.Contains(got, "connect-src 'self' ws://127.0.0.1:* ws://localhost:* ws://[::1]:*") || strings.Contains(got, " ws:;") || !strings.Contains(got, "frame-ancestors 'none'") {
 		t.Fatalf("csp = %q", got)
 	}
 	if got := rec.Header().Get("Permissions-Policy"); got != "camera=(), microphone=(), geolocation=()" {
@@ -157,6 +157,11 @@ func TestConsoleStaticContract(t *testing.T) {
 		`searchParams.delete("token")`,
 		`searchParams.set("token", TOKEN)`,
 		"capdWebSocketURL",
+		"safeCAPDHost",
+		"params.get(\"capd\")",
+		`host === "localhost"`,
+		`host === "127.0.0.1"`,
+		`host === "[::1]"`,
 		`location.host || "127.0.0.1:7777"`,
 		"history.replaceState",
 	}

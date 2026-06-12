@@ -74,7 +74,7 @@
 // token 来自 ~/.capd/token，通过 ?token=... 传入（演示用；产品里应走配对流程）
 const params = new URLSearchParams(location.search);
 const TOKEN = params.get("token") || "";
-const CAPD = params.get("capd") || location.host || "127.0.0.1:7777";
+const CAPD = safeCAPDHost(params.get("capd"));
 const QUOTA_FRESH_MS = 30 * 60 * 1000;
 if (TOKEN) {
   const cleanURL = new URL(location.href);
@@ -88,6 +88,18 @@ const accountsEl = document.getElementById("accounts");
 const routePreviewEl = document.getElementById("routePreview");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
+
+function safeCAPDHost(raw) {
+  const fallback = location.host || "127.0.0.1:7777";
+  const candidate = (raw || fallback).trim();
+  if (!candidate) return fallback;
+  try {
+    const u = new URL(`ws://${candidate}`);
+    const host = u.hostname.toLowerCase();
+    if (u.host === location.host || host === "localhost" || host === "127.0.0.1" || host === "[::1]") return u.host;
+  } catch (_) {}
+  return fallback;
+}
 
 function line(cls, text) {
   const el = document.createElement("div");
