@@ -82,6 +82,7 @@ func TestReferenceDocsCoverRunFreshQuotaRecovery(t *testing.T) {
 		"`--account auto --require-fresh-quota` fails",
 		"`capd accounts check --readiness`",
 		"`capd agents route --account auto --require-fresh-quota`",
+		"prints any safe daemon-provided\n`accountRoute` and `routeCandidates` evidence",
 		"preview the route\ngate before sending another prompt",
 	} {
 		if !strings.Contains(reference, want) {

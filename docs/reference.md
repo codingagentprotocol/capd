@@ -130,9 +130,11 @@ Interactive: approval requests pause the stream and ask
 follow-ups.
 
 When `--account auto --require-fresh-quota` fails because the selected Codex
-account lacks fresh cached quota, `capd run` prints recovery commands that point
-back to the shared readiness path: `capd accounts check --readiness` to refresh
-and verify daemon-side quota evidence, or
+account lacks fresh cached quota, `capd run` prints any safe daemon-provided
+`accountRoute` and `routeCandidates` evidence, then prints recovery commands
+that point back to the shared readiness path:
+`capd accounts check --readiness` to refresh and verify daemon-side quota
+evidence, or
 `capd agents route --account auto --require-fresh-quota` to preview the route
 gate before sending another prompt.
 

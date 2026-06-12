@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -250,9 +251,39 @@ func runTaskErrorWithNextStep(err error, o runOpts) error {
 		return nil
 	}
 	if o.requireFreshQuota && strings.Contains(strings.ToLower(err.Error()), "fresh") {
-		return fmt.Errorf("%w\nnext: refresh and verify Codex quota with: capd accounts check --readiness\nnext: or preview local account routing with: capd agents route --account auto --require-fresh-quota", err)
+		return fmt.Errorf("%w%s\nnext: refresh and verify Codex quota with: capd accounts check --readiness\nnext: or preview local account routing with: capd agents route --account auto --require-fresh-quota", err, runTaskRouteErrorEvidence(err))
 	}
 	return err
+}
+
+func runTaskRouteErrorEvidence(err error) string {
+	var perr *protocol.Error
+	if !errors.As(err, &perr) || perr.Data == nil {
+		return ""
+	}
+	data, marshalErr := json.Marshal(perr.Data)
+	if marshalErr != nil {
+		return ""
+	}
+	var routeData protocol.AgentRouteErrorData
+	if unmarshalErr := json.Unmarshal(data, &routeData); unmarshalErr != nil {
+		return ""
+	}
+	lines := []string{}
+	if routeData.AccountRoute != nil {
+		lines = append(lines, "route: "+routeEvidenceText(*routeData.AccountRoute))
+	}
+	if len(routeData.RouteCandidates) > 0 {
+		parts := make([]string, 0, len(routeData.RouteCandidates))
+		for _, candidate := range routeData.RouteCandidates {
+			parts = append(parts, candidate.AccountID+" "+routeEvidenceText(candidate))
+		}
+		lines = append(lines, "route candidates: "+strings.Join(parts, "; "))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "\n" + strings.Join(lines, "\n")
 }
 
 // printEvent renders one event; returns true when the turn is over.

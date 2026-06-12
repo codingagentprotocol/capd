@@ -338,10 +338,37 @@ func TestRunTaskFreshQuotaFailureSuggestsReadiness(t *testing.T) {
 					"result":  protocol.InitializeResult{ProtocolVersion: protocol.Version},
 				})
 			case protocol.MethodSessionCreate:
+				primary := 91.0
 				writeWSJSON(t, r.Context(), conn, map[string]any{
 					"jsonrpc": "2.0",
 					"id":      req.ID,
-					"error":   protocol.NewError(protocol.CodeInvalidParams, "auto route does not have fresh cached quota"),
+					"error": &protocol.Error{
+						Code:    protocol.CodeInvalidParams,
+						Message: "auto route does not have fresh cached quota",
+						Data: protocol.AgentRouteErrorData{
+							AccountRoute: &protocol.AccountRouteEvidence{
+								AccountID:          "codex-stale",
+								QuotaState:         protocol.AccountQuotaStateStale,
+								CheckedAt:          1700000000,
+								PrimaryUsedPercent: &primary,
+								Score:              75,
+							},
+							RouteCandidates: []protocol.AccountRouteEvidence{
+								{
+									AccountID:          "codex-stale",
+									QuotaState:         protocol.AccountQuotaStateStale,
+									CheckedAt:          1700000000,
+									PrimaryUsedPercent: &primary,
+									Score:              75,
+								},
+								{
+									AccountID:  "codex-missing",
+									QuotaState: protocol.AccountQuotaStateMissing,
+									Score:      75,
+								},
+							},
+						},
+					},
 				})
 				return
 			default:
@@ -372,7 +399,7 @@ func TestRunTaskFreshQuotaFailureSuggestsReadiness(t *testing.T) {
 		t.Fatal("expected fresh quota error")
 	}
 	text := err.Error()
-	for _, want := range []string{"fresh cached quota", "capd accounts check --readiness", "capd agents route --account auto --require-fresh-quota"} {
+	for _, want := range []string{"fresh cached quota", "route: quota stale fresh false primary 91.0% score 75.00 checked", "route candidates: codex-stale quota stale", "codex-missing quota missing", "capd accounts check --readiness", "capd agents route --account auto --require-fresh-quota"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("error missing %q: %s", want, text)
 		}
