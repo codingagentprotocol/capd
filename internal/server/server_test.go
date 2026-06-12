@@ -104,7 +104,7 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 		t.Fatalf("csp = %q", got)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"CAPD Probe", "accounts/check", "agents/route", "/healthz", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "readinessError", "routeError", "routeDecision", "routeDecisionText", "decision.reason", `call("accounts/check", { provider:"codex" })`} {
+	for _, want := range []string{"CAPD Probe", "accounts/check", "agents/route", "/healthz", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "validationRows", "showTests", "daemon health", "multi-account readiness", "quota freshness", "auto route fresh", "native secret backend", "readiness gate", "readinessError", "routeError", "routeDecision", "routeDecisionText", "decision.reason", `call("accounts/check", { provider:"codex" })`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("probe HTML missing %q", want)
 		}

@@ -21,6 +21,10 @@
   .bad { color:#f85149; }
   .panel { border:1px solid #30363d; border-radius:8px; background:#0d1117; overflow:hidden; }
   .panel h2 { margin:0; padding:10px 12px; border-bottom:1px solid #30363d; font-size:14px; background:#161b22; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:8px 10px; border-bottom:1px solid #30363d; text-align:left; vertical-align:top; }
+  th { color:#8b949e; font-weight:650; background:#161b22; }
+  td:nth-child(2) { font-weight:650; width:92px; }
   pre { margin:0; padding:12px; overflow:auto; min-height:96px; font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:pre-wrap; }
 </style>
 <main>
@@ -43,6 +47,13 @@
     <pre id="summary">waiting</pre>
   </section>
   <section class="panel">
+    <h2>Validation Tests</h2>
+    <table>
+      <thead><tr><th>Check</th><th>Status</th><th>Evidence</th></tr></thead>
+      <tbody id="tests"><tr><td>probe</td><td class="warn">waiting</td><td>not run yet</td></tr></tbody>
+    </table>
+  </section>
+  <section class="panel">
     <h2>Evidence JSON</h2>
     <pre id="json">{}</pre>
   </section>
@@ -62,6 +73,22 @@ function httpURL(path) { return `${location.protocol === "https:" ? "https" : "h
 function wsURL() { return `${location.protocol === "https:" ? "wss" : "ws"}://${capdHost()}/ws?token=${encodeURIComponent(TOKEN)}`; }
 function showJSON(data) { $("json").textContent = JSON.stringify(data, null, 2); }
 function showSummary(lines) { $("summary").textContent = lines.join("\n"); }
+function showTests(rows) {
+  const tbody = $("tests");
+  tbody.textContent = "";
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    const name = document.createElement("td");
+    const status = document.createElement("td");
+    const evidence = document.createElement("td");
+    name.textContent = row.name;
+    status.textContent = row.ok ? "pass" : "fail";
+    status.className = row.ok ? "ok" : "bad";
+    evidence.textContent = row.evidence || "";
+    tr.append(name, status, evidence);
+    tbody.appendChild(tr);
+  }
+}
 async function call(method, params = {}) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) throw new Error("CAP WebSocket is not connected");
   const id = ++state.id;
@@ -118,6 +145,26 @@ function routeDecisionText(decision, route) {
   if (decision.reason) bits.push(decision.reason);
   return bits.join(" · ") || routeText(route);
 }
+function validationRows({ healthOK, result, route, routeDecision, readiness, requireNative, readinessError, routeError }) {
+  const accounts = result && result.accounts ? result.accounts : [];
+  const fresh = accounts.filter(a => a.quotaFresh).length;
+  const secretBackend = result && result.secretBackend ? result.secretBackend : "unknown";
+  const routeEvidence = routeText(route);
+  const rows = [
+    { name:"daemon health", ok:!!healthOK, evidence:healthOK ? "/healthz ok" : "/healthz unavailable" },
+    { name:"accounts/check data", ok:!!result, evidence:result ? `${result.checkedAccounts || 0} account(s), secret ${secretBackend}` : "accounts/check failed" },
+    { name:"multi-account readiness", ok:(result && (result.checkedAccounts || 0) >= 2), evidence:`checked ${result ? result.checkedAccounts || 0 : 0}, need 2` },
+    { name:"quota freshness", ok:accounts.length > 0 && fresh === accounts.length, evidence:`fresh ${fresh}/${accounts.length}` },
+    { name:"auto route data", ok:!!route, evidence:routeEvidence },
+    { name:"auto route fresh", ok:!!(route && route.fresh), evidence:routeEvidence },
+    { name:"route decision", ok:!!routeDecision, evidence:routeDecisionText(routeDecision, route) },
+    { name:"native secret backend", ok:!readiness || !requireNative || secretBackend === "native", evidence:requireNative ? `secret ${secretBackend}` : "not required" },
+  ];
+  if (readiness) rows.push({ name:"readiness gate", ok:!readinessError && !routeError && rows.every(r => r.name === "readiness gate" || r.ok), evidence:readinessError || routeError || "all readiness checks passed" });
+  if (readinessError) rows.push({ name:"readiness error detail", ok:false, evidence:readinessError });
+  if (routeError) rows.push({ name:"route error detail", ok:false, evidence:routeError });
+  return rows;
+}
 async function refresh(readiness = false) {
   $("refresh").disabled = true;
   $("readiness").disabled = true;
@@ -169,10 +216,12 @@ async function refresh(readiness = false) {
     if (readinessError) summary.push(`readiness error: ${readinessError}`);
     if (routeError) summary.push(`route error: ${routeError}`);
     showSummary(summary);
+    showTests(validationRows({ healthOK:true, result, route, routeDecision, readiness, requireNative:$("native").checked, readinessError, routeError }));
     showJSON({ accountsCheck: result, routeDecision, autoRoute: route, readinessError, routeError });
   } catch (e) {
     setMetric("daemon", "attention", "bad");
     showSummary([e.message || String(e)]);
+    showTests(validationRows({ healthOK:false, result:null, route:null, routeDecision:null, readiness, requireNative:$("native").checked, readinessError:e.message || String(e), routeError:"" }));
     showJSON({ error: e.message || String(e) });
   } finally {
     $("refresh").disabled = false;
