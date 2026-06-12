@@ -463,9 +463,7 @@ func doctorSummary(report doctorReport, opts doctorOptions) doctorSummaryReport 
 }
 
 func doctorDaemonAccountsCheck(ctx context.Context, requireSecretBackend string) (protocol.AccountsCheckResult, string) {
-	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	raw, err := daemonRPCCall(checkCtx, "capd-doctor", protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+	raw, err := daemonRPCCall(ctx, "capd-doctor", protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
 		Provider:             codexauth.Provider,
 		RequireSecretBackend: requireSecretBackend,
 	})

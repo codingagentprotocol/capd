@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -158,6 +159,28 @@ func TestDoctorHelpIncludesTimeout(t *testing.T) {
 	text := out.String()
 	if !strings.Contains(text, "--timeout") || !strings.Contains(text, "2m") {
 		t.Fatalf("doctor help missing timeout: %s", text)
+	}
+}
+
+func TestDoctorDaemonAccountsCheckUsesCallerTimeout(t *testing.T) {
+	data, err := os.ReadFile("doctor.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	start := strings.Index(source, "func doctorDaemonAccountsCheck")
+	if start < 0 {
+		t.Fatal("doctorDaemonAccountsCheck missing")
+	}
+	end := strings.Index(source[start:], "\nfunc ")
+	if end < 0 {
+		t.Fatal("doctorDaemonAccountsCheck end missing")
+	}
+	body := source[start : start+end]
+	for _, forbidden := range []string{"context.WithTimeout(ctx,", "3*time.Second", "3 * time.Second"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("doctor daemon accounts/check must respect the caller --timeout, found %q in:\n%s", forbidden, body)
+		}
 	}
 }
 
