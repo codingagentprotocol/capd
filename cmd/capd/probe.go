@@ -86,21 +86,22 @@ type probeDataOptions struct {
 type probeDataResponse struct {
 	OK      bool `json:"ok"`
 	Summary struct {
-		Ready                bool   `json:"ready"`
-		Readiness            bool   `json:"readiness"`
-		CheckedAccounts      int    `json:"checkedAccounts"`
-		RequiredAccounts     int    `json:"requiredAccounts"`
-		MissingAccounts      int    `json:"missingAccounts"`
-		FreshQuotaAccounts   int    `json:"freshQuotaAccounts"`
-		StaleQuotaAccounts   int    `json:"staleQuotaAccounts"`
-		MissingQuotaAccounts int    `json:"missingQuotaAccounts"`
-		AutoRouteAccountID   string `json:"autoRouteAccountId"`
-		AutoRouteFresh       bool   `json:"autoRouteFresh"`
-		RouteDecisionOK      bool   `json:"routeDecisionOk"`
-		RouteCandidates      int    `json:"routeCandidates"`
-		SecretBackend        string `json:"secretBackend"`
-		SecretBackendOK      bool   `json:"secretBackendOk"`
-		QuotaRefreshed       bool   `json:"quotaRefreshed"`
+		Ready                 bool   `json:"ready"`
+		Readiness             bool   `json:"readiness"`
+		CheckedAccounts       int    `json:"checkedAccounts"`
+		RequiredAccounts      int    `json:"requiredAccounts"`
+		MissingAccounts       int    `json:"missingAccounts"`
+		FreshQuotaAccounts    int    `json:"freshQuotaAccounts"`
+		StaleQuotaAccounts    int    `json:"staleQuotaAccounts"`
+		MissingQuotaAccounts  int    `json:"missingQuotaAccounts"`
+		AutoRouteAccountID    string `json:"autoRouteAccountId"`
+		AutoRouteFresh        bool   `json:"autoRouteFresh"`
+		RouteDecisionOK       bool   `json:"routeDecisionOk"`
+		RouteCandidates       int    `json:"routeCandidates"`
+		SecretBackend         string `json:"secretBackend"`
+		RequiredSecretBackend string `json:"requiredSecretBackend"`
+		SecretBackendOK       bool   `json:"secretBackendOk"`
+		QuotaRefreshed        bool   `json:"quotaRefreshed"`
 	} `json:"summary"`
 	Health struct {
 		Version         string `json:"version"`
@@ -129,6 +130,7 @@ type probeDataResponse struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 	} `json:"errors"`
+	Error string `json:"error"`
 }
 
 func daemonProbeData(ctx context.Context, cfg config.Config, opts probeDataOptions) ([]byte, int, error) {
@@ -205,6 +207,13 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 			result.Summary.SecretBackendOK,
 		)
 	}
+	if result.Summary.SecretBackend != "" || result.Summary.RequiredSecretBackend != "" {
+		required := result.Summary.RequiredSecretBackend
+		if required == "" {
+			required = "none"
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "secret backend: actual=%s required=%s ok=%t\n", result.Summary.SecretBackend, required, result.Summary.SecretBackendOK)
+	}
 	if result.AutoRoute != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s fresh=%t\n", result.AutoRoute.AccountID, result.AutoRoute.QuotaState, result.AutoRoute.Fresh)
 	}
@@ -216,5 +225,8 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 	_ = w.Flush()
 	for _, probeErr := range result.Errors {
 		fmt.Fprintf(cmd.OutOrStdout(), "error: %s code=%d %s\n", probeErr.Source, probeErr.Code, probeErr.Message)
+	}
+	if result.Error != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "error: probe data %s\n", result.Error)
 	}
 }
