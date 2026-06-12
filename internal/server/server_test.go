@@ -14,6 +14,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/session"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
@@ -43,6 +44,47 @@ func TestWSRejectsMissingToken(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("want 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
+	reg := adapter.NewRegistry()
+	secretRoot := t.TempDir()
+	s := New(Options{
+		Token:    "test-token",
+		Version:  "test-version",
+		Registry: reg,
+		Sessions: session.NewManager(reg, nil),
+		Secrets:  secret.NewFileStore(secretRoot),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz?format=json", nil)
+	rec := httptest.NewRecorder()
+	s.handleHealthz(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("content-type = %q", got)
+	}
+	var got struct {
+		OK              bool   `json:"ok"`
+		Daemon          string `json:"daemon"`
+		Version         string `json:"version"`
+		ProtocolVersion string `json:"protocolVersion"`
+		SecretBackend   string `json:"secretBackend"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.OK || got.Daemon != "capd" || got.Version != "test-version" || got.ProtocolVersion != protocol.Version || got.SecretBackend != secret.BackendFile {
+		t.Fatalf("health json = %+v", got)
+	}
+	for _, leaked := range []string{"test-token", secretRoot, "secretRef", "rawAuthJson"} {
+		if strings.Contains(rec.Body.String(), leaked) {
+			t.Fatalf("health json leaked %q: %s", leaked, rec.Body.String())
+		}
 	}
 }
 

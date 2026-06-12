@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -16,6 +17,7 @@ import (
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/session"
+	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
 type Options struct {
@@ -50,9 +52,7 @@ func New(opts Options) *Server {
 // Run serves until ctx is cancelled.
 func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprintln(w, "ok")
-	})
+	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/console/", http.StatusFound)
 	})
@@ -86,4 +86,23 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 		return err
 	}
+}
+
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("format") != "json" {
+		fmt.Fprintln(w, "ok")
+		return
+	}
+	secretBackend := ""
+	if s.opts.Secrets != nil {
+		secretBackend = s.opts.Secrets.Backend()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":              true,
+		"daemon":          "capd",
+		"version":         s.opts.Version,
+		"protocolVersion": protocol.Version,
+		"secretBackend":   secretBackend,
+	})
 }

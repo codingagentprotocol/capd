@@ -7,7 +7,7 @@ environment variable and file. For a guided tour, read the [README](../README.md
 
 | Question | How to ask |
 |----------|------------|
-| Is the daemon up? | `GET http://127.0.0.1:7777/healthz` → `ok` (no auth needed) |
+| Is the daemon up? | `GET http://127.0.0.1:7777/healthz` → `ok`, or `?format=json` for safe daemon metadata (no auth needed) |
 | Which agents are installed? | `capd agents list` / method `agents/list` — `available`, version, binary path per agent |
 | Which sessions exist, which are alive? | `capd sessions` / method `session/list` — state `live` (in memory now), `stored` (revives on touch), `ended` |
 | Is my connection still good? | server pings every 30 s; a missed pong (10 s) drops the connection — reconnect and `session/attach` |
@@ -50,8 +50,10 @@ backend mismatches from deeper OS SecretStore verification and point the latter 
 ### `capd health` — check the daemon
 
 Checks the configured daemon `/healthz` endpoint and prints `ok`, or
-`{"ok":true,"addr":"..."}` with `--json`. Failures point to `capd start`,
-making it useful before daemon-side account readiness checks.
+`{"ok":true,"addr":"...","daemon":"capd","version":"...","protocolVersion":"...","secretBackend":"..."}` with
+`--json` when the daemon supports safe health metadata. The JSON path falls back
+to `{"ok":true,"addr":"..."}` for older daemons. Failures point to
+`capd start`, making it useful before daemon-side account readiness checks.
 
 ### `capd doctor` — local readiness preflight
 
@@ -121,7 +123,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 
 | Command | Output |
 |---------|--------|
-| `capd health [--json]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok` and `addr` |
+| `capd health [--json]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok`, `addr`, and daemon metadata such as version, protocol version, and active SecretStore backend when supported |
 | `capd console [--probe] [--url]` | opens the local web console, or the compact validation probe with `--probe`, after checking daemon health. By default it passes the daemon token to the browser without printing it; `--url` prints the tokenized URL only when explicitly requested. |
 | `capd doctor [--json] [--fail] [--verify-secretstore] [--require-secret-backend <file\|native>]` | local readiness preflight for daemon health, Codex CLI availability, imported account count, quota freshness, auto-route freshness, daemon-side CAP account evidence, and SecretStore backend; `--verify-secretstore` performs an explicit write/read/delete diagnostic roundtrip; text mode fails when issues are found, and `--fail` makes JSON mode fail too |
 | `capd agents list` | table: id, available/not installed, version, binary path |
