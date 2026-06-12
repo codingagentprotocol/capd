@@ -89,6 +89,42 @@ func TestCodexAccountsListShowsZeroQuotaWithoutLeakingSecrets(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsListJSONShowsQuotaWithoutLeakingSecrets(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	checkedAt := time.Now().Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 0, CheckedAt: checkedAt}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "list", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, secret := range []string{"access-secret", "refresh-secret", "secretRef", "secret_ref"} {
+		if strings.Contains(text, secret) {
+			t.Fatalf("codex list json leaked %q: %s", secret, text)
+		}
+	}
+	var rows []accountListRow
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	row := rows[0]
+	if !row.Current || row.Provider != codexauth.Provider || row.ID != "codex-test" || row.Plan != "pro" || row.PrimaryUsed != "0.0%" || row.QuotaState != protocol.AccountQuotaStateFresh || row.QuotaCheckedAt != checkedAt {
+		t.Fatalf("row = %+v", row)
+	}
+}
+
 func TestAccountsCheckHelpExplainsDaemonRequirement(t *testing.T) {
 	var out bytes.Buffer
 	cmd := newAccountsCmd()

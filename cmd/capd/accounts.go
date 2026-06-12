@@ -326,6 +326,7 @@ func newCodexAccountsCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List Codex accounts imported into capd",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			jsonOut, _ := cmd.Flags().GetBool("json")
 			accounts, _, err := accountDepsFromCmd(cmd)
 			if err != nil {
 				return err
@@ -338,6 +339,12 @@ func newCodexAccountsCmd() *cobra.Command {
 			list, err := accounts.ListAccounts(codexauth.Provider)
 			if err != nil {
 				return err
+			}
+			if jsonOut {
+				rows := makeAccountListRows(accounts, list, current)
+				out, _ := json.MarshalIndent(rows, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+				return nil
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
 			fmt.Fprintln(w, "CURRENT\tID\tMODE\tEMAIL\tCHATGPT_ACCOUNT\tPLAN\tPRIMARY_USED\tQUOTA_STATE")
@@ -361,6 +368,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			return w.Flush()
 		},
 	}
+	listCmd.Flags().Bool("json", false, "print imported Codex account metadata as JSON without token material")
 
 	currentCmd := &cobra.Command{
 		Use:   "current [account-id]",
@@ -905,6 +913,32 @@ type accountListRow struct {
 	PrimaryUsed    string `json:"primaryUsed,omitempty"`
 	QuotaState     string `json:"quotaState"`
 	QuotaCheckedAt int64  `json:"quotaCheckedAt,omitempty"`
+}
+
+func makeAccountListRows(accounts *account.Store, list []account.Account, current string) []accountListRow {
+	rows := make([]accountListRow, 0, len(list))
+	for _, acc := range list {
+		row := accountListRow{
+			Current:    acc.ID == current,
+			ID:         acc.ID,
+			Provider:   acc.Provider,
+			AuthMode:   acc.AuthMode,
+			Email:      acc.Email,
+			AccountID:  acc.AccountID,
+			Plan:       acc.Plan,
+			QuotaState: protocol.AccountQuotaStateMissing,
+		}
+		if q, err := accounts.LoadQuota(acc.ID); err == nil {
+			if row.Plan == "" {
+				row.Plan = q.Plan
+			}
+			row.PrimaryUsed = formatPercent(q.PrimaryUsedPercent)
+			row.QuotaState = accountQuotaState(q)
+			row.QuotaCheckedAt = q.CheckedAt
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 func accountQuotaState(q account.QuotaSnapshot) string {
