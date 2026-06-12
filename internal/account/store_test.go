@@ -430,4 +430,21 @@ func TestQuotaRouteEvidenceAndReason(t *testing.T) {
 	if got := QuotaRouteReason(st, Account{ID: "missing", Provider: "codex"}); got != "auto account missing without fresh cached quota" {
 		t.Fatalf("missing reason = %q", got)
 	}
+
+	candidates, err := QuotaRouteCandidates(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 3 {
+		t.Fatalf("candidates = %+v", candidates)
+	}
+	if candidates[0].AccountID != "fresh" || !candidates[0].Fresh || candidates[0].Score != 12 {
+		t.Fatalf("first candidate = %+v", candidates[0])
+	}
+	if candidates[1].AccountID != "missing" || candidates[1].QuotaState != protocol.AccountQuotaStateMissing || candidates[1].Score != quotaUnknownScore-0.01 {
+		t.Fatalf("second candidate = %+v", candidates[1])
+	}
+	if candidates[2].AccountID != "stale" || candidates[2].QuotaState != protocol.AccountQuotaStateStale || candidates[2].Score != quotaUnknownScore {
+		t.Fatalf("third candidate = %+v", candidates[2])
+	}
 }

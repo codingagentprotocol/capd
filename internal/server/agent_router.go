@@ -118,6 +118,9 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 	if selectedAccount.ID != "" && s.opts.Accounts != nil {
 		evidence := account.QuotaRouteEvidence(s.opts.Accounts, selectedAccount)
 		result.AccountRoute = &evidence
+		if candidates, err := account.QuotaRouteCandidates(s.opts.Accounts, codexauth.Provider); err == nil {
+			result.RouteCandidates = candidates
+		}
 	}
 	return result, nil
 }

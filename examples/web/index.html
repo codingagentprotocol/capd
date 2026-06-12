@@ -353,6 +353,8 @@ function renderReadinessDiagnosticResult({ result, route, routeError = "", readi
   if (accountEvidence) parts.push(`accounts ${accountEvidence}`);
   if (autoRoute) parts.push(`auto ${autoRoute.accountId || (route && route.accountId) || "unknown"} ${routeEvidenceSummary(autoRoute)}`);
   if (route) parts.push(`route ${routeDecisionSummary(route)}`);
+  const candidates = routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates));
+  if (candidates) parts.push(`candidates ${candidates}`);
   if (readinessError) parts.push(`readiness error ${readinessError}`);
   if (routeError) parts.push(`route error ${routeError}`);
   readinessEl.className = issues.length ? "warn" : "ok";
@@ -372,6 +374,7 @@ function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, ro
     { name: "Codex auto route freshness", ok: !!(autoRoute && autoRoute.fresh), evidence: autoRoute ? routeEvidenceSummary(autoRoute) : "auto route missing", nextStep: autoRoute && autoRoute.fresh ? "" : "刷新 quota 后预览自动路由" },
     { name: "readiness gate", ok: !readinessError, evidence: readinessError || "no blocking readiness error", nextStep: readinessError ? "按 partial evidence 修复账号、quota 或 SecretStore 后重跑就绪门禁" : "" },
     { name: "route decision", ok: !!route, evidence: route ? routeDecisionSummary(route) : routeError || "route missing", nextStep: route ? "" : "运行 capd agents route --account auto" },
+    { name: "route candidates", ok: !!routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)), evidence: routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)) || "no routeCandidates evidence", nextStep: routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)) ? "" : "刷新诊断或运行 capd agents route --account auto --json" },
     { name: "SecretStore backend", ok: secretOK, evidence: requireNativeSecret ? `secret ${secretBackend}, want native` : `secret ${secretBackend}`, nextStep: requireNativeSecret ? secretNextStep : "" }
   ];
 }
@@ -502,8 +505,15 @@ function routeDecisionSummary(routed) {
   const parts = [`agent ${agent.id || "unknown"}`];
   if (routed.accountId) parts.push(`account ${routed.accountId}`);
   if (routed.accountRoute) parts.push(routeEvidenceSummary(routed.accountRoute));
+  const candidates = routeCandidateSummary(routed.routeCandidates);
+  if (candidates) parts.push(`candidates ${candidates}`);
   if (routed.reason) parts.push(routed.reason);
   return parts.join(" · ");
+}
+
+function routeCandidateSummary(candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return "";
+  return candidates.map(c => `${c.accountId || "unknown"} ${routeEvidenceSummary(c)}`).join(" | ");
 }
 
 function routeEvidenceSummary(route) {

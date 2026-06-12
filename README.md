@@ -187,6 +187,9 @@ command with the same `CAPD_SECRET_BACKEND` value, and the daemon-side
 readiness step uses `capd accounts check --json --readiness`, so failing gates
 still print safe partial evidence under `data` for quota, account, and
 SecretStore diagnostics.
+Both `agents/route --account auto --json` and daemon-side `accounts/check`
+include `routeCandidates`, sorted by the same conservative quota score used for
+auto routing, so clients can verify why one account was selected.
 
 Every flag, protocol field, and event is documented in
 [docs/reference.md](docs/reference.md).
@@ -353,9 +356,10 @@ flowchart TB
   quota scoring. Fresh cached primary quota uses the actual usage percent, while
   rows older than 30 minutes or missing quota are treated like unknown usage so
   stale low-usage snapshots do not dominate routing. The daemon projects that
-  account into a dedicated `CODEX_HOME` and returns the resolved `accountId` in
-  `session/create` so clients can audit auto-route choices without another
-  lookup. The Codex app-server profile pool
+  account into a dedicated `CODEX_HOME`. `agents/route` and `accounts/check`
+  return `routeCandidates` sorted by the same score rule, and `session/create`
+  returns the resolved `accountId` so clients can audit auto-route choices
+  without another lookup. The Codex app-server profile pool
   keeps it isolated from other accounts.
 
 ## Repository layout

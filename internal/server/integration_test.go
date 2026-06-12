@@ -820,6 +820,15 @@ func TestAgentsRouteAutoAccountIgnoresStaleLowQuota(t *testing.T) {
 	if routed.AccountRoute == nil || routed.AccountRoute.AccountID != "codex-fresh" || routed.AccountRoute.QuotaState != protocol.AccountQuotaStateFresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 20 {
 		t.Fatalf("account route = %+v", routed.AccountRoute)
 	}
+	if len(routed.RouteCandidates) != 2 {
+		t.Fatalf("route candidates = %+v", routed.RouteCandidates)
+	}
+	if routed.RouteCandidates[0].AccountID != "codex-fresh" || !routed.RouteCandidates[0].Fresh || routed.RouteCandidates[0].PrimaryUsedPercent == nil || *routed.RouteCandidates[0].PrimaryUsedPercent != 20 {
+		t.Fatalf("first route candidate = %+v", routed.RouteCandidates[0])
+	}
+	if routed.RouteCandidates[1].AccountID != "codex-test" || routed.RouteCandidates[1].QuotaState != protocol.AccountQuotaStateStale || routed.RouteCandidates[1].Fresh {
+		t.Fatalf("second route candidate = %+v", routed.RouteCandidates[1])
+	}
 	if !strings.Contains(routed.Reason, "auto account codex-fresh primary 20%") {
 		t.Fatalf("reason = %q", routed.Reason)
 	}

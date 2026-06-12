@@ -365,6 +365,9 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 	if selectedAccount.ID != "" && accounts != nil {
 		evidence := account.QuotaRouteEvidence(accounts, selectedAccount)
 		result.AccountRoute = &evidence
+		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil {
+			result.RouteCandidates = candidates
+		}
 	}
 	return result, nil
 }

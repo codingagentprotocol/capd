@@ -2,6 +2,7 @@ package account
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/codingagentprotocol/capd/pkg/protocol"
@@ -82,6 +83,37 @@ func QuotaRouteEvidence(st *Store, acc Account) protocol.AccountRouteEvidence {
 	return evidence
 }
 
+// QuotaRouteCandidates returns every provider account with the same
+// protocol-safe evidence used by auto routing, sorted in the order the router
+// would consider them: lowest score first, then the stable tie-breaker.
+func QuotaRouteCandidates(st *Store, provider string) ([]protocol.AccountRouteEvidence, error) {
+	if st == nil {
+		return nil, fmt.Errorf("account store is required")
+	}
+	accounts, err := st.ListAccounts(provider)
+	if err != nil {
+		return nil, err
+	}
+	if len(accounts) == 0 {
+		return nil, ErrUnknownAccount
+	}
+	current, _ := st.CurrentAccount(provider)
+	now := time.Now()
+	sort.Slice(accounts, func(i, j int) bool {
+		leftScore := quotaRouteScoreAt(st, accounts[i], current, now)
+		rightScore := quotaRouteScoreAt(st, accounts[j], current, now)
+		if leftScore != rightScore {
+			return leftScore < rightScore
+		}
+		return routeTieBeats(accounts[i], accounts[j], current)
+	})
+	candidates := make([]protocol.AccountRouteEvidence, 0, len(accounts))
+	for _, acc := range accounts {
+		candidates = append(candidates, quotaRouteEvidenceAt(st, acc, current, now))
+	}
+	return candidates, nil
+}
+
 // QuotaRouteReason gives a short human-readable explanation for auto account
 // routing. It intentionally mirrors QuotaRouteEvidence's freshness semantics.
 func QuotaRouteReason(st *Store, acc Account) string {
@@ -91,6 +123,25 @@ func QuotaRouteReason(st *Store, acc Account) string {
 		}
 	}
 	return fmt.Sprintf("auto account %s without fresh cached quota", acc.ID)
+}
+
+func quotaRouteEvidenceAt(st *Store, acc Account, current string, now time.Time) protocol.AccountRouteEvidence {
+	evidence := protocol.AccountRouteEvidence{
+		AccountID:  acc.ID,
+		Score:      quotaRouteScoreAt(st, acc, current, now),
+		QuotaState: protocol.AccountQuotaStateMissing,
+	}
+	if q, err := st.LoadQuota(acc.ID); err == nil {
+		evidence.CheckedAt = q.CheckedAt
+		evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
+		if QuotaSnapshotFresh(q, now) {
+			evidence.QuotaState = protocol.AccountQuotaStateFresh
+			evidence.Fresh = true
+		} else {
+			evidence.QuotaState = protocol.AccountQuotaStateStale
+		}
+	}
+	return evidence
 }
 
 func quotaRouteScoreAt(st *Store, acc Account, current string, now time.Time) float64 {

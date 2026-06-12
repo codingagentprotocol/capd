@@ -111,10 +111,11 @@ type AgentRouteParams struct {
 }
 
 type AgentRouteResult struct {
-	Agent        AgentInfo             `json:"agent"`
-	AccountID    string                `json:"accountId,omitempty"`
-	AccountRoute *AccountRouteEvidence `json:"accountRoute,omitempty"`
-	Reason       string                `json:"reason"`
+	Agent           AgentInfo              `json:"agent"`
+	AccountID       string                 `json:"accountId,omitempty"`
+	AccountRoute    *AccountRouteEvidence  `json:"accountRoute,omitempty"`
+	RouteCandidates []AccountRouteEvidence `json:"routeCandidates,omitempty"`
+	Reason          string                 `json:"reason"`
 }
 
 type AccountRouteEvidence struct {
@@ -200,6 +201,7 @@ type AccountsCheckResult struct {
 	CheckedAccounts  int                    `json:"checkedAccounts"`
 	QuotaRefreshed   bool                   `json:"quotaRefreshed,omitempty"`
 	AutoRoute        *AccountRouteEvidence  `json:"autoRoute,omitempty"`
+	RouteCandidates  []AccountRouteEvidence `json:"routeCandidates,omitempty"`
 	Accounts         []AccountCheckEvidence `json:"accounts"`
 }
 

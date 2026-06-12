@@ -341,6 +341,9 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateFresh {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
+	if len(result.RouteCandidates) != 1 || result.RouteCandidates[0].AccountID != "codex-test" || !result.RouteCandidates[0].Fresh {
+		t.Fatalf("route candidates = %+v", result.RouteCandidates)
+	}
 	text := out.String()
 	for _, leaked := range []string{token, "access-secret", "refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
 		if strings.Contains(text, leaked) {
@@ -394,6 +397,9 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	}
 	if refreshed.AutoRoute == nil || !refreshed.AutoRoute.Fresh || refreshed.AutoRoute.PrimaryUsedPercent == nil || *refreshed.AutoRoute.PrimaryUsedPercent != 6 {
 		t.Fatalf("refreshed auto route = %+v", refreshed.AutoRoute)
+	}
+	if len(refreshed.RouteCandidates) != 1 || refreshed.RouteCandidates[0].AccountID != "codex-test" || refreshed.RouteCandidates[0].PrimaryUsedPercent == nil || *refreshed.RouteCandidates[0].PrimaryUsedPercent != 6 {
+		t.Fatalf("refreshed route candidates = %+v", refreshed.RouteCandidates)
 	}
 	if !refreshed.QuotaRefreshed {
 		t.Fatalf("quotaRefreshed = false")

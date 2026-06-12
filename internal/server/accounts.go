@@ -363,6 +363,9 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		}
 		evidence := account.QuotaRouteEvidence(s.opts.Accounts, selected)
 		result.AutoRoute = &evidence
+		if candidates, err := account.QuotaRouteCandidates(s.opts.Accounts, provider); err == nil {
+			result.RouteCandidates = candidates
+		}
 	}
 	if perr := validateAccountsCheckResult(result, params); perr != nil {
 		return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result)

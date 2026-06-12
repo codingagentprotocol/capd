@@ -149,14 +149,21 @@ function routeDecisionText(decision, route) {
   if (decision.agent && decision.agent.id) bits.push(`agent ${decision.agent.id}`);
   if (decision.accountId) bits.push(`account ${decision.accountId}`);
   if (route) bits.push(routeText(route));
+  const candidates = routeCandidateText(decision.routeCandidates);
+  if (candidates) bits.push(`candidates ${candidates}`);
   if (decision.reason) bits.push(decision.reason);
   return bits.join(" · ") || routeText(route);
+}
+function routeCandidateText(candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return "";
+  return candidates.map(c => routeText(c)).join(" | ");
 }
 function validationRows({ healthOK, result, route, routeDecision, readiness, requireNative, readinessError, routeError }) {
   const accounts = result && result.accounts ? result.accounts : [];
   const fresh = accounts.filter(a => a.quotaFresh).length;
   const secretBackend = result && result.secretBackend ? result.secretBackend : "unknown";
   const routeEvidence = routeText(route);
+  const candidatesEvidence = routeCandidateText((routeDecision && routeDecision.routeCandidates) || (result && result.routeCandidates));
   const nativeSecretOK = !readiness || !requireNative || secretBackend === "native";
   const nativeSecretNextStep = !readiness || !requireNative ? "" : (secretBackend === "native" ? "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native" : "restart daemon with: CAPD_SECRET_BACKEND=native capd start");
   const rows = [
@@ -167,6 +174,7 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
     { name:"auto route data", ok:!!route, evidence:routeEvidence, nextStep:route ? "" : "import accounts, then refresh quota with: capd accounts check --readiness" },
     { name:"auto route fresh", ok:!!(route && route.fresh), evidence:routeEvidence, nextStep:(route && route.fresh) ? "" : "refresh quota and route with: capd accounts check --readiness" },
     { name:"route decision", ok:!!routeDecision, evidence:routeDecisionText(routeDecision, route), nextStep:routeDecision ? "" : "preview routing with: capd agents route --account auto" },
+    { name:"route candidates", ok:!!candidatesEvidence, evidence:candidatesEvidence || "routeCandidates missing", nextStep:candidatesEvidence ? "" : "preview routing with: capd agents route --account auto --json" },
     { name:"native secret backend", ok:nativeSecretOK, evidence:requireNative ? `secret ${secretBackend}` : "not required", nextStep:nativeSecretNextStep },
   ];
   if (readiness) rows.push({ name:"readiness gate", ok:!readinessError && !routeError && rows.every(r => r.name === "readiness gate" || r.ok), evidence:readinessError || routeError || "all readiness checks passed", nextStep:(readinessError || routeError) ? "fix failed checks above, then rerun Readiness" : "" });
@@ -220,6 +228,7 @@ async function refresh(readiness = false) {
       `quota refreshed: ${!!result.quotaRefreshed}`,
       `auto route: ${routeText(route)}`,
       `route decision: ${routeDecisionText(routeDecision, route)}`,
+      `route candidates: ${routeCandidateText((routeDecision && routeDecision.routeCandidates) || result.routeCandidates) || "missing"}`,
       ...accountEvidence(accounts)
     ];
     if (readinessError) summary.push(`readiness error: ${readinessError}`);
@@ -227,7 +236,7 @@ async function refresh(readiness = false) {
     const checks = validationRows({ healthOK:true, result, route, routeDecision, readiness, requireNative:$("native").checked, readinessError, routeError });
     showSummary(summary);
     showTests(checks);
-    showJSON({ checks, accountsCheck: result, routeDecision, autoRoute: route, readinessError, routeError });
+    showJSON({ checks, accountsCheck: result, routeDecision, autoRoute: route, routeCandidates: (routeDecision && routeDecision.routeCandidates) || result.routeCandidates, readinessError, routeError });
   } catch (e) {
     setMetric("daemon", "attention", "bad");
     showSummary([e.message || String(e)]);
