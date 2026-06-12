@@ -84,7 +84,7 @@ the file backend.
 | `capd accounts codex list` | List imported Codex account metadata; the current account is marked with `*`. |
 | `capd accounts codex current [account-id]` | Show or set the current Codex account. |
 | `capd accounts codex project [account-id]` | Create or refresh a capd-managed per-account `CODEX_HOME`; prints the path. |
-| `capd accounts codex quota [account-id] [--raw]` | Fetch ChatGPT backend quota for an imported Codex account and update the local quota snapshot. Defaults to a safe summary; `--raw` prints backend usage JSON for debugging. |
+| `capd accounts codex quota [account-id\|auto] [--raw]` | Fetch ChatGPT backend quota for an imported Codex account and update the local quota snapshot. `auto` selects the Codex account with the lowest fresh cached primary quota. Defaults to a safe summary; `--raw` prints backend usage JSON for debugging. |
 | `capd accounts codex smoke [--json] [--quota] [--require-fresh-quota] [--require-secret-backend <file\|native>]` | Verify imported accounts, SecretStore readability, per-account projection, auth file permissions, auto-route account selection, and optionally quota refresh without printing token material. `--require-fresh-quota` fails unless auto-route selection is backed by fresh cached quota; `--require-secret-backend` fails unless the active SecretStore backend matches. |
 
 The import stores token material in `~/.capd/secrets/codex/*.json` with mode
@@ -190,6 +190,8 @@ raw quota JSON.
 Refreshes one imported Codex account through the ChatGPT backend quota endpoint,
 updates the local quota snapshot, and returns the same safe account summary
 shape as `accounts/list`. Omit `accountId` to refresh the current Codex account.
+Use `"accountId":"auto"` to refresh the account selected by the same
+conservative quota scoring rule used by account-aware routing.
 The response never returns token material, `secret_ref`, or raw backend JSON.
 
 ### `session/create`

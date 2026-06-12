@@ -147,6 +147,7 @@ capd accounts codex import   # import local ~/.codex/auth.json into capd
 capd accounts codex list     # imported Codex accounts, current account marked
 capd accounts codex project  # create a per-account CODEX_HOME projection
 capd accounts codex quota    # refresh quota and print a safe summary
+capd accounts codex quota auto
 ```
 
 Every flag, protocol field, and event is documented in

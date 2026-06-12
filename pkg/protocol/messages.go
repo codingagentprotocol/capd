@@ -126,7 +126,7 @@ type AccountsListResult struct {
 
 type AccountsQuotaParams struct {
 	Provider  string `json:"provider,omitempty"`  // empty = codex
-	AccountID string `json:"accountId,omitempty"` // empty = provider's current account
+	AccountID string `json:"accountId,omitempty"` // empty = provider's current account; "auto" = account-aware route scoring
 }
 
 type AccountsQuotaResult struct {

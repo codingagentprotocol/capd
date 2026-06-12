@@ -124,6 +124,70 @@ func TestCodexAccountsQuotaPrintsSafeSummaryByDefault(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsQuotaAutoUsesLowestCachedQuotaAccount(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, secrets := seedCodexAccount(t)
+	defer accounts.Close()
+	ref, err := secrets.Put(context.Background(), "codex-low", secret.Bundle{
+		Provider:     codexauth.Provider,
+		AuthMode:     "chatgpt",
+		AccessToken:  "low-access-secret",
+		RefreshToken: "low-refresh-secret",
+		AccountID:    "acct_low",
+		RawAuthJSON:  []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"low-access-secret","refresh_token":"low-refresh-secret"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-low",
+		Provider:  codexauth.Provider,
+		AuthMode:  "chatgpt",
+		Email:     "low@example.com",
+		AccountID: "acct_low",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 80}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", PrimaryUsedPercent: 5}); err != nil {
+		t.Fatal(err)
+	}
+	var sawAuth, sawAccount string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAuth = r.Header.Get("Authorization")
+		sawAccount = r.Header.Get("ChatGPT-Account-Id")
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": "team",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": 14},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "quota", "auto", "--base-url", srv.URL})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var result codexQuotaSummary
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.ID != "codex-low" || result.PrimaryUsedPercent != 14 || result.Plan != "team" {
+		t.Fatalf("result = %+v", result)
+	}
+	if sawAuth != "Bearer low-access-secret" || sawAccount != "acct_low" {
+		t.Fatalf("headers auth=%q account=%q", sawAuth, sawAccount)
+	}
+}
+
 func TestCodexAccountsQuotaRawFlagPrintsBackendUsage(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)

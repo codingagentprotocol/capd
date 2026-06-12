@@ -868,6 +868,70 @@ func TestAccountsQuotaRefreshesBackendQuotaSafely(t *testing.T) {
 	}
 }
 
+func TestAccountsQuotaAutoRefreshesLowestCachedQuotaAccount(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	ref, err := s.opts.Secrets.Put(context.Background(), "codex-low", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "low-token",
+		AccountID:   "acct_low",
+		Email:       "low@example.com",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"low-token"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-low",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "low@example.com",
+		AccountID: "acct_low",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 80}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", PrimaryUsedPercent: 5}); err != nil {
+		t.Fatal(err)
+	}
+	var sawAuth, sawAccount string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAuth = r.Header.Get("Authorization")
+		sawAccount = r.Header.Get("ChatGPT-Account-Id")
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": "team",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": 13},
+			},
+		})
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+	c := initialized(t, ts)
+
+	var result protocol.AccountsQuotaResult
+	c.mustResult(c.call(protocol.MethodAccountsQuota, protocol.AccountsQuotaParams{
+		Provider:  codexauth.Provider,
+		AccountID: protocol.AccountAuto,
+	}), &result)
+	if result.Account.ID != "codex-low" || result.Account.Quota == nil || result.Account.Quota.PrimaryUsedPercent != 13 {
+		t.Fatalf("account = %+v", result.Account)
+	}
+	if sawAuth != "Bearer low-token" || sawAccount != "acct_low" {
+		t.Fatalf("headers auth=%q account=%q", sawAuth, sawAccount)
+	}
+	q, err := accounts.LoadQuota("codex-low")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Plan != "team" || q.PrimaryUsedPercent != 13 {
+		t.Fatalf("cached quota = %+v", q)
+	}
+}
+
 func TestAccountsQuotaRejectsMalformedSecretRef(t *testing.T) {
 	_, ts, _, accounts := newCodexAccountIntegrationServer(t)
 	if err := accounts.UpsertAccount(account.Account{

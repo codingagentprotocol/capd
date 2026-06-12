@@ -239,8 +239,9 @@ func newCodexAccountsCmd() *cobra.Command {
 	}
 
 	quotaCmd := &cobra.Command{
-		Use:   "quota [account-id]",
+		Use:   "quota [account-id|auto]",
 		Short: "Fetch ChatGPT backend quota for an imported Codex account",
+		Long:  "Fetch ChatGPT backend quota for an imported Codex account. With auto, capd uses the same conservative quota scoring rule as account-aware routing.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			baseURL, _ := cmd.Flags().GetString("base-url")
@@ -262,7 +263,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			if id == "" {
 				return fmt.Errorf("no Codex account selected")
 			}
-			acc, err := accounts.LoadAccount(id)
+			acc, err := resolveUsageAccount(accounts, id)
 			if err != nil {
 				return err
 			}

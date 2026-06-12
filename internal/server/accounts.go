@@ -118,6 +118,12 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 		if err != nil {
 			return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
 		}
+	} else if accountID == protocol.AccountAuto {
+		acc, _, perr := s.selectCodexAccountForRoute()
+		if perr != nil {
+			return protocol.AccountsQuotaResult{}, perr
+		}
+		accountID = acc.ID
 	}
 	if accountID == "" {
 		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInvalidParams, "accountId is required")
