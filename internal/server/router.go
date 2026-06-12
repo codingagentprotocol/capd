@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/adapter"
@@ -158,6 +159,8 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
 		}
+		params.AgentID = strings.TrimSpace(params.AgentID)
+		params.AccountID = strings.TrimSpace(params.AccountID)
 		if params.Cwd == "" {
 			home, err := os.UserHomeDir()
 			if err != nil {

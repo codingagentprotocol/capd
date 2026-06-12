@@ -30,6 +30,11 @@ func TestPolicyValidateSessionCreate(t *testing.T) {
 		t.Fatalf("requireFreshQuota without auto should be rejected, got %v", perr)
 	}
 	if perr := policy.validateSessionCreate(protocol.SessionCreateParams{
+		AgentID: " codex ", AccountID: " auto ", RequireFreshQuota: true,
+	}); perr != nil {
+		t.Fatalf("trimmed auto account should be accepted, got %v", perr)
+	}
+	if perr := policy.validateSessionCreate(protocol.SessionCreateParams{
 		AgentID: "codex", AccountID: protocol.AccountAll,
 	}); perr == nil || !strings.Contains(perr.Message, "reserved") {
 		t.Fatalf("reserved account id should be rejected, got %v", perr)

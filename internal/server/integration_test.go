@@ -846,8 +846,8 @@ func TestSessionCreateCodexWithAutoAccountRequireFreshQuota(t *testing.T) {
 	}
 	var created protocol.SessionCreateResult
 	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
-		AgentID:           "codex",
-		AccountID:         protocol.AccountAuto,
+		AgentID:           " codex ",
+		AccountID:         " " + protocol.AccountAuto + " ",
 		RequireFreshQuota: true,
 	}), &created)
 	accountID, err := accounts.SessionAccount(created.SessionID)

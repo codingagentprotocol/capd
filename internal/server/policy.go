@@ -18,16 +18,18 @@ type policyEngine struct{}
 func newPolicyEngine() *policyEngine { return &policyEngine{} }
 
 func (e *policyEngine) validateSessionCreate(params protocol.SessionCreateParams) *protocol.Error {
-	if params.AgentID == "" {
+	agentID := strings.TrimSpace(params.AgentID)
+	accountID := strings.TrimSpace(params.AccountID)
+	if agentID == "" {
 		return protocol.NewError(protocol.CodeInvalidParams, "agentId is required")
 	}
 	if !validPermissionMode(params.PermissionMode) {
 		return protocol.NewError(protocol.CodeInvalidParams, "unknown permissionMode %q", params.PermissionMode)
 	}
-	if params.RequireFreshQuota && params.AccountID != protocol.AccountAuto {
+	if params.RequireFreshQuota && accountID != protocol.AccountAuto {
 		return protocol.NewError(protocol.CodeInvalidParams, "requireFreshQuota is supported only with accountId %q", protocol.AccountAuto)
 	}
-	if perr := rejectReservedAccountID(params.AccountID); perr != nil {
+	if perr := rejectReservedAccountID(accountID); perr != nil {
 		return perr
 	}
 	if params.PermissionMode == protocol.PermissionFull && isFilesystemRoot(params.Cwd) {
