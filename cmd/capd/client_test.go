@@ -347,6 +347,7 @@ func TestRunTaskFreshQuotaFailureSuggestsReadiness(t *testing.T) {
 						Code:    protocol.CodeInvalidParams,
 						Message: "auto route does not have fresh cached quota",
 						Data: protocol.AgentRouteErrorData{
+							SecretBackend: secret.BackendFile,
 							AccountRoute: &protocol.AccountRouteEvidence{
 								AccountID:          "codex-stale",
 								QuotaState:         protocol.AccountQuotaStateStale,
@@ -401,7 +402,7 @@ func TestRunTaskFreshQuotaFailureSuggestsReadiness(t *testing.T) {
 		t.Fatal("expected fresh quota error")
 	}
 	text := err.Error()
-	for _, want := range []string{"fresh cached quota", "route: quota stale fresh false primary 91.0% score 75.00 checked", "route candidates: codex-stale quota stale", "codex-missing quota missing", "capd accounts check --json --readiness --require-secret-backend file --timeout 2m", "capd agents route --account auto --require-fresh-quota --json"} {
+	for _, want := range []string{"fresh cached quota", "route: quota stale fresh false primary 91.0% score 75.00 checked", "route candidates: codex-stale quota stale", "codex-missing quota missing", "secret backend: file", "capd accounts check --json --readiness --require-secret-backend file --timeout 2m", "capd agents route --account auto --require-fresh-quota --json"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("error missing %q: %s", want, text)
 		}
@@ -495,6 +496,9 @@ func TestRunTaskFreshQuotaFailurePrefersRouteSecretBackend(t *testing.T) {
 	want := "capd accounts check --json --readiness --require-secret-backend native --timeout 2m"
 	if !strings.Contains(text, want) {
 		t.Fatalf("error missing %q: %s", want, text)
+	}
+	if !strings.Contains(text, "secret backend: native") {
+		t.Fatalf("error missing secret backend evidence: %s", text)
 	}
 	if strings.Contains(text, "--require-secret-backend file") {
 		t.Fatalf("error used env backend instead of route backend: %s", text)

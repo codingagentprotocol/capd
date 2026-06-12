@@ -388,6 +388,9 @@ func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error
 			lines = append(lines, "route candidates: "+strings.Join(parts, "; "))
 		}
 	}
+	if backend := routeReadinessBackendHint(acc); backend != "" {
+		lines = append(lines, "secret backend: "+backend)
+	}
 	lines = append(lines,
 		"next: refresh and verify daemon-side readiness with: "+accountsCheckReadinessCommand(routeReadinessBackendHint(acc)),
 		"next: preview routing with: capd agents route --account auto --require-fresh-quota --json",

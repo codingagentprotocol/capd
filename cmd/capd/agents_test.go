@@ -122,6 +122,7 @@ func TestRouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 		"route: quota stale fresh false primary 2.0% score 74.99 checked",
 		"route candidates: codex-test quota stale",
 		"codex-missing quota missing",
+		"secret backend: file",
 		"next: refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend file --timeout 2m",
 		"next: preview routing with: capd agents route --account auto --require-fresh-quota --json",
 	} {
@@ -191,6 +192,9 @@ func TestRouteCLIAccountAutoRequireFreshQuotaPrefersAccountSecretBackendInNextSt
 	want := "next: refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend native --timeout 2m"
 	if !strings.Contains(err.Error(), want) {
 		t.Fatalf("error missing %q: %s", want, err.Error())
+	}
+	if !strings.Contains(err.Error(), "secret backend: native") {
+		t.Fatalf("error missing secret backend evidence: %s", err.Error())
 	}
 	if strings.Contains(err.Error(), "--require-secret-backend file") {
 		t.Fatalf("error used env backend instead of account backend: %s", err.Error())
