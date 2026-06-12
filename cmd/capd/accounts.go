@@ -194,7 +194,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			defer accounts.Close()
 			result, err := codexauth.Importer{Accounts: accounts, Secrets: secrets}.ImportAuthJSON(cmd.Context(), authPath)
 			if err != nil {
-				return err
+				return fmt.Errorf("import account: %s", codexauth.SafeImportError(err, authPath))
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "imported %s", result.Account.ID)
 			if result.Account.Email != "" {

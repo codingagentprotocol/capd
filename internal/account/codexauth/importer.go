@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -86,6 +87,47 @@ func (im Importer) ImportAuthJSON(ctx context.Context, path string) (ImportResul
 		}
 	}
 	return ImportResult{Account: acc, Secret: ref}, nil
+}
+
+func SafeImportError(err error, authPath string) string {
+	if err == nil {
+		return ""
+	}
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		return "read auth json failed"
+	}
+	msg := err.Error()
+	if authPath != "" && strings.Contains(msg, authPath) {
+		return "read auth json failed"
+	}
+	if containsSensitiveAuthErrorText(msg) {
+		return "import auth json failed"
+	}
+	return msg
+}
+
+func containsSensitiveAuthErrorText(msg string) bool {
+	lower := strings.ToLower(msg)
+	for _, marker := range []string{
+		"access_token",
+		"refreshtoken",
+		"refresh_token",
+		"idtoken",
+		"id_token",
+		"openai_api_key",
+		"api_key",
+		"authorization:",
+		"bearer ",
+		"rawauthjson",
+		"raw_auth_json",
+		"sk-",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func readAuthJSON(path string) ([]byte, error) {

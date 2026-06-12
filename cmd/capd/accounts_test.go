@@ -89,6 +89,26 @@ func TestCodexAccountsListShowsZeroQuotaWithoutLeakingSecrets(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsImportMissingAuthDoesNotLeakPath(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	missingPath := filepath.Join(t.TempDir(), "missing-auth.json")
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "import", "--auth", missingPath})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected missing auth error")
+	}
+	if !strings.Contains(err.Error(), "read auth json failed") {
+		t.Fatalf("err = %v", err)
+	}
+	if strings.Contains(err.Error(), missingPath) {
+		t.Fatalf("import error leaked path: %v", err)
+	}
+}
+
 func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

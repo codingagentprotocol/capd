@@ -150,7 +150,7 @@ func (s *Server) importAccount(ctx context.Context, params protocol.AccountsImpo
 	}
 	result, err := codexauth.Importer{Accounts: s.opts.Accounts, Secrets: s.opts.Secrets}.ImportAuthJSON(ctx, authPath)
 	if err != nil {
-		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInvalidParams, "import account: %s", safeImportError(err, authPath))
+		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInvalidParams, "import account: %s", codexauth.SafeImportError(err, authPath))
 	}
 	current, err := s.opts.Accounts.CurrentAccount(provider)
 	if err != nil {
@@ -160,17 +160,6 @@ func (s *Server) importAccount(ctx context.Context, params protocol.AccountsImpo
 		CurrentAccountID: current,
 		Account:          accountSummary(result.Account, account.QuotaSnapshot{}),
 	}, nil
-}
-
-func safeImportError(err error, authPath string) string {
-	if err == nil {
-		return ""
-	}
-	msg := err.Error()
-	if authPath != "" && strings.Contains(msg, authPath) {
-		return "read auth json failed"
-	}
-	return msg
 }
 
 func (s *Server) currentAccount(params protocol.AccountsCurrentParams) (protocol.AccountsCurrentResult, *protocol.Error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,6 +108,24 @@ func TestImportAuthJSONRejectsOversizedFile(t *testing.T) {
 	}
 	if len(list) != 0 {
 		t.Fatalf("accounts = %+v", list)
+	}
+}
+
+func TestSafeImportErrorRedactsPathsAndTokenMarkers(t *testing.T) {
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	pathMsg := SafeImportError(&os.PathError{Op: "open", Path: authPath, Err: os.ErrNotExist}, authPath)
+	if pathMsg != "read auth json failed" || strings.Contains(pathMsg, authPath) {
+		t.Fatalf("pathMsg = %q", pathMsg)
+	}
+
+	tokenMsg := SafeImportError(fmt.Errorf("backend rejected access_token sk-sensitive"), authPath)
+	if tokenMsg != "import auth json failed" || strings.Contains(tokenMsg, "access_token") || strings.Contains(tokenMsg, "sk-sensitive") {
+		t.Fatalf("tokenMsg = %q", tokenMsg)
+	}
+
+	fieldMsg := SafeImportError(fmt.Errorf("codex auth json did not contain a supported token field"), authPath)
+	if !strings.Contains(fieldMsg, "supported token field") {
+		t.Fatalf("fieldMsg = %q", fieldMsg)
 	}
 }
 
