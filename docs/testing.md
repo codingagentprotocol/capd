@@ -64,8 +64,9 @@ per-account `CODEX_HOME` projection, runtime `CODEX_HOME` env, private
 `auth.json` permissions, capd projection marker integrity, auto-route account
 selection, and optionally ChatGPT backend quota refresh. It prints only account
 metadata, projection paths, quota percentages, projection booleans, and the
-selected `autoRoute.accountId` plus `secretBackend`; token material is never
-printed. Use `--require-fresh-quota` to fail unless the auto-route decision is
-backed by a fresh cached quota snapshot. Use `--require-secret-backend native`
-to fail unless smoke is reading credentials from the OS secret backend. Use
-`--json` to capture machine-readable smoke evidence in long tasks or CI logs.
+selected `autoRoute.accountId`, `autoRoute.quotaState` (`fresh`, `stale`, or
+`missing`), plus `secretBackend`; token material is never printed. Use
+`--require-fresh-quota` to fail unless the auto-route decision is backed by a
+fresh cached quota snapshot. Use `--require-secret-backend native` to fail
+unless smoke is reading credentials from the OS secret backend. Use `--json` to
+capture machine-readable smoke evidence in long tasks or CI logs.

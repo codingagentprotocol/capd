@@ -395,7 +395,7 @@ func TestCodexAccountsSmokeJSONIncludesAutoRouteEvidence(t *testing.T) {
 			t.Fatalf("projection evidence missing: %+v", acc)
 		}
 	}
-	if result.AutoRoute.AccountID != "codex-low" || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 4 {
+	if result.AutoRoute.AccountID != "codex-low" || result.AutoRoute.QuotaState != "fresh" || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 4 {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
 	if !strings.Contains(result.AutoRoute.Reason, "fresh primary quota") {
@@ -419,6 +419,54 @@ func TestCodexAccountsSmokeRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsSmokeJSONMarksAutoRouteMissingQuota(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var result codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != "missing" || result.AutoRoute.Fresh || result.AutoRoute.Primary != nil {
+		t.Fatalf("auto route = %+v", result.AutoRoute)
+	}
+}
+
+func TestCodexAccountsSmokeJSONMarksAutoRouteStaleQuota(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	staleAt := time.Now().Add(-account.QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 2, CheckedAt: staleAt}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var result codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != "stale" || result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 2 || result.AutoRoute.CheckedAt != staleAt {
+		t.Fatalf("auto route = %+v", result.AutoRoute)
+	}
+}
+
 func TestCodexAccountsSmokeRequireFreshQuotaPassesWithFreshCache(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)
@@ -439,7 +487,7 @@ func TestCodexAccountsSmokeRequireFreshQuotaPassesWithFreshCache(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.AutoRoute == nil || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 9 {
+	if result.AutoRoute == nil || result.AutoRoute.QuotaState != "fresh" || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 9 {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
 }

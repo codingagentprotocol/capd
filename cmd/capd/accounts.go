@@ -489,11 +489,13 @@ type codexSmokeResult struct {
 }
 
 type codexSmokeAutoRoute struct {
-	AccountID string   `json:"accountId"`
-	Reason    string   `json:"reason"`
-	Score     float64  `json:"score"`
-	Fresh     bool     `json:"fresh"`
-	Primary   *float64 `json:"primaryUsedPercent,omitempty"`
+	AccountID  string   `json:"accountId"`
+	Reason     string   `json:"reason"`
+	Score      float64  `json:"score"`
+	QuotaState string   `json:"quotaState"`
+	Fresh      bool     `json:"fresh"`
+	CheckedAt  int64    `json:"checkedAt,omitempty"`
+	Primary    *float64 `json:"primaryUsedPercent,omitempty"`
 }
 
 type codexSmokeAccount struct {
@@ -567,13 +569,21 @@ func codexSmokeAutoRouteEvidence(accounts *account.Store) (*codexSmokeAutoRoute,
 	}
 	current, _ := accounts.CurrentAccount(codexauth.Provider)
 	route := &codexSmokeAutoRoute{
-		AccountID: acc.ID,
-		Score:     account.QuotaRouteScore(accounts, acc, current),
+		AccountID:  acc.ID,
+		Score:      account.QuotaRouteScore(accounts, acc, current),
+		QuotaState: "missing",
 	}
-	if q, err := accounts.LoadQuota(acc.ID); err == nil && account.QuotaSnapshotFresh(q, time.Now()) {
-		route.Fresh = true
+	if q, err := accounts.LoadQuota(acc.ID); err == nil {
+		route.CheckedAt = q.CheckedAt
 		route.Primary = &q.PrimaryUsedPercent
-		route.Reason = fmt.Sprintf("fresh primary quota %.1f%%", q.PrimaryUsedPercent)
+		if account.QuotaSnapshotFresh(q, time.Now()) {
+			route.QuotaState = "fresh"
+			route.Fresh = true
+			route.Reason = fmt.Sprintf("fresh primary quota %.1f%%", q.PrimaryUsedPercent)
+		} else {
+			route.QuotaState = "stale"
+			route.Reason = "conservative score with stale cached quota"
+		}
 	} else {
 		route.Reason = "conservative score without fresh cached quota"
 	}
