@@ -411,7 +411,8 @@ Use `"accountId":"auto"` to refresh the account selected by the same
 conservative quota scoring rule used by account-aware routing. Use
 `"accountId":"all"` to refresh every imported Codex account in one daemon-side
 operation; if one account fails, the RPC fails with that account id in the error
-message instead of returning partial readiness evidence.
+message and JSON-RPC error `data` contains safe `AccountsQuotaResult` evidence
+for accounts refreshed before the failure.
 The response never returns token material, `secret_ref`, or raw backend JSON.
 
 ### `accounts/remove`

@@ -2518,6 +2518,16 @@ func TestAccountsQuotaAllFailureIsSafeAndCachesSuccessfulAccounts(t *testing.T) 
 			t.Fatalf("accounts/quota all error leaked %q: %s", leaked, resp.Error.Message)
 		}
 	}
+	partial := accountsQuotaErrorData(t, resp.Error)
+	if len(partial.Accounts) != 1 || partial.Accounts[0].ID != "codex-test" || partial.Accounts[0].Quota == nil || partial.Accounts[0].Quota.PrimaryUsedPercent != 41 {
+		t.Fatalf("partial quota evidence = %+v", partial)
+	}
+	partialData, _ := json.Marshal(partial)
+	for _, leaked := range []string{"test-token", "zlow-token", "backend-secret", "secretRef", ref.String()} {
+		if strings.Contains(string(partialData), leaked) {
+			t.Fatalf("accounts/quota all partial data leaked %q: %s", leaked, partialData)
+		}
+	}
 	q, err := accounts.LoadQuota("codex-test")
 	if err != nil {
 		t.Fatal(err)
@@ -2528,6 +2538,22 @@ func TestAccountsQuotaAllFailureIsSafeAndCachesSuccessfulAccounts(t *testing.T) 
 	if _, err := accounts.LoadQuota("codex-zlow"); !errors.Is(err, account.ErrUnknownAccount) {
 		t.Fatalf("codex-zlow cached quota err = %v", err)
 	}
+}
+
+func accountsQuotaErrorData(t *testing.T, perr *protocol.Error) protocol.AccountsQuotaResult {
+	t.Helper()
+	if perr == nil || perr.Data == nil {
+		t.Fatalf("missing accounts/quota error data: %+v", perr)
+	}
+	data, err := json.Marshal(perr.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out protocol.AccountsQuotaResult
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("decode accounts/quota error data %s: %v", data, err)
+	}
+	return out
 }
 
 func TestAccountsQuotaRejectsMalformedSecretRef(t *testing.T) {

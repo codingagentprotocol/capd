@@ -92,6 +92,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"AccountsCheckReadinessFailureIsDaemonSideAndSafe",
 		"AccountsCheckAllFreshFailureReportsEveryStaleAccountSafely",
 		"AccountsQuotaAllRefreshesEveryCodexAccountSafely",
+		"AccountsQuotaAllFailureIsSafeAndCachesSuccessfulAccounts",
 		"ConcurrentAccountsQuotaAllAndFreshRoute",
 		"ProbeDataReturnsSafeAccountRouteEvidence",
 		"ProbeDataReadinessReturnsPartialEvidenceOnFailure",

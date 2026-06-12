@@ -605,7 +605,7 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 		for _, acc := range accounts {
 			summary, perr := s.refreshOneAccountQuota(ctx, acc)
 			if perr != nil {
-				return protocol.AccountsQuotaResult{}, protocol.NewError(perr.Code, "%s: %s", acc.ID, perr.Message)
+				return protocol.AccountsQuotaResult{}, accountsQuotaAllErrorWithEvidence(perr, acc.ID, result)
 			}
 			result.Accounts = append(result.Accounts, summary)
 		}
@@ -639,6 +639,17 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 		return protocol.AccountsQuotaResult{}, perr
 	}
 	return protocol.AccountsQuotaResult{Account: summary}, nil
+}
+
+func accountsQuotaAllErrorWithEvidence(perr *protocol.Error, accountID string, partial protocol.AccountsQuotaResult) *protocol.Error {
+	if perr == nil {
+		return nil
+	}
+	out := protocol.NewError(perr.Code, "%s: %s", accountID, perr.Message)
+	if len(partial.Accounts) > 0 {
+		out.Data = partial
+	}
+	return out
 }
 
 func (s *Server) refreshOneAccountQuota(ctx context.Context, acc account.Account) (protocol.AccountSummary, *protocol.Error) {
