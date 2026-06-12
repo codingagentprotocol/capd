@@ -339,6 +339,47 @@ func TestCodexAccountsSmokeJSONIncludesAutoRouteEvidence(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsSmokeRequireFreshQuotaFailsWhenMissing(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--require-fresh-quota"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "fresh cached quota") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCodexAccountsSmokeRequireFreshQuotaPassesWithFreshCache(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 9}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json", "--require-fresh-quota"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var result codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.AutoRoute == nil || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 9 {
+		t.Fatalf("auto route = %+v", result.AutoRoute)
+	}
+}
+
 func TestCodexAccountsSmokeFailsWithoutAccounts(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	var out bytes.Buffer

@@ -48,7 +48,7 @@ capd accounts codex smoke --quota
 For multi-account routing readiness:
 
 ```bash
-capd accounts codex smoke --quota --require-multiple
+capd accounts codex smoke --quota --require-multiple --require-fresh-quota
 capd agents usage codex --account auto
 ```
 
@@ -58,5 +58,6 @@ per-account `CODEX_HOME` projection, runtime `CODEX_HOME` env, private
 selection, and optionally ChatGPT backend quota refresh. It prints only account
 metadata, projection paths, quota percentages, projection booleans, and the
 selected `autoRoute.accountId` plus `secretBackend`; token material is never
-printed. Use `--json` to capture machine-readable smoke evidence in long tasks
-or CI logs.
+printed. Use `--require-fresh-quota` to fail unless the auto-route decision is
+backed by a fresh cached quota snapshot. Use `--json` to capture
+machine-readable smoke evidence in long tasks or CI logs.

@@ -80,7 +80,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 | `capd accounts codex current [account-id]` | Show or set the current Codex account. |
 | `capd accounts codex project [account-id]` | Create or refresh a capd-managed per-account `CODEX_HOME`; prints the path. |
 | `capd accounts codex quota [account-id] [--raw]` | Fetch ChatGPT backend quota for an imported Codex account and update the local quota snapshot. Defaults to a safe summary; `--raw` prints backend usage JSON for debugging. |
-| `capd accounts codex smoke [--json] [--quota]` | Verify imported accounts, SecretStore readability, per-account projection, auth file permissions, auto-route account selection, and optionally quota refresh without printing token material. |
+| `capd accounts codex smoke [--json] [--quota] [--require-fresh-quota]` | Verify imported accounts, SecretStore readability, per-account projection, auth file permissions, auto-route account selection, and optionally quota refresh without printing token material. `--require-fresh-quota` fails unless auto-route selection is backed by fresh cached quota. |
 
 The import stores token material in `~/.capd/secrets/codex/*.json` with mode
 0600. SQLite stores only account metadata plus a `secret_ref`; access tokens,

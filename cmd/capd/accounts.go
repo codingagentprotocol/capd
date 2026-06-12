@@ -298,6 +298,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			refreshQuota, _ := cmd.Flags().GetBool("quota")
 			baseURL, _ := cmd.Flags().GetString("base-url")
 			requireMultiple, _ := cmd.Flags().GetBool("require-multiple")
+			requireFreshQuota, _ := cmd.Flags().GetBool("require-fresh-quota")
 			jsonOut, _ := cmd.Flags().GetBool("json")
 			accounts, secrets, err := openAccountDeps()
 			if err != nil {
@@ -378,6 +379,9 @@ func newCodexAccountsCmd() *cobra.Command {
 			} else {
 				result.AutoRoute = route
 			}
+			if requireFreshQuota && (result.AutoRoute == nil || !result.AutoRoute.Fresh) {
+				return fmt.Errorf("auto route does not have fresh cached quota; run with --quota or refresh quota first")
+			}
 			if jsonOut {
 				out, _ := json.MarshalIndent(result, "", "  ")
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))
@@ -401,6 +405,7 @@ func newCodexAccountsCmd() *cobra.Command {
 	smokeCmd.Flags().Bool("quota", false, "also refresh ChatGPT backend quota for every imported account")
 	smokeCmd.Flags().String("base-url", "", "override ChatGPT base URL for testing")
 	smokeCmd.Flags().Bool("require-multiple", false, "fail unless at least two Codex accounts are imported")
+	smokeCmd.Flags().Bool("require-fresh-quota", false, "fail unless auto-route selection is backed by fresh cached quota")
 	smokeCmd.Flags().Bool("json", false, "print machine-readable smoke evidence without token material")
 
 	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, quotaCmd, smokeCmd)
