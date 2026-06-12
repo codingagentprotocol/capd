@@ -1102,7 +1102,7 @@ func populateCodexSmokeCachedEvidence(result *codexSmokeResult, accounts *accoun
 	if len(result.Accounts) == 0 {
 		result.Accounts = make([]codexSmokeAccount, 0, len(list))
 		for _, acc := range list {
-			result.Accounts = append(result.Accounts, codexSmokeCachedAccountRow(accounts, acc))
+			result.Accounts = append(result.Accounts, codexSmokeCachedAccountRow(accounts, acc, result.SecretBackend))
 		}
 	}
 	if result.AutoRoute == nil {
@@ -1117,13 +1117,21 @@ func populateCodexSmokeCachedEvidence(result *codexSmokeResult, accounts *accoun
 	}
 }
 
-func codexSmokeCachedAccountRow(accounts *account.Store, acc account.Account) codexSmokeAccount {
+func codexSmokeCachedAccountRow(accounts *account.Store, acc account.Account, activeBackend string) codexSmokeAccount {
 	row := codexSmokeAccount{
 		ID:          acc.ID,
 		Email:       acc.Email,
 		AuthMode:    acc.AuthMode,
 		PrimaryUsed: "cached-missing",
 		QuotaState:  protocol.AccountQuotaStateMissing,
+	}
+	ref, err := secret.ParseRef(acc.SecretRef)
+	if err != nil {
+		row.SecretState = protocol.AccountSecretStateMalformedRef
+	} else if secretRefBackendLabel(ref) == activeBackend {
+		row.SecretBackendOK = true
+	} else {
+		row.SecretState = protocol.AccountSecretStateBackendMismatch
 	}
 	if q, err := accounts.LoadQuota(acc.ID); err == nil {
 		setCodexSmokeQuotaEvidence(&row, q)

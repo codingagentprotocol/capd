@@ -1889,6 +1889,36 @@ func TestCodexAccountsSmokeJSONKeepsPartialSecretFailureEvidence(t *testing.T) {
 	}
 }
 
+func TestCodexSmokeCachedAccountRowReportsSecretBackendMetadata(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = secret.BackendNative + ":codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+
+	row := codexSmokeCachedAccountRow(accounts, acc, secret.BackendNative)
+	if !row.SecretBackendOK || row.SecretReadable || row.SecretState != "" {
+		t.Fatalf("native cached row = %+v", row)
+	}
+
+	row = codexSmokeCachedAccountRow(accounts, acc, secret.BackendFile)
+	if row.SecretBackendOK || row.SecretState != protocol.AccountSecretStateBackendMismatch {
+		t.Fatalf("mismatched cached row = %+v", row)
+	}
+
+	acc.SecretRef = secret.BackendNative + ":"
+	row = codexSmokeCachedAccountRow(accounts, acc, secret.BackendNative)
+	if row.SecretBackendOK || row.SecretState != protocol.AccountSecretStateMalformedRef {
+		t.Fatalf("malformed cached row = %+v", row)
+	}
+}
+
 func TestCodexSmokeSecretRecoveryClassifiesKeychainAccessDenied(t *testing.T) {
 	if got := codexSmokeSecretErrorState(errors.New("load secret: macOS keychain status -128")); got != protocol.AccountSecretStateAccessDenied {
 		t.Fatalf("state = %q", got)
