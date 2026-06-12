@@ -100,3 +100,20 @@ func TestParseRef(t *testing.T) {
 		})
 	}
 }
+
+func TestEnsureRefBackend(t *testing.T) {
+	st := NewFileStore(t.TempDir())
+	if err := EnsureRefBackend(st, Ref{Backend: BackendFile, ID: "codex-a"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureRefBackend(st, Ref{ID: "codex-a"}); err != nil {
+		t.Fatal(err)
+	}
+	err := EnsureRefBackend(st, Ref{Backend: BackendNative, ID: "codex-a"})
+	if err == nil || err.Error() != `secret backend = "native", active backend = "file"` {
+		t.Fatalf("err = %v", err)
+	}
+	if err := EnsureRefBackend(nil, Ref{Backend: BackendFile, ID: "codex-a"}); err == nil || err.Error() != "secret store is required" {
+		t.Fatalf("nil store err = %v", err)
+	}
+}

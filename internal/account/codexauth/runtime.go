@@ -34,6 +34,9 @@ func (rp RuntimeProjector) Project(ctx context.Context, acc account.Account) (Ru
 	if err != nil {
 		return RuntimeProfile{}, err
 	}
+	if err := secret.EnsureRefBackend(rp.Secrets, ref); err != nil {
+		return RuntimeProfile{}, err
+	}
 	bundle, err := rp.Secrets.Get(ctx, ref)
 	if err != nil {
 		return RuntimeProfile{}, err

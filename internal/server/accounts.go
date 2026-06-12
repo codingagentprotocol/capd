@@ -139,6 +139,9 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 	if err != nil {
 		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInternalError, "parse secret ref: %v", err)
 	}
+	if err := secret.EnsureRefBackend(s.opts.Secrets, ref); err != nil {
+		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInternalError, "%v", err)
+	}
 	bundle, err := s.opts.Secrets.Get(ctx, ref)
 	if err != nil {
 		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInternalError, "load account secret: %v", err)

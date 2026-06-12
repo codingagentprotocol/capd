@@ -90,7 +90,9 @@ the file backend.
 The import stores token material in `~/.capd/secrets/codex/*.json` with mode
 0600. SQLite stores only account metadata plus a `secret_ref`; access tokens,
 refresh tokens, ID tokens, and API keys are intentionally kept out of the
-database, protocol responses, and logs.
+database, protocol responses, and logs. Account operations fail closed when an
+account's `secret_ref` backend does not match the active SecretStore backend,
+before token material is read.
 
 Codex-managed ChatGPT OAuth refresh is handled by Codex itself inside each
 projected `CODEX_HOME`. Before capd rewrites a projection, it checks whether

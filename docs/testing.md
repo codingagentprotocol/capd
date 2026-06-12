@@ -69,5 +69,7 @@ selected `autoRoute.accountId`, `autoRoute.quotaState` (`fresh`, `stale`, or
 `secretBackendOk` and `secretReadable` booleans. Token material is never
 printed. Use `--require-fresh-quota` to fail unless the auto-route decision is
 backed by a fresh cached quota snapshot. Use `--require-secret-backend native`
-to fail unless smoke is reading credentials from the OS secret backend. Use
-`--json` to capture machine-readable smoke evidence in long tasks or CI logs.
+to fail unless smoke is reading credentials from the OS secret backend.
+Projection, quota refresh, and smoke all fail closed if an account `secret_ref`
+points at a different backend than the active SecretStore. Use `--json` to
+capture machine-readable smoke evidence in long tasks or CI logs.

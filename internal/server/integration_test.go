@@ -964,6 +964,35 @@ func TestAccountsQuotaRejectsMalformedSecretRef(t *testing.T) {
 	}
 }
 
+func TestAccountsQuotaRejectsSecretBackendMismatchWithoutLeakingSecrets(t *testing.T) {
+	_, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-test",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "codex@example.com",
+		AccountID: "acct_test",
+		SecretRef: secret.BackendNative + ":codex-test",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsQuota, protocol.AccountsQuotaParams{
+		Provider:  codexauth.Provider,
+		AccountID: "codex-test",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInternalError || !strings.Contains(resp.Error.Message, `secret backend = "native", active backend = "file"`) {
+		t.Fatalf("response = %+v", resp)
+	}
+	data, _ := json.Marshal(resp)
+	for _, leaked := range []string{"test-token", "acct_test", "native:codex-test"} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("accounts/quota leaked %q: %s", leaked, data)
+		}
+	}
+}
+
 func TestSessionCreateRejectsAccountForNonCodexAgent(t *testing.T) {
 	ts, _ := newIntegration(t)
 	c := initialized(t, ts)

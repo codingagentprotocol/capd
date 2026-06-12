@@ -119,6 +119,24 @@ func TestRuntimeProjectorSanitizesAccountDirectory(t *testing.T) {
 	}
 }
 
+func TestRuntimeProjectorRejectsSecretBackendMismatch(t *testing.T) {
+	dir := t.TempDir()
+	secrets := secret.NewFileStore(filepath.Join(dir, "secrets"))
+	acc := account.Account{ID: "codex-acct", Provider: Provider, SecretRef: secret.BackendNative + ":codex-acct"}
+	_, err := RuntimeProjector{
+		Root:    filepath.Join(dir, "runtimes"),
+		Secrets: secrets,
+	}.Project(context.Background(), acc)
+	if err == nil || !strings.Contains(err.Error(), `secret backend = "native", active backend = "file"`) {
+		t.Fatalf("err = %v", err)
+	}
+	for _, leaked := range []string{"codex-acct", "access-secret", "refresh-secret"} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Fatalf("projector error leaked %q: %v", leaked, err)
+		}
+	}
+}
+
 func TestRuntimeProjectorSyncsRefreshedProjectedAuth(t *testing.T) {
 	dir := t.TempDir()
 	secrets := secret.NewFileStore(filepath.Join(dir, "secrets"))

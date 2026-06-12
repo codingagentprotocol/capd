@@ -65,6 +65,16 @@ type Store interface {
 	Backend() string
 }
 
+func EnsureRefBackend(st Store, ref Ref) error {
+	if st == nil {
+		return fmt.Errorf("secret store is required")
+	}
+	if ref.Backend != "" && ref.Backend != st.Backend() {
+		return fmt.Errorf("secret backend = %q, active backend = %q", ref.Backend, st.Backend())
+	}
+	return nil
+}
+
 type FileStore struct {
 	root string
 }

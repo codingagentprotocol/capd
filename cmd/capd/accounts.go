@@ -272,6 +272,9 @@ func newCodexAccountsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := secret.EnsureRefBackend(secrets, ref); err != nil {
+				return err
+			}
 			bundle, err := secrets.Get(cmd.Context(), ref)
 			if err != nil {
 				return err
@@ -339,8 +342,8 @@ func newCodexAccountsCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("%s: parse secret ref: %w", acc.ID, err)
 				}
-				if ref.Backend != "" && ref.Backend != secrets.Backend() {
-					return fmt.Errorf("%s: secret backend = %q, active backend = %q", acc.ID, ref.Backend, secrets.Backend())
+				if err := secret.EnsureRefBackend(secrets, ref); err != nil {
+					return fmt.Errorf("%s: %w", acc.ID, err)
 				}
 				bundle, err := secrets.Get(cmd.Context(), ref)
 				if err != nil {

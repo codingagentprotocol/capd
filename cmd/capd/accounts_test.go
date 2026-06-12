@@ -218,6 +218,44 @@ func TestCodexAccountsQuotaRawFlagPrintsBackendUsage(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsQuotaRejectsSecretBackendMismatch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = secret.BackendNative + ":codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		t.Fatal("quota backend should not be called when secret backend mismatches")
+	}))
+	defer srv.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "quota", "--base-url", srv.URL})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `secret backend = "native", active backend = "file"`) {
+		t.Fatalf("err = %v", err)
+	}
+	if called {
+		t.Fatal("quota backend was called")
+	}
+	for _, leaked := range []string{"access-secret", "refresh-secret", "native:codex-test"} {
+		if strings.Contains(err.Error(), leaked) || strings.Contains(out.String(), leaked) {
+			t.Fatalf("quota leaked %q: err=%v out=%s", leaked, err, out.String())
+		}
+	}
+}
+
 func TestAccountsListShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)
