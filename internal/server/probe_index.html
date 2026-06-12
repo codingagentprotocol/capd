@@ -230,13 +230,14 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
   const accounts = result && result.accounts ? result.accounts : [];
   const fresh = accounts.filter(a => a.quotaFresh).length;
   const secretBackend = result && result.secretBackend ? result.secretBackend : "unknown";
+  const secretStates = accounts.map(a => a.secretState).filter(Boolean).join(", ") || "unknown";
   const routeEvidence = routeText(route);
   const candidatesEvidence = routeCandidateText((routeDecision && routeDecision.routeCandidates) || (result && result.routeCandidates));
   const nativeSecretOK = !readiness || !requireNative || secretBackend === "native";
   const nativeSecretNextStep = !readiness || !requireNative ? "" : (secretBackend === "native" ? "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native" : "restart daemon with: CAPD_SECRET_BACKEND=native capd start");
   const rows = [
     { name:"daemon health", ok:!!healthOK, evidence:healthEvidence(healthOK), nextStep:healthOK ? "" : "start capd with: capd start" },
-    { name:"accounts/check data", ok:!!result, evidence:result ? `${result.checkedAccounts || 0} account(s), secret ${secretBackend}` : "accounts/check failed", nextStep:result ? "" : "check daemon logs and retry accounts/check" },
+    { name:"accounts/check data", ok:!!result, evidence:result ? `${result.checkedAccounts || 0} account(s), secret ${secretBackend}, secretState ${secretStates}` : "accounts/check failed", nextStep:result ? "" : "check daemon logs and retry accounts/check" },
     { name:"multi-account readiness", ok:(result && (result.checkedAccounts || 0) >= 2), evidence:`checked ${result ? result.checkedAccounts || 0 : 0}, need 2`, nextStep:(result && (result.checkedAccounts || 0) >= 2) ? "" : "import at least two accounts with: capd accounts import --auth /path/a --auth /path/b" },
     { name:"quota freshness", ok:accounts.length > 0 && fresh === accounts.length, evidence:`fresh ${fresh}/${accounts.length}`, nextStep:(accounts.length > 0 && fresh === accounts.length) ? "" : "refresh and verify with: capd accounts check --readiness" },
     { name:"auto route data", ok:!!route, evidence:routeEvidence, nextStep:route ? "" : "import accounts, then refresh quota with: capd accounts check --readiness" },

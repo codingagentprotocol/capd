@@ -239,7 +239,7 @@ SecretStore smoke check that does not require the daemon, use
 				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s\n", result.AutoRoute.AccountID, routeEvidenceText(*result.AutoRoute))
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "CURRENT\tID\tEMAIL\tSECRET\tCREDENTIAL\tRUNTIME\tAUTH_JSON\tMARKER\tQUOTA\tFRESH\tPRIMARY\tCHECKED_AT")
+			fmt.Fprintln(w, "CURRENT\tID\tEMAIL\tSECRET\tSECRET_STATE\tCREDENTIAL\tRUNTIME\tAUTH_JSON\tMARKER\tQUOTA\tFRESH\tPRIMARY\tCHECKED_AT")
 			for _, row := range result.Accounts {
 				mark := ""
 				if row.Current {
@@ -253,8 +253,8 @@ SecretStore smoke check that does not require the daemon, use
 				if row.QuotaCheckedAt > 0 {
 					checkedAt = time.Unix(row.QuotaCheckedAt, 0).Format(time.RFC3339)
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%t\t%t\t%t\t%t\t%t\t%s\t%t\t%s\t%s\n",
-					mark, row.ID, row.Email, row.SecretBackendOK, row.CredentialReadable, row.RuntimeReady, row.AuthJSONPrivate, row.ProjectionMarkerOK, row.QuotaState, row.QuotaFresh, primary, checkedAt)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%t\t%s\t%t\t%t\t%t\t%t\t%s\t%t\t%s\t%s\n",
+					mark, row.ID, row.Email, row.SecretBackendOK, row.SecretState, row.CredentialReadable, row.RuntimeReady, row.AuthJSONPrivate, row.ProjectionMarkerOK, row.QuotaState, row.QuotaFresh, primary, checkedAt)
 			}
 			return w.Flush()
 		},

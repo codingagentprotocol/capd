@@ -1367,7 +1367,7 @@ func TestAccountsCheckReturnsSafeSmokeEvidence(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 	row := result.Accounts[0]
-	if row.ID != "codex-test" || !row.Current || !row.SecretBackendOK || !row.CredentialReadable || !row.RuntimeReady || !row.AuthJSONPrivate || !row.ProjectionMarkerOK || row.QuotaState != protocol.AccountQuotaStateFresh || !row.QuotaFresh || row.PrimaryUsedPercent == nil || *row.PrimaryUsedPercent != 14 {
+	if row.ID != "codex-test" || !row.Current || !row.SecretBackendOK || row.SecretState != protocol.AccountSecretStateReadable || !row.CredentialReadable || !row.RuntimeReady || !row.AuthJSONPrivate || !row.ProjectionMarkerOK || row.QuotaState != protocol.AccountQuotaStateFresh || !row.QuotaFresh || row.PrimaryUsedPercent == nil || *row.PrimaryUsedPercent != 14 {
 		t.Fatalf("row = %+v", row)
 	}
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateFresh || !result.AutoRoute.Fresh {
@@ -1384,6 +1384,43 @@ func TestAccountsCheckReturnsSafeSmokeEvidence(t *testing.T) {
 	for _, leaked := range []string{"test-token", profileHome, "CODEX_HOME", "secretRef", "secret_ref"} {
 		if strings.Contains(string(data), leaked) {
 			t.Fatalf("accounts/check leaked %q: %s", leaked, data)
+		}
+	}
+}
+
+func TestAccountsCheckReportsSafeSecretStateOnPerAccountFailure(t *testing.T) {
+	_, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = "native:codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider: codexauth.Provider,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInternalError || !strings.Contains(resp.Error.Message, "account secret backend mismatch") {
+		t.Fatalf("response = %+v", resp)
+	}
+	partial := accountsCheckErrorData(t, resp.Error)
+	if partial.CheckedAccounts != 1 || len(partial.Accounts) != 1 {
+		t.Fatalf("partial evidence = %+v", partial)
+	}
+	if partial.Summary.Ready {
+		t.Fatalf("partial summary ready despite secret failure: %+v", partial.Summary)
+	}
+	row := partial.Accounts[0]
+	if row.ID != "codex-test" || row.SecretBackendOK || row.SecretState != protocol.AccountSecretStateBackendMismatch || row.CredentialReadable || row.RuntimeReady {
+		t.Fatalf("row = %+v", row)
+	}
+	data, _ := json.Marshal(partial)
+	for _, leaked := range []string{"test-token", "native:codex-test", "secretRef", "secret_ref", "CODEX_HOME"} {
+		if strings.Contains(string(data), leaked) || strings.Contains(resp.Error.Message, leaked) {
+			t.Fatalf("accounts/check secret-state failure leaked %q: err=%s data=%s", leaked, resp.Error.Message, data)
 		}
 	}
 }
@@ -1476,7 +1513,7 @@ func TestAccountsCheckCanRefreshQuotaAndEnforceReadiness(t *testing.T) {
 		t.Fatalf("refreshed account evidence = %+v", result.Accounts[1])
 	}
 	for _, row := range result.Accounts {
-		if !row.QuotaFresh || row.QuotaState != protocol.AccountQuotaStateFresh {
+		if !row.SecretBackendOK || row.SecretState != protocol.AccountSecretStateReadable || !row.CredentialReadable || !row.QuotaFresh || row.QuotaState != protocol.AccountQuotaStateFresh {
 			t.Fatalf("row = %+v", row)
 		}
 	}
@@ -1657,7 +1694,7 @@ func TestAccountsCheckReadinessSingleAccountFailureKeepsCheckedEvidence(t *testi
 	if partial.Summary.Ready || partial.Summary.CheckedAccounts != 1 || partial.Summary.FreshQuotaAccounts != 1 || !partial.Summary.AutoRouteFresh || !partial.Summary.SecretBackendOK {
 		t.Fatalf("partial summary = %+v", partial.Summary)
 	}
-	if partial.Accounts[0].ID != "codex-test" || !partial.Accounts[0].RuntimeReady || !partial.Accounts[0].QuotaFresh || partial.Accounts[0].PrimaryUsedPercent == nil || *partial.Accounts[0].PrimaryUsedPercent != 11 {
+	if partial.Accounts[0].ID != "codex-test" || partial.Accounts[0].SecretState != protocol.AccountSecretStateReadable || !partial.Accounts[0].RuntimeReady || !partial.Accounts[0].QuotaFresh || partial.Accounts[0].PrimaryUsedPercent == nil || *partial.Accounts[0].PrimaryUsedPercent != 11 {
 		t.Fatalf("account evidence = %+v", partial.Accounts[0])
 	}
 	if len(partial.RouteCandidates) != 1 || !partial.RouteCandidates[0].Fresh {
@@ -1742,15 +1779,21 @@ func TestAccountsCheckHandlesEmptyAndRejectsBackendMismatch(t *testing.T) {
 	resp := c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
 		Provider: codexauth.Provider,
 	})
-	if resp.Error == nil || resp.Error.Code != protocol.CodeInternalError || !strings.Contains(resp.Error.Message, `secret backend = "native", active backend = "file"`) {
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInternalError || !strings.Contains(resp.Error.Message, "account secret backend mismatch") {
 		t.Fatalf("response = %+v", resp)
 	}
-	if strings.Contains(resp.Error.Message, "test-token") {
-		t.Fatalf("check error leaked token: %v", resp.Error)
+	if strings.Contains(resp.Error.Message, "test-token") || strings.Contains(resp.Error.Message, "native:codex-test") {
+		t.Fatalf("check error leaked sensitive data: %v", resp.Error)
 	}
 	partial := accountsCheckErrorData(t, resp.Error)
-	if partial.CheckedAccounts != 1 || len(partial.Accounts) != 0 {
+	if partial.CheckedAccounts != 1 || len(partial.Accounts) != 1 {
 		t.Fatalf("partial evidence = %+v", partial)
+	}
+	if partial.Summary.Ready {
+		t.Fatalf("partial summary ready despite secret failure: %+v", partial.Summary)
+	}
+	if partial.Accounts[0].SecretState != protocol.AccountSecretStateBackendMismatch || partial.Accounts[0].SecretBackendOK || partial.Accounts[0].CredentialReadable {
+		t.Fatalf("partial account evidence = %+v", partial.Accounts[0])
 	}
 }
 

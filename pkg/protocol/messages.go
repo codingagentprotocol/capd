@@ -223,11 +223,21 @@ type AccountsCheckSummary struct {
 	QuotaRefreshed        bool   `json:"quotaRefreshed,omitempty"`
 }
 
+const (
+	AccountSecretStateReadable        = "readable"
+	AccountSecretStateBackendMismatch = "backend-mismatch"
+	AccountSecretStateMalformedRef    = "malformed-ref"
+	AccountSecretStateMissing         = "missing"
+	AccountSecretStateTimeout         = "timeout"
+	AccountSecretStateUnreadable      = "unreadable"
+)
+
 type AccountCheckEvidence struct {
 	ID                 string   `json:"id"`
 	Email              string   `json:"email,omitempty"`
 	Current            bool     `json:"current,omitempty"`
 	SecretBackendOK    bool     `json:"secretBackendOk"`
+	SecretState        string   `json:"secretState,omitempty"`
 	CredentialReadable bool     `json:"credentialReadable"`
 	RuntimeReady       bool     `json:"runtimeReady"`
 	AuthJSONPrivate    bool     `json:"authJsonPrivate"`

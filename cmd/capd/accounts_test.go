@@ -407,7 +407,7 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 	row := result.Accounts[0]
-	if row.ID != "codex-test" || !row.Current || !row.SecretBackendOK || !row.CredentialReadable || !row.RuntimeReady || !row.AuthJSONPrivate || !row.ProjectionMarkerOK || row.QuotaState != protocol.AccountQuotaStateFresh || !row.QuotaFresh {
+	if row.ID != "codex-test" || !row.Current || !row.SecretBackendOK || row.SecretState != protocol.AccountSecretStateReadable || !row.CredentialReadable || !row.RuntimeReady || !row.AuthJSONPrivate || !row.ProjectionMarkerOK || row.QuotaState != protocol.AccountQuotaStateFresh || !row.QuotaFresh {
 		t.Fatalf("row = %+v", row)
 	}
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateFresh {
@@ -437,7 +437,7 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if !strings.Contains(out.String(), "quota refreshed: false") {
 		t.Fatalf("text output missing quota refresh evidence: %s", out.String())
 	}
-	for _, want := range []string{"summary: ready=true accounts=1/2 missing=1 quota fresh=1 stale=0 missing=0 autoFresh=true secretOK=true", "auto route: codex-test quota fresh fresh true primary 12.0% score ", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountQuotaStateFresh, "true", "12.0%"} {
+	for _, want := range []string{"summary: ready=true accounts=1/2 missing=1 quota fresh=1 stale=0 missing=0 autoFresh=true secretOK=true", "auto route: codex-test quota fresh fresh true primary 12.0% score ", "SECRET_STATE", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountSecretStateReadable, protocol.AccountQuotaStateFresh, "true", "12.0%"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("text output missing %q: %s", want, out.String())
 		}
@@ -502,7 +502,7 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if !strings.Contains(out.String(), "quota refreshed: true") {
 		t.Fatalf("text output missing refreshed evidence: %s", out.String())
 	}
-	for _, want := range []string{"auto route: codex-test quota fresh fresh true primary 6.0% score ", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountQuotaStateFresh, "true", "6.0%"} {
+	for _, want := range []string{"auto route: codex-test quota fresh fresh true primary 6.0% score ", "SECRET_STATE", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountSecretStateReadable, protocol.AccountQuotaStateFresh, "true", "6.0%"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("text refresh output missing %q: %s", want, out.String())
 		}
@@ -774,7 +774,7 @@ func TestAccountsCheckReadinessShortcutSetsDaemonGateParams(t *testing.T) {
 		t.Fatalf("summary = %+v", result.Summary)
 	}
 	for _, row := range result.Accounts {
-		if !row.QuotaFresh || row.QuotaState != protocol.AccountQuotaStateFresh {
+		if row.SecretState != protocol.AccountSecretStateReadable || !row.CredentialReadable || !row.QuotaFresh || row.QuotaState != protocol.AccountQuotaStateFresh {
 			t.Fatalf("row = %+v", row)
 		}
 	}

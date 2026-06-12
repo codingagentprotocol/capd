@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -356,10 +358,12 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 	}
 	for _, acc := range accounts {
 		row, perr := s.checkAccount(ctx, acc, current)
+		if row.ID != "" {
+			result.Accounts = append(result.Accounts, row)
+		}
 		if perr != nil {
 			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result, params)
 		}
-		result.Accounts = append(result.Accounts, row)
 	}
 	if len(accounts) > 0 {
 		selected, _, perr := s.selectCodexAccountForRoute()
@@ -418,7 +422,11 @@ func accountsCheckSummary(result protocol.AccountsCheckResult, params protocol.A
 		summary.AutoRouteAccountID = result.AutoRoute.AccountID
 		summary.AutoRouteFresh = result.AutoRoute.Fresh
 	}
-	summary.Ready = result.CheckedAccounts > 0 && summary.SecretBackendOK
+	accountsReady := result.CheckedAccounts > 0 && len(result.Accounts) == result.CheckedAccounts
+	for _, row := range result.Accounts {
+		accountsReady = accountsReady && row.SecretBackendOK && row.CredentialReadable && row.RuntimeReady
+	}
+	summary.Ready = result.CheckedAccounts > 0 && summary.SecretBackendOK && accountsReady
 	if params.RequireMultiple {
 		summary.Ready = summary.Ready && result.CheckedAccounts >= requiredAccounts
 	}
@@ -469,23 +477,31 @@ func validateAccountsCheckResult(result protocol.AccountsCheckResult, params pro
 }
 
 func (s *Server) checkAccount(ctx context.Context, acc account.Account, current string) (protocol.AccountCheckEvidence, *protocol.Error) {
+	row := s.baseAccountCheckEvidence(acc, current)
 	ref, err := secret.ParseRef(acc.SecretRef)
 	if err != nil {
-		return protocol.AccountCheckEvidence{}, protocol.NewError(protocol.CodeInternalError, "parse secret ref: %v", err)
+		row.SecretState = protocol.AccountSecretStateMalformedRef
+		return row, protocol.NewError(protocol.CodeInternalError, "parse account secret ref: %s", row.SecretState)
 	}
 	if err := secret.EnsureRefBackend(s.opts.Secrets, ref); err != nil {
-		return protocol.AccountCheckEvidence{}, protocol.NewError(protocol.CodeInternalError, "%v", err)
+		row.SecretState = protocol.AccountSecretStateBackendMismatch
+		return row, protocol.NewError(protocol.CodeInternalError, "account secret backend mismatch")
 	}
 	if _, err := s.opts.Secrets.Get(ctx, ref); err != nil {
-		return protocol.AccountCheckEvidence{}, protocol.NewError(protocol.CodeInternalError, "load account credentials: %v", err)
+		row.SecretBackendOK = true
+		row.SecretState = accountSecretErrorState(err)
+		return row, protocol.NewError(protocol.CodeInternalError, "load account credentials: %s", row.SecretState)
 	}
+	row.SecretBackendOK = true
+	row.SecretState = protocol.AccountSecretStateReadable
+	row.CredentialReadable = true
 	env, perr := s.runtimeEnvForAccount(ctx, codexAgentID, acc.ID)
 	if perr != nil {
-		return protocol.AccountCheckEvidence{}, perr
+		return row, perr
 	}
 	codexHome := codexHomeFromEnv(env)
 	if codexHome == "" {
-		return protocol.AccountCheckEvidence{}, protocol.NewError(protocol.CodeInternalError, "project account runtime: CODEX_HOME missing")
+		return row, protocol.NewError(protocol.CodeInternalError, "project account runtime: CODEX_HOME missing")
 	}
 	evidence, err := codexauth.VerifyRuntimeProfile(codexauth.RuntimeProfile{
 		AccountID: acc.ID,
@@ -493,18 +509,20 @@ func (s *Server) checkAccount(ctx context.Context, acc account.Account, current 
 		Env:       env,
 	})
 	if err != nil {
-		return protocol.AccountCheckEvidence{}, protocol.NewError(protocol.CodeInternalError, "verify account runtime: %v", err)
+		return row, protocol.NewError(protocol.CodeInternalError, "verify account runtime: %v", err)
 	}
+	row.RuntimeReady = evidence.RuntimeEnvOK && evidence.AuthJSONPrivate && evidence.ProjectionMarkerOK
+	row.AuthJSONPrivate = evidence.AuthJSONPrivate
+	row.ProjectionMarkerOK = evidence.ProjectionMarkerOK
+	return row, nil
+}
+
+func (s *Server) baseAccountCheckEvidence(acc account.Account, current string) protocol.AccountCheckEvidence {
 	row := protocol.AccountCheckEvidence{
-		ID:                 acc.ID,
-		Email:              acc.Email,
-		Current:            acc.ID == current,
-		SecretBackendOK:    true,
-		CredentialReadable: true,
-		RuntimeReady:       evidence.RuntimeEnvOK && evidence.AuthJSONPrivate && evidence.ProjectionMarkerOK,
-		AuthJSONPrivate:    evidence.AuthJSONPrivate,
-		ProjectionMarkerOK: evidence.ProjectionMarkerOK,
-		QuotaState:         protocol.AccountQuotaStateMissing,
+		ID:         acc.ID,
+		Email:      acc.Email,
+		Current:    acc.ID == current,
+		QuotaState: protocol.AccountQuotaStateMissing,
 	}
 	if q, err := s.opts.Accounts.LoadQuota(acc.ID); err == nil {
 		row.QuotaState = accountQuotaState(q)
@@ -512,7 +530,20 @@ func (s *Server) checkAccount(ctx context.Context, acc account.Account, current 
 		row.PrimaryUsedPercent = &q.PrimaryUsedPercent
 		row.QuotaFresh = row.QuotaState == protocol.AccountQuotaStateFresh
 	}
-	return row, nil
+	return row
+}
+
+func accountSecretErrorState(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		return protocol.AccountSecretStateTimeout
+	case os.IsNotExist(err):
+		return protocol.AccountSecretStateMissing
+	case strings.Contains(err.Error(), "macOS keychain status -25300"):
+		return protocol.AccountSecretStateMissing
+	default:
+		return protocol.AccountSecretStateUnreadable
+	}
 }
 
 func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.AccountsQuotaParams) (protocol.AccountsQuotaResult, *protocol.Error) {

@@ -272,9 +272,10 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 	autoRoute := result.AutoRoute
 	routeFresh := autoRoute != nil && autoRoute.Fresh
 	candidates := len(result.RouteCandidates)
+	secretStates := accountSecretStatesEvidence(accounts)
 	checks := []probeDataCheck{
 		{Name: "daemon health", OK: true, Evidence: "health ok"},
-		{Name: "accounts/check data", OK: result.AccountsCheck != nil, Evidence: checkedEvidence(checked, secretBackend), NextStep: missingStep(result.AccountsCheck != nil, "start capd with account support enabled")},
+		{Name: "accounts/check data", OK: result.AccountsCheck != nil, Evidence: checkedEvidence(checked, secretBackend, secretStates), NextStep: missingStep(result.AccountsCheck != nil, "start capd with account support enabled")},
 		{Name: "multi-account readiness", OK: !readiness || checked >= 2, Evidence: countEvidence(checked, 2), NextStep: missingStep(!readiness || checked >= 2, "import at least two accounts with: capd accounts import --auth /path/a --auth /path/b")},
 		{Name: "quota freshness", OK: !readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), Evidence: quotaFreshEvidence(quotaFresh, len(accounts)), NextStep: missingStep(!readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), "refresh quota with: capd accounts check --readiness")},
 		{Name: "auto route data", OK: autoRoute != nil, Evidence: routeEvidenceTextPtr(autoRoute), NextStep: missingStep(autoRoute != nil, "import accounts, then preview with: capd agents route --account auto --json")},
@@ -314,11 +315,45 @@ func parseBoolQuery(r *http.Request, key string) bool {
 	return value == "1" || value == "true" || value == "yes"
 }
 
-func checkedEvidence(checked int, secretBackend string) string {
+func checkedEvidence(checked int, secretBackend, secretStates string) string {
 	if secretBackend == "" {
 		secretBackend = "unknown"
 	}
-	return countEvidence(checked, 1) + ", secret " + secretBackend
+	if secretStates == "" {
+		secretStates = "unknown"
+	}
+	return countEvidence(checked, 1) + ", secret " + secretBackend + ", secretState " + secretStates
+}
+
+func accountSecretStatesEvidence(accounts []protocol.AccountCheckEvidence) string {
+	if len(accounts) == 0 {
+		return ""
+	}
+	counts := map[string]int{}
+	for _, row := range accounts {
+		if row.SecretState == "" {
+			continue
+		}
+		counts[row.SecretState]++
+	}
+	if len(counts) == 0 {
+		return ""
+	}
+	order := []string{
+		protocol.AccountSecretStateReadable,
+		protocol.AccountSecretStateTimeout,
+		protocol.AccountSecretStateBackendMismatch,
+		protocol.AccountSecretStateMissing,
+		protocol.AccountSecretStateMalformedRef,
+		protocol.AccountSecretStateUnreadable,
+	}
+	parts := []string{}
+	for _, state := range order {
+		if count := counts[state]; count > 0 {
+			parts = append(parts, state+" "+strconv.Itoa(count))
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 func countEvidence(got, want int) string {

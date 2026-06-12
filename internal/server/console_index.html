@@ -438,6 +438,7 @@ function renderReadinessChecks(checks) {
 function accountCheckSummary(accounts) {
   return accounts.map(a => {
     const parts = [a.id || "unknown", a.quotaState || "missing"];
+    if (a.secretState) parts.push(`secret ${a.secretState}`);
     if (typeof a.quotaFresh === "boolean") parts.push(a.quotaFresh ? "fresh" : "not-fresh");
     if (hasNumber(a.primaryUsedPercent)) parts.push(`primary ${a.primaryUsedPercent}%`);
     if (a.quotaCheckedAt) parts.push(`checked ${new Date(a.quotaCheckedAt * 1000).toLocaleString()}`);
