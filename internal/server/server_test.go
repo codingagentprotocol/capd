@@ -554,6 +554,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"renderAccountDiagnostics",
 		"accountDiagnosticSummary",
 		"accountDiagnosticCard",
+		"accountPromptFreeNextStep",
 		"accountQuotaDiagnosticText",
 		"accountDiagnosticIssue",
 		"accountDiagnosticNextStep",
@@ -561,9 +562,14 @@ func TestConsoleStaticContract(t *testing.T) {
 		"access-denied",
 		"macOS Keychain access was denied",
 		"boolWord",
-		"accounts/check ·",
+		"lightweightAccountsResult",
+		"promptFree",
+		`promptFree ? "accounts/list" : "accounts/check"`,
 		"not ready",
 		"quota refreshed",
+		"secret not checked in prompt-free refresh",
+		"runtime not checked in prompt-free refresh",
+		"use 就绪门禁 or 深度验证",
 		"secret ${account.secretState",
 		"runtime ${boolWord(account.runtimeReady)}",
 		"approve macOS Keychain access, or restart with file SecretStore and re-import",
@@ -753,6 +759,27 @@ func TestConsoleStaticContract(t *testing.T) {
 		if strings.Contains(html, needle) {
 			t.Fatalf("console HTML contains forbidden token %q", needle)
 		}
+	}
+	start := strings.Index(html, "async function refreshReadinessDiagnostic")
+	if start < 0 {
+		t.Fatal("console HTML missing refreshReadinessDiagnostic")
+	}
+	end := strings.Index(html[start:], "async function deepVerify")
+	if end < 0 {
+		t.Fatal("console HTML missing refreshReadinessDiagnostic terminator")
+	}
+	refreshBlock := html[start : start+end]
+	for _, want := range []string{
+		`const listResult = codexListResult || await call("accounts/list", { provider: "codex" })`,
+		"lightweightAccountsResult(listResult, healthInfo)",
+		`call("agents/route", { accountId: "auto" })`,
+	} {
+		if !strings.Contains(refreshBlock, want) {
+			t.Fatalf("prompt-free console diagnostic missing %q", want)
+		}
+	}
+	if strings.Contains(refreshBlock, `call("accounts/check"`) {
+		t.Fatal("prompt-free console diagnostic must not call accounts/check")
 	}
 }
 

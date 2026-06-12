@@ -40,10 +40,11 @@ runtime projection, selected or all-account quota refresh, safe account checks,
 and readiness gates over the same CAP RPC methods used by CLI clients.
 Use `capd console` to open the full console, or `capd console --probe` to open
 the lightweight validation probe without printing the daemon token to the
-terminal. The probe's ordinary `Refresh` path uses `accounts/list` metadata and
-route evidence so opening the page does not read account SecretStore
-credentials; the `Readiness` button runs the stronger account credential,
-quota, and native SecretStore gate. The probe's Evidence JSON includes a `checks` array with
+terminal. The full console's ordinary diagnostic refresh and the probe's
+ordinary `Refresh` path use `accounts/list` metadata and route evidence so
+opening either page does not read account SecretStore credentials; the console's
+`就绪门禁` action and the probe's `Readiness` button run the stronger account
+credential, quota, and native SecretStore gate. The probe's Evidence JSON includes a `checks` array with
 `name`, `ok`, `evidence`, and optional `nextStep` fields plus safe `health`
 metadata (`version`, `protocolVersion`, and `secretBackend` when supported) so
 browser-side readiness evidence mirrors `capd doctor --json`. The probe also
@@ -51,11 +52,12 @@ fetches `/probe/data` with an Authorization header so Web clients can validate
 the HTTP diagnostics path without exposing the token in URLs, and its visible
 summary includes the daemon's compact readiness `summary`. The full console
 renders the same readiness concepts as visible pass/fail cards under the
-diagnostic line, includes a compact readiness summary, can run `深度验证`
-against the same header-authenticated `/probe/data` readiness endpoint, and shows the
-account-aware `routeCandidates` returned by `agents/route` and `accounts/check`
-so route choices can be audited from the browser without exposing token material
-or local runtime paths.
+diagnostic line, marks SecretStore credentials and projected runtimes as
+`not checked in prompt-free refresh` during ordinary diagnostics, can run
+`深度验证` against the same header-authenticated `/probe/data` readiness endpoint,
+and shows the account-aware `routeCandidates` returned by `agents/route` and
+the explicit `accounts/check` readiness gate so route choices can be audited
+from the browser without exposing token material or local runtime paths.
 When the native SecretStore gate is enabled, the console and probe distinguish
 backend mismatches from deeper OS SecretStore verification and point the latter to
 `capd doctor --json --fail --verify-secretstore --require-secret-backend native`.

@@ -47,17 +47,22 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 	testingDoc := string(testingData)
 
 	for _, want := range []string{
-		"ordinary `Refresh` path uses `accounts/list` metadata",
-		"does not read account SecretStore\ncredentials",
-		"`Readiness` button runs the stronger account credential",
+		"full console's ordinary diagnostic refresh",
+		"ordinary `Refresh` path use `accounts/list` metadata",
+		"opening either page does not read account SecretStore credentials",
+		"console's\n`就绪门禁` action",
+		"probe's `Readiness` button run the stronger account",
+		"`not checked in prompt-free refresh`",
 	} {
 		if !strings.Contains(reference, want) {
 			t.Fatalf("reference docs missing prompt-free probe refresh contract %q", want)
 		}
 	}
 	for _, want := range []string{
-		"ordinary `Refresh` path uses `accounts/list` metadata plus\nroute evidence",
-		"does not read account SecretStore credentials",
+		"full console's ordinary diagnostic refresh",
+		"`Refresh` path use `accounts/list` metadata plus route evidence",
+		"do not read\naccount SecretStore credentials",
+		"console's\n`就绪门禁`",
 		"without repeated OS credential prompts",
 	} {
 		if !strings.Contains(testingDoc, want) {

@@ -265,7 +265,7 @@ async function loadAccounts() {
       call("accounts/list", { provider: "codex" })
     ]);
     renderAccounts(allResult.accounts || [], codexResult.currentAccountId || "");
-    await refreshReadinessDiagnostic();
+    await refreshReadinessDiagnostic(codexResult);
   } catch (e) {
     accountsEl.textContent = "";
     routePreviewEl.textContent = "";
@@ -273,6 +273,33 @@ async function loadAccounts() {
     readinessEl.textContent = "诊断不可用: accounts/list";
     line("ev-sys", "· accounts/list 不可用");
   }
+}
+
+function lightweightAccountsResult(listResult, healthInfo = null) {
+  const accounts = (listResult && listResult.accounts || []).filter(a => !a.provider || a.provider === "codex").map(a => ({
+    id: a.id,
+    email: a.email || "",
+    authMode: a.authMode || "",
+    current: a.id === (listResult && listResult.currentAccountId),
+    credentialReadable: false,
+    runtimeReady: false,
+    authJsonPrivate: false,
+    projectionMarkerOk: false,
+    secretBackendOk: false,
+    promptFree: true,
+    quotaFresh: !!a.quotaFresh,
+    quotaState: (a.quota && a.quota.quotaState) || "missing",
+    quotaCheckedAt: (a.quota && a.quota.checkedAt) || 0,
+    primaryUsedPercent: a.quota ? a.quota.primaryUsedPercent : undefined
+  }));
+  return {
+    provider: "codex",
+    checkedAccounts: accounts.length,
+    secretBackend: (healthInfo && healthInfo.secretBackend) || "",
+    quotaRefreshed: false,
+    promptFree: true,
+    accounts
+  };
 }
 
 async function importCodexAccount() {
@@ -342,7 +369,7 @@ async function checkAccounts(readinessGate = false) {
   }
 }
 
-async function refreshReadinessDiagnostic() {
+async function refreshReadinessDiagnostic(codexListResult = null) {
   readinessEl.className = "";
   readinessChecksEl.textContent = "";
   if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -351,11 +378,10 @@ async function refreshReadinessDiagnostic() {
   }
   readinessEl.textContent = "诊断中…";
   try {
-    await checkDaemonHealth(false);
-    const checkParams = { provider: "codex" };
+    const healthInfo = await checkDaemonHealth(false);
     const requiredBackend = requiredSecretBackend();
-    if (requiredBackend) checkParams.requireSecretBackend = requiredBackend;
-    const result = await call("accounts/check", checkParams);
+    const listResult = codexListResult || await call("accounts/list", { provider: "codex" });
+    const result = lightweightAccountsResult(listResult, healthInfo);
     let route = null;
     let routeError = "";
     try {
@@ -554,11 +580,12 @@ function renderAccountDiagnostics(result) {
   accountDiagnosticsEl.textContent = "";
   if (!result) return;
   const summary = result.summary || {};
+  const promptFree = !!result.promptFree;
   const header = document.createElement("div");
   header.className = "acctdiag " + (summary.ready ? "pass" : "fail");
   const title = document.createElement("div");
   title.className = "head";
-  title.textContent = `accounts/check · ${result.checkedAccounts || 0} checked · ${summary.ready ? "ready" : "not ready"}`;
+  title.textContent = `${promptFree ? "accounts/list" : "accounts/check"} · ${result.checkedAccounts || 0} checked · ${summary.ready ? "ready" : "not ready"}`;
   const meta = document.createElement("div");
   meta.className = "meta";
   meta.textContent = accountDiagnosticSummary(result);
@@ -571,11 +598,11 @@ function renderAccountDiagnostics(result) {
   }
   accountDiagnosticsEl.appendChild(header);
   const accounts = result.accounts || [];
-  for (const account of accounts) accountDiagnosticsEl.appendChild(accountDiagnosticCard(account));
+  for (const account of accounts) accountDiagnosticsEl.appendChild(accountDiagnosticCard(account, promptFree));
   if (accounts.length === 0 && (result.checkedAccounts || 0) > 0) {
     const empty = document.createElement("div");
     empty.className = "acctdiag fail";
-    empty.textContent = "accounts/check failed before per-account evidence was available";
+    empty.textContent = promptFree ? "accounts/list returned no per-account evidence" : "accounts/check failed before per-account evidence was available";
     accountDiagnosticsEl.appendChild(empty);
   }
 }
@@ -594,24 +621,24 @@ function accountDiagnosticSummary(result) {
   return parts.join(" · ");
 }
 
-function accountDiagnosticCard(account) {
-  const ok = account.secretBackendOk && account.credentialReadable && account.runtimeReady && account.quotaFresh;
+function accountDiagnosticCard(account, promptFree = false) {
+  const ok = (promptFree || (account.secretBackendOk && account.credentialReadable && account.runtimeReady)) && account.quotaFresh;
   const card = document.createElement("div");
   card.className = "acctdiag " + (ok ? "pass" : "fail");
   const head = document.createElement("div");
   head.className = "head";
   head.textContent = `${account.current ? "* " : ""}${account.email || account.id || "unknown"}`;
   const secret = document.createElement("div");
-  secret.className = account.secretBackendOk && account.credentialReadable ? "meta good" : "meta bad";
-  secret.textContent = `secret ${account.secretState || "unknown"} · backend ${boolWord(account.secretBackendOk)} · readable ${boolWord(account.credentialReadable)}`;
+  secret.className = promptFree || (account.secretBackendOk && account.credentialReadable) ? "meta good" : "meta bad";
+  secret.textContent = promptFree ? "secret not checked in prompt-free refresh" : `secret ${account.secretState || "unknown"} · backend ${boolWord(account.secretBackendOk)} · readable ${boolWord(account.credentialReadable)}`;
   const runtime = document.createElement("div");
-  runtime.className = account.runtimeReady ? "meta good" : "meta bad";
-  runtime.textContent = `runtime ${boolWord(account.runtimeReady)} · auth ${boolWord(account.authJsonPrivate)} · marker ${boolWord(account.projectionMarkerOk)}`;
+  runtime.className = promptFree || account.runtimeReady ? "meta good" : "meta bad";
+  runtime.textContent = promptFree ? "runtime not checked in prompt-free refresh" : `runtime ${boolWord(account.runtimeReady)} · auth ${boolWord(account.authJsonPrivate)} · marker ${boolWord(account.projectionMarkerOk)}`;
   const quota = document.createElement("div");
   quota.className = account.quotaFresh ? "meta good" : "meta bad";
   quota.textContent = accountQuotaDiagnosticText(account);
   card.append(head, secret, runtime, quota);
-  const next = accountDiagnosticIssue(account);
+  const next = promptFree ? accountPromptFreeNextStep(account) : accountDiagnosticIssue(account);
   if (next) {
     const el = document.createElement("div");
     el.className = "next";
@@ -619,6 +646,11 @@ function accountDiagnosticCard(account) {
     card.appendChild(el);
   }
   return card;
+}
+
+function accountPromptFreeNextStep(account) {
+  if (!account.quotaFresh) return "refresh quota or run 就绪门禁; use 深度验证 for SecretStore credentials";
+  return "use 就绪门禁 or 深度验证 to check SecretStore credentials and projected runtime";
 }
 
 function accountQuotaDiagnosticText(account) {
@@ -647,6 +679,10 @@ function accountDiagnosticNextStep(result) {
   const accounts = result.accounts || [];
   const summary = result.summary || {};
   if ((result.checkedAccounts || 0) < 2) return "import a second Codex account, then run 就绪门禁";
+  if (result.promptFree) {
+    if (accounts.some(a => !a.quotaFresh)) return "refresh quota for all accounts or run 就绪门禁";
+    return "use 就绪门禁 or 深度验证 to check SecretStore credentials and projected runtimes";
+  }
   if (summary.requiredSecretBackend && !summary.secretBackendOk) return `restart daemon with capd start --secret-backend ${summary.requiredSecretBackend}`;
   if (accounts.some(a => !a.secretBackendOk || !a.credentialReadable)) return "approve macOS Keychain access, or restart with file SecretStore and re-import failing accounts";
   if (accounts.some(a => !a.runtimeReady)) return "project each failing account runtime, then rerun accounts/check";
