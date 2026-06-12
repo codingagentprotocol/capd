@@ -902,6 +902,72 @@ func TestAccountsListJSONIncludesZeroQuota(t *testing.T) {
 	}
 }
 
+func TestAccountsCurrentShowsAndSetsCurrentWithoutSecrets(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	addCodexAccountForTest(t, accounts, "codex-alt", "alt@example.com")
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-alt", Plan: "pro", PrimaryUsedPercent: 7}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var before protocol.AccountsCurrentResult
+	c.mustResult(c.call(protocol.MethodAccountsCurrent, protocol.AccountsCurrentParams{
+		Provider: codexauth.Provider,
+	}), &before)
+	if before.CurrentAccountID != "codex-test" || before.Account == nil || before.Account.ID != "codex-test" {
+		t.Fatalf("before = %+v", before)
+	}
+
+	var after protocol.AccountsCurrentResult
+	c.mustResult(c.call(protocol.MethodAccountsCurrent, protocol.AccountsCurrentParams{
+		Provider:  codexauth.Provider,
+		AccountID: "codex-alt",
+	}), &after)
+	if after.CurrentAccountID != "codex-alt" || after.Account == nil || after.Account.Email != "alt@example.com" || after.Account.Quota == nil || after.Account.Quota.QuotaState != protocol.AccountQuotaStateFresh {
+		t.Fatalf("after = %+v", after)
+	}
+	current, err := accounts.CurrentAccount(codexauth.Provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != "codex-alt" {
+		t.Fatalf("current = %q", current)
+	}
+	data, _ := json.Marshal(after)
+	if strings.Contains(string(data), "test-token") || strings.Contains(string(data), "secret") || strings.Contains(string(data), "secretRef") {
+		t.Fatalf("accounts/current leaked sensitive data: %s", data)
+	}
+}
+
+func TestAccountsCurrentRejectsUnknownAndProviderMismatch(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "gemini-test",
+		Provider:  "gemini",
+		AuthMode:  "oauth",
+		Email:     "gemini@example.com",
+		SecretRef: "file:gemini-test",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsCurrent, protocol.AccountsCurrentParams{
+		Provider:  codexauth.Provider,
+		AccountID: "missing",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "unknown accountId") {
+		t.Fatalf("missing response = %+v", resp)
+	}
+	resp = c.call(protocol.MethodAccountsCurrent, protocol.AccountsCurrentParams{
+		Provider:  codexauth.Provider,
+		AccountID: "gemini-test",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "not a codex account") {
+		t.Fatalf("mismatch response = %+v", resp)
+	}
+}
+
 func addCodexAccountForTest(t *testing.T, accounts *account.Store, id, email string) {
 	t.Helper()
 	if err := accounts.UpsertAccount(account.Account{

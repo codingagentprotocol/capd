@@ -7,6 +7,7 @@ const (
 	MethodAgentsRoute     = "agents/route"     // choose an agent for requested capabilities
 	MethodAgentsUsage     = "agents/usage"     // account usage / rate-limit data for one agent
 	MethodAccountsList    = "accounts/list"    // list imported agent accounts, without secrets
+	MethodAccountsCurrent = "accounts/current" // show or set provider-scoped current account, without secrets
 	MethodAccountsQuota   = "accounts/quota"   // refresh one imported account quota, without secrets
 	MethodSessionCreate   = "session/create"   // start an agent session
 	MethodSessionList     = "session/list"     // enumerate sessions and their liveness
@@ -138,6 +139,16 @@ type AccountsListParams struct {
 type AccountsListResult struct {
 	CurrentAccountID string           `json:"currentAccountId,omitempty"`
 	Accounts         []AccountSummary `json:"accounts"`
+}
+
+type AccountsCurrentParams struct {
+	Provider  string `json:"provider,omitempty"`  // empty = codex
+	AccountID string `json:"accountId,omitempty"` // empty = read current account only
+}
+
+type AccountsCurrentResult struct {
+	CurrentAccountID string          `json:"currentAccountId,omitempty"`
+	Account          *AccountSummary `json:"account,omitempty"`
 }
 
 type AccountsQuotaParams struct {

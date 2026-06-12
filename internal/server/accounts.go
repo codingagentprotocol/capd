@@ -101,6 +101,50 @@ func (s *Server) listAccounts(params protocol.AccountsListParams) (protocol.Acco
 	return result, nil
 }
 
+func (s *Server) currentAccount(params protocol.AccountsCurrentParams) (protocol.AccountsCurrentResult, *protocol.Error) {
+	if s.opts.Accounts == nil {
+		return protocol.AccountsCurrentResult{}, nil
+	}
+	provider := strings.TrimSpace(params.Provider)
+	if provider == "" {
+		provider = codexauth.Provider
+	}
+	accountID := strings.TrimSpace(params.AccountID)
+	if accountID != "" {
+		acc, err := s.opts.Accounts.LoadAccount(accountID)
+		if err != nil {
+			return protocol.AccountsCurrentResult{}, protocol.NewError(protocol.CodeInvalidParams, "unknown accountId %q", accountID)
+		}
+		if acc.Provider != provider {
+			return protocol.AccountsCurrentResult{}, protocol.NewError(protocol.CodeInvalidParams, "accountId %q is not a %s account", accountID, provider)
+		}
+		if err := s.opts.Accounts.SetCurrentAccount(provider, accountID); err != nil {
+			return protocol.AccountsCurrentResult{}, protocol.NewError(protocol.CodeInternalError, "set current account: %v", err)
+		}
+		summary := accountSummary(acc, account.QuotaSnapshot{})
+		if q, err := s.opts.Accounts.LoadQuota(acc.ID); err == nil {
+			summary = accountSummary(acc, q)
+		}
+		return protocol.AccountsCurrentResult{CurrentAccountID: accountID, Account: &summary}, nil
+	}
+	current, err := s.opts.Accounts.CurrentAccount(provider)
+	if err != nil {
+		return protocol.AccountsCurrentResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
+	}
+	if current == "" {
+		return protocol.AccountsCurrentResult{}, nil
+	}
+	acc, err := s.opts.Accounts.LoadAccount(current)
+	if err != nil {
+		return protocol.AccountsCurrentResult{}, protocol.NewError(protocol.CodeInternalError, "load current account metadata: %v", err)
+	}
+	summary := accountSummary(acc, account.QuotaSnapshot{})
+	if q, err := s.opts.Accounts.LoadQuota(acc.ID); err == nil {
+		summary = accountSummary(acc, q)
+	}
+	return protocol.AccountsCurrentResult{CurrentAccountID: current, Account: &summary}, nil
+}
+
 func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.AccountsQuotaParams) (protocol.AccountsQuotaResult, *protocol.Error) {
 	if s.opts.Accounts == nil || s.opts.Secrets == nil {
 		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")

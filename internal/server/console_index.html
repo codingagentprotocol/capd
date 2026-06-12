@@ -200,10 +200,14 @@ function renderAccounts(accounts, currentAccountId) {
     quota.textContent = quotaLabel(a);
     card.append(name, provider, quota);
     if (isCodex) {
+      const current = document.createElement("button");
+      current.textContent = "设为当前";
+      current.disabled = a.id === currentAccountId;
+      current.onclick = () => setCurrentAccount(a.id, current);
       const refresh = document.createElement("button");
       refresh.textContent = "刷新 quota";
       refresh.onclick = () => refreshQuota(a.id, refresh);
-      card.appendChild(refresh);
+      card.append(current, refresh);
     }
     accountsEl.appendChild(card);
   }
@@ -287,6 +291,19 @@ async function refreshQuota(accountId, button) {
     await loadAccounts();
   } catch (e) {
     line("ev-err", `✗ quota 刷新失败: ${e.message || JSON.stringify(e)}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function setCurrentAccount(accountId, button) {
+  button.disabled = true;
+  try {
+    const { account } = await call("accounts/current", { provider: "codex", accountId });
+    line("ev-sys", `· 当前账号 ${account.email || account.id}`);
+    await loadAccounts();
+  } catch (e) {
+    line("ev-err", `✗ 设置当前账号失败: ${e.message || JSON.stringify(e)}`);
   } finally {
     button.disabled = false;
   }

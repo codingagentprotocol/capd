@@ -193,6 +193,15 @@ snapshots include server-classified `quotaState` (`fresh`, `stale`, or
 `secret_ref`, access tokens, refresh tokens, ID tokens, API keys, or raw quota
 JSON.
 
+### `accounts/current`
+
+Read or set the provider-scoped current account without exposing secrets.
+
+`{"provider": "codex"}` → `{"currentAccountId", "account": {...}}`.
+
+`{"provider": "codex", "accountId": "codex-acct"}` sets the current Codex
+account, then returns the same safe account summary shape as `accounts/list`.
+
 ### `accounts/quota`
 
 `{"provider": "codex", "accountId": "codex-acct"}` → `{"account": {...}}`.
