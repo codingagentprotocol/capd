@@ -1,0 +1,69 @@
+package main
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/codingagentprotocol/capd/internal/account"
+	"github.com/codingagentprotocol/capd/internal/account/codexauth"
+	"github.com/codingagentprotocol/capd/pkg/protocol"
+)
+
+func TestRouteCLIPrefersRequestedCapabilities(t *testing.T) {
+	infos := []protocol.AgentInfo{
+		{ID: "opencode", Available: true, Capabilities: protocol.AgentCapabilities{Streaming: true}},
+		{ID: "codex", Available: true, Capabilities: protocol.AgentCapabilities{Streaming: true, Review: true}},
+	}
+	result, err := routeCLI(infos, nil, routeCLIParams{
+		Capabilities: protocol.AgentCapabilities{Review: true},
+		Prefer:       []string{"opencode", "codex"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Agent.ID != "codex" || !strings.Contains(result.Reason, "review") {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestRouteCLIAccountAutoSelectsFreshLowestQuotaCodex(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-low",
+		Provider:  codexauth.Provider,
+		AuthMode:  "chatgpt",
+		Email:     "low@example.com",
+		SecretRef: "file:codex-low",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 60}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", PrimaryUsedPercent: 3}); err != nil {
+		t.Fatal(err)
+	}
+	infos := []protocol.AgentInfo{
+		{ID: "codex", Available: true, Capabilities: protocol.AgentCapabilities{Usage: true, Resume: true}},
+		{ID: "opencode", Available: true, Capabilities: protocol.AgentCapabilities{Usage: true, Resume: true}},
+	}
+	result, err := routeCLI(infos, accounts, routeCLIParams{AccountID: protocol.AccountAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Agent.ID != "codex" || result.AccountID != "codex-low" {
+		t.Fatalf("result = %+v", result)
+	}
+	if !strings.Contains(result.Reason, "primary 3%") {
+		t.Fatalf("reason = %q", result.Reason)
+	}
+}
+
+func TestRouteCLIRejectsUnknownCapability(t *testing.T) {
+	_, err := agentCapabilitiesFromNames([]string{"review", "telepathy"})
+	if err == nil || !strings.Contains(err.Error(), "unknown capability") {
+		t.Fatalf("err = %v", err)
+	}
+}
