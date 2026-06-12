@@ -215,6 +215,14 @@ function readinessSummaryText(summary) {
   if (summary.secretBackend) bits.push(`secret ${summary.secretBackend}`);
   return bits.join(" · ");
 }
+function readinessCommand(requiredBackend = "") {
+  const backend = normalizeSecretBackend(requiredBackend);
+  return `capd accounts check --json --readiness${backend ? ` --require-secret-backend ${backend}` : ""} --timeout 2m`;
+}
+function doctorCommand(requiredBackend = "") {
+  const backend = normalizeSecretBackend(requiredBackend);
+  return `capd doctor --json --fail --verify-secretstore${backend ? ` --require-secret-backend ${backend}` : ""} --timeout 2m`;
+}
 async function fetchHealthInfo() {
   const health = await fetch(httpURL("/healthz?format=json"), { cache:"no-store" });
   const body = (await health.text()).trim();
@@ -249,7 +257,8 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
   const routeEvidence = routeText(route);
   const candidatesEvidence = routeCandidateText((routeDecision && routeDecision.routeCandidates) || (result && result.routeCandidates));
   const nativeSecretOK = !readiness || !requireNative || secretBackend === "native";
-  const nativeSecretNextStep = !readiness || !requireNative ? "" : (secretBackend === "native" ? "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native" : "restart daemon with: capd start --secret-backend native");
+  const requiredBackend = requiredSecretBackend();
+  const nativeSecretNextStep = !readiness || !requireNative ? "" : (secretBackend === "native" ? `deep verify with: ${doctorCommand(requiredBackend)}` : "restart daemon with: capd start --secret-backend native");
   const credentialNextStep = credentialAccessNextStep(accounts);
   const rows = [
     { name:"daemon health", ok:!!healthOK, evidence:healthEvidence(healthOK), nextStep:healthOK ? "" : "start capd with: capd start" },
@@ -257,9 +266,9 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
     { name:"account credentials", ok:accounts.length > 0 && readable === accounts.length && secretBackendOK === accounts.length, evidence:`readable ${readable}/${accounts.length}, backend ${secretBackendOK}/${accounts.length}`, nextStep:(accounts.length > 0 && readable === accounts.length && secretBackendOK === accounts.length) ? "" : credentialNextStep },
     { name:"account runtime", ok:accounts.length > 0 && runtimeReady === accounts.length, evidence:`runtime ${runtimeReady}/${accounts.length}, auth ${authPrivate}/${accounts.length}, marker ${markerOK}/${accounts.length}`, nextStep:(accounts.length > 0 && runtimeReady === accounts.length) ? "" : "project account runtimes with accounts/project or rerun accounts/check" },
     { name:"multi-account readiness", ok:(result && (result.checkedAccounts || 0) >= 2), evidence:`checked ${result ? result.checkedAccounts || 0 : 0}, need 2`, nextStep:(result && (result.checkedAccounts || 0) >= 2) ? "" : "import at least two accounts with: capd accounts import --auth /path/a --auth /path/b" },
-    { name:"quota freshness", ok:accounts.length > 0 && fresh === accounts.length, evidence:`fresh ${fresh}/${accounts.length}`, nextStep:(accounts.length > 0 && fresh === accounts.length) ? "" : "refresh and verify daemon-side readiness with: capd accounts check --json --readiness" },
+    { name:"quota freshness", ok:accounts.length > 0 && fresh === accounts.length, evidence:`fresh ${fresh}/${accounts.length}`, nextStep:(accounts.length > 0 && fresh === accounts.length) ? "" : `refresh and verify daemon-side readiness with: ${readinessCommand(requiredBackend)}` },
     { name:"auto route data", ok:!!route, evidence:routeEvidence, nextStep:route ? "" : "import accounts, then preview with: capd agents route --account auto --json" },
-    { name:"auto route fresh", ok:!!(route && route.fresh), evidence:routeEvidence, nextStep:(route && route.fresh) ? "" : "refresh and verify daemon-side readiness with: capd accounts check --json --readiness" },
+    { name:"auto route fresh", ok:!!(route && route.fresh), evidence:routeEvidence, nextStep:(route && route.fresh) ? "" : `refresh and verify daemon-side readiness with: ${readinessCommand(requiredBackend)}` },
     { name:"route decision", ok:!!routeDecision, evidence:routeDecisionText(routeDecision, route), nextStep:routeDecision ? "" : "preview routing with: capd agents route --account auto --require-fresh-quota --json" },
     { name:"route candidates", ok:!!candidatesEvidence, evidence:candidatesEvidence || "routeCandidates missing", nextStep:candidatesEvidence ? "" : "preview routing with: capd agents route --account auto --json" },
     { name:"native secret backend", ok:nativeSecretOK, evidence:requireNative ? `secret ${secretBackend}` : "not required", nextStep:nativeSecretNextStep },
@@ -271,7 +280,7 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
 }
 
 function credentialAccessNextStep(accounts) {
-  if (accounts.some(a => a.secretState === "timeout")) return "unlock or approve OS SecretStore access, then rerun Readiness";
+  if (accounts.some(a => a.secretState === "timeout")) return `unlock or approve OS SecretStore access, then rerun: ${readinessCommand(requiredSecretBackend())}`;
   if (accounts.some(a => a.secretState === "access-denied")) return "macOS Keychain access was denied; approve the prompt, or restart with file SecretStore and re-import accounts";
   if (accounts.some(a => a.secretState === "unreadable")) return "approve macOS Keychain access, or restart with file SecretStore and re-import accounts";
   return "fix SecretStore access or re-import failing accounts";

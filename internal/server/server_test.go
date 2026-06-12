@@ -161,7 +161,7 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 		t.Fatalf("csp = %q", got)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"CAPD Probe", "accounts/check", "accounts/quota", "agents/usage", "agents/route", "/healthz?format=json", "/probe/data", "Authorization:`Bearer ${TOKEN}`", "fetchProbeData", "httpProbe", "fallbackResult", "fallbackHealth", "http probe error", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "health: fallbackHealth", "protocolVersion", "secretBackend", "secretState", "credentialReadable", "runtimeReady", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "nextSteps", "checks", "validationRows", "showTests", "daemon health", "account credentials", "account runtime", "credentialAccessNextStep", "access-denied", "macOS Keychain access was denied", "approve macOS Keychain access, or restart with file SecretStore and re-import accounts", "project account runtimes with accounts/project", "multi-account readiness", "quota freshness", "auto route fresh", "require native secret", "native secret backend", "readiness gate", "rpcError", "e.data", "routeDecision = e.data", "e.data.accountRoute || route", "capd accounts check --json --readiness", "capd agents route --account auto --require-fresh-quota --json", "capd start --secret-backend native", "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", "readinessSummaryText", "http summary", "summary.ready", "summary.checkedAccounts", "summary.secretBackendOk", "RPC_TIMEOUT_MS = 12000", "LONG_RPC_TIMEOUT_MS = 120000", "rpcTimeoutFor", `method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)`, `timeout after ${timeoutMS}ms`, "clearTimeout(pending.timer)", `call("accounts/check", { provider:"codex" })`} {
+	for _, want := range []string{"CAPD Probe", "accounts/check", "accounts/quota", "agents/usage", "agents/route", "/healthz?format=json", "/probe/data", "Authorization:`Bearer ${TOKEN}`", "fetchProbeData", "httpProbe", "fallbackResult", "fallbackHealth", "http probe error", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "health: fallbackHealth", "protocolVersion", "secretBackend", "secretState", "credentialReadable", "runtimeReady", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "nextSteps", "checks", "validationRows", "showTests", "daemon health", "account credentials", "account runtime", "credentialAccessNextStep", "access-denied", "macOS Keychain access was denied", "approve macOS Keychain access, or restart with file SecretStore and re-import accounts", "project account runtimes with accounts/project", "multi-account readiness", "quota freshness", "auto route fresh", "require native secret", "native secret backend", "readiness gate", "rpcError", "e.data", "routeDecision = e.data", "e.data.accountRoute || route", "readinessCommand", "doctorCommand", "capd accounts check --json --readiness", "--require-secret-backend ${backend}", "--timeout 2m", "capd agents route --account auto --require-fresh-quota --json", "capd start --secret-backend native", "deep verify with:", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", "readinessSummaryText", "http summary", "summary.ready", "summary.checkedAccounts", "summary.secretBackendOk", "RPC_TIMEOUT_MS = 12000", "LONG_RPC_TIMEOUT_MS = 120000", "rpcTimeoutFor", `method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)`, `timeout after ${timeoutMS}ms`, "clearTimeout(pending.timer)", `call("accounts/check", { provider:"codex" })`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("probe HTML missing %q", want)
 		}
@@ -554,7 +554,11 @@ func TestConsoleStaticContract(t *testing.T) {
 		"Codex auto route freshness",
 		"SecretStore backend",
 		"导入至少两个账号",
+		"readinessCommand",
+		"doctorCommand",
 		"capd accounts check --json --readiness",
+		"--require-secret-backend ${backend}",
+		"--timeout 2m",
 		"capd agents route --account auto --require-fresh-quota --json",
 		"refreshDiagnostic",
 		"刷新诊断",
@@ -607,7 +611,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"result.importedAccounts",
 		"accountsImportNextStep",
 		"继续导入第二个 Codex 账号",
-		"运行就绪门禁或 capd accounts check --json --readiness",
+		"运行就绪门禁或 ",
 		"checkAccounts",
 		"检查账号",
 		"checkReady",
@@ -674,7 +678,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"readiness gate",
 		"requireNativeSecret",
 		"SecretStore 未启用",
-		"deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native",
+		"deep verify with:",
 		"approve macOS Keychain access, or restart with file SecretStore and re-import failing accounts",
 		"capd start --secret-backend ${requiredBackend}",
 		"CAP WebSocket is not connected",

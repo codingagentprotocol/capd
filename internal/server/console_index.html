@@ -124,6 +124,16 @@ function normalizeSecretBackend(value) {
   return value === "file" || value === "native" ? value : "";
 }
 
+function readinessCommand(requiredBackend = "") {
+  const backend = normalizeSecretBackend(requiredBackend);
+  return `capd accounts check --json --readiness${backend ? ` --require-secret-backend ${backend}` : ""} --timeout 2m`;
+}
+
+function doctorCommand(requiredBackend = "") {
+  const backend = normalizeSecretBackend(requiredBackend);
+  return `capd doctor --json --fail --verify-secretstore${backend ? ` --require-secret-backend ${backend}` : ""} --timeout 2m`;
+}
+
 function requiredSecretBackend() {
   return REQUIRED_SECRET_BACKEND || (document.getElementById("requireNativeSecret").checked ? "native" : "");
 }
@@ -293,7 +303,7 @@ async function importCodexAccount() {
 function accountsImportNextStep(importedAccounts) {
   if (!importedAccounts) return "";
   if (importedAccounts < 2) return "继续导入第二个 Codex 账号";
-  return "运行就绪门禁或 capd accounts check --json --readiness";
+  return "运行就绪门禁或 " + readinessCommand(requiredSecretBackend());
 }
 
 async function checkAccounts(readinessGate = false) {
@@ -504,11 +514,12 @@ function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, ro
   const secretBackend = result.secretBackend || "unknown";
   const requiredBackend = (result.summary && result.summary.requiredSecretBackend) || requiredSecretBackend;
   const secretOK = !requiredBackend || secretBackend === requiredBackend;
-  const secretNextStep = !secretOK ? `restart daemon with: capd start --secret-backend ${requiredBackend}` : (requiredBackend === "native" ? "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native" : "");
+  const secretNextStep = !secretOK ? `restart daemon with: capd start --secret-backend ${requiredBackend}` : (requiredBackend === "native" ? `deep verify with: ${doctorCommand(requiredBackend)}` : "");
+  const readinessNextStep = readinessCommand(requiredBackend);
   return [
     { name: "daemon health", ok: true, evidence: "health ok", nextStep: "" },
     { name: "Codex multi-account import", ok: checked >= 2, evidence: `checked ${checked}, need 2`, nextStep: checked >= 2 ? "" : "导入至少两个账号: capd accounts import --auth /path/a --auth /path/b" },
-    { name: "Codex quota freshness", ok: accounts.length > 0 && freshCount === accounts.length, evidence: `fresh ${freshCount}/${accounts.length}`, nextStep: accounts.length > 0 && freshCount === accounts.length ? "" : "运行就绪门禁或 capd accounts check --json --readiness" },
+    { name: "Codex quota freshness", ok: accounts.length > 0 && freshCount === accounts.length, evidence: `fresh ${freshCount}/${accounts.length}`, nextStep: accounts.length > 0 && freshCount === accounts.length ? "" : `运行就绪门禁或 ${readinessNextStep}` },
     { name: "Codex auto route freshness", ok: !!(autoRoute && autoRoute.fresh), evidence: autoRoute ? routeEvidenceSummary(autoRoute) : "auto route missing", nextStep: autoRoute && autoRoute.fresh ? "" : "刷新 quota 后运行 capd agents route --account auto --require-fresh-quota --json" },
     { name: "readiness gate", ok: !readinessError, evidence: readinessError || "no blocking readiness error", nextStep: readinessError ? "按 partial evidence 修复账号、quota 或 SecretStore 后重跑就绪门禁" : "" },
     { name: "route decision", ok: !!route, evidence: route ? routeDecisionSummary(route) : routeError || "route missing", nextStep: route ? "" : "运行 capd agents route --account auto --require-fresh-quota --json" },
