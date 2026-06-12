@@ -632,9 +632,9 @@ func doctorSecretReadinessNextStep(daemonOK bool, states map[string]int, require
 		return "remove and re-import malformed Codex account metadata"
 	default:
 		if daemonOK {
-			return "re-import affected Codex accounts through CAP with the active SecretStore backend: capd accounts import --auth /path/to/auth.json"
+			return "verify SecretStore directly with: " + doctorSecretStoreCheckCommand(requireSecretBackend) + ", then re-import affected Codex accounts through CAP with the active SecretStore backend: capd accounts import --auth /path/to/auth.json"
 		}
-		return "restart capd with the active SecretStore backend, then re-import affected Codex accounts"
+		return "verify SecretStore directly with: " + doctorSecretStoreCheckCommand(requireSecretBackend) + ", then restart capd with the active SecretStore backend and re-import affected Codex accounts"
 	}
 }
 
@@ -692,6 +692,14 @@ func doctorCommand(requireSecretBackend string) string {
 	cmd := "capd doctor --json --fail --verify-secretstore"
 	if requireSecretBackend != "" {
 		cmd += " --require-secret-backend " + requireSecretBackend
+	}
+	return cmd + " --timeout 2m"
+}
+
+func doctorSecretStoreCheckCommand(requireSecretBackend string) string {
+	cmd := "capd secretstore check --json --roundtrip"
+	if requireSecretBackend != "" {
+		cmd += " --secret-backend " + requireSecretBackend + " --require-backend " + requireSecretBackend
 	}
 	return cmd + " --timeout 2m"
 }

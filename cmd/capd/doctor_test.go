@@ -800,6 +800,15 @@ func TestDoctorSecretReadinessNextStepUsesSecretState(t *testing.T) {
 	if got := doctorSecretReadinessNextStep(true, map[string]int{doctorSecretStateMissing: 1}, secret.BackendNative); !strings.Contains(got, "re-import missing Codex credentials through CAP") {
 		t.Fatalf("missing next step = %q", got)
 	}
+	if got := doctorSecretReadinessNextStep(true, map[string]int{doctorSecretStateUnreadable: 1}, secret.BackendNative); !strings.Contains(got, "capd secretstore check --json --roundtrip --secret-backend native --require-backend native --timeout 2m") || !strings.Contains(got, "re-import affected Codex accounts through CAP") {
+		t.Fatalf("unreadable next step = %q", got)
+	}
+	if got := doctorSecretReadinessNextStep(false, map[string]int{doctorSecretStateUnreadable: 1}, secret.BackendNative); !strings.Contains(got, "capd secretstore check --json --roundtrip --secret-backend native --require-backend native --timeout 2m") || !strings.Contains(got, "restart capd") {
+		t.Fatalf("unreadable daemon-down next step = %q", got)
+	}
+	if got := doctorSecretStoreCheckCommand(""); got != "capd secretstore check --json --roundtrip --timeout 2m" {
+		t.Fatalf("generic secretstore check command = %q", got)
+	}
 }
 
 func containsString(values []string, want string) bool {

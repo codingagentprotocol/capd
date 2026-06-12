@@ -100,7 +100,10 @@ routing score, checked time, and the same human-readable reason used by routing 
 includes SecretStore refs, token material, runtime paths, or raw auth JSON.
 `secretState` is a safe enum such as `readable`, `backend-mismatch`, `missing`,
 `timeout`, `access-denied`, `malformed-ref`, or `unreadable`; `codex.secretStates` aggregates
-those categories by count for CI and Web clients.
+those categories by count for CI and Web clients. For generic `unreadable`
+SecretStore failures, doctor next steps point first to
+`capd secretstore check --json --roundtrip` so users can separate backend
+health from a damaged account credential entry before re-importing.
 The top-level `summary` object gives CI and Web clients a compact readiness
 view: required/missing account counts, readable/unreadable SecretStore credential
 counts, fresh/stale/missing quota counts, auto-route freshness, route candidate
