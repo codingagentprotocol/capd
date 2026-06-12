@@ -44,11 +44,13 @@ terminal. The probe's Evidence JSON includes a `checks` array with
 metadata (`version`, `protocolVersion`, and `secretBackend` when supported) so
 browser-side readiness evidence mirrors `capd doctor --json`. The probe also
 fetches `/probe/data` with an Authorization header so Web clients can validate
-the HTTP diagnostics path without exposing the token in URLs. The full console
+the HTTP diagnostics path without exposing the token in URLs, and its visible
+summary includes the daemon's compact readiness `summary`. The full console
 renders the same readiness concepts as visible pass/fail cards under the
-diagnostic line, and it shows the account-aware `routeCandidates` returned by
-`agents/route` and `accounts/check` so route choices can be audited from the
-browser without exposing token material or local runtime paths.
+diagnostic line, includes a compact readiness summary, and shows the
+account-aware `routeCandidates` returned by `agents/route` and `accounts/check`
+so route choices can be audited from the browser without exposing token material
+or local runtime paths.
 When the native SecretStore gate is enabled, the console and probe distinguish
 backend mismatches from deeper OS SecretStore verification and point the latter to
 `capd doctor --json --fail --verify-secretstore --require-secret-backend native`.

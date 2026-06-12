@@ -188,6 +188,23 @@ function routeCandidateText(candidates) {
   if (!Array.isArray(candidates) || candidates.length === 0) return "";
   return candidates.map(c => routeText(c)).join(" | ");
 }
+function readinessSummaryText(summary) {
+  if (!summary) return "";
+  const bits = [
+    `ready ${!!summary.ready}`,
+    `accounts ${summary.checkedAccounts || 0}/${summary.requiredAccounts || 2}`,
+    `missing ${summary.missingAccounts || 0}`,
+    `quota fresh ${summary.freshQuotaAccounts || 0}`,
+    `stale ${summary.staleQuotaAccounts || 0}`,
+    `missing quota ${summary.missingQuotaAccounts || 0}`,
+    `auto fresh ${!!summary.autoRouteFresh}`,
+    `route decision ${!!summary.routeDecisionOk}`,
+    `secret ok ${!!summary.secretBackendOk}`
+  ];
+  if (summary.autoRouteAccountId) bits.push(`auto ${summary.autoRouteAccountId}`);
+  if (summary.secretBackend) bits.push(`secret ${summary.secretBackend}`);
+  return bits.join(" · ");
+}
 async function fetchHealthInfo() {
   const health = await fetch(httpURL("/healthz?format=json"), { cache:"no-store" });
   const body = (await health.text()).trim();
@@ -289,6 +306,8 @@ async function refresh(readiness = false) {
     try {
       httpProbe = await fetchProbeData(readiness);
       summary.push(`http probe: ${httpProbe.ok ? "ok" : "attention"} (${(httpProbe.checks || []).length} checks)`);
+      const httpSummary = readinessSummaryText(httpProbe.summary);
+      if (httpSummary) summary.push(`http summary: ${httpSummary}`);
     } catch (probeErr) {
       summary.push(`http probe error: ${probeErr.message || String(probeErr)}`);
     }

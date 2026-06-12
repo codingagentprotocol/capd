@@ -359,8 +359,10 @@ function renderReadinessDiagnosticResult({ result, route, routeError = "", readi
   if (requireNativeSecret && result.secretBackend !== "native") issues.push("native SecretStore 未启用");
   if (readinessError) issues.push("readiness gate failed");
   const checks = readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError, requireNativeSecret });
+  const summary = readinessSummaryText({ result, accounts, freshCount, autoRoute, route, requireNativeSecret });
   const parts = [
     "daemon ok",
+    summary,
     `codex ${result.checkedAccounts || 0}`,
     `secret ${result.secretBackend || "unknown"}`,
     `quota fresh ${freshCount}/${accounts.length}`
@@ -376,6 +378,18 @@ function renderReadinessDiagnosticResult({ result, route, routeError = "", readi
   readinessEl.className = issues.length ? "warn" : "ok";
   readinessEl.textContent = issues.length ? `${parts.join(" · ")} · ${issues.join(" · ")}` : `${parts.join(" · ")} · ready`;
   renderReadinessChecks(checks);
+}
+
+function readinessSummaryText({ result, accounts, freshCount, autoRoute, route, requireNativeSecret = false }) {
+  const checked = result.checkedAccounts || 0;
+  const required = 2;
+  const missing = Math.max(0, required - checked);
+  const stale = accounts.filter(a => a.quotaState === "stale").length;
+  const missingQuota = accounts.filter(a => !a.quotaState || a.quotaState === "missing").length;
+  const secretBackend = result.secretBackend || "unknown";
+  const routeOK = !!(route && route.accountRoute);
+  const secretOK = !requireNativeSecret || secretBackend === "native";
+  return `summary ready ${missing === 0 && accounts.length > 0 && freshCount === accounts.length && !!(autoRoute && autoRoute.fresh) && routeOK && secretOK} accounts ${checked}/${required} missing ${missing} quota fresh ${freshCount} stale ${stale} missing quota ${missingQuota} auto fresh ${!!(autoRoute && autoRoute.fresh)} route decision ${routeOK} secret ok ${secretOK}`;
 }
 
 function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError = "", requireNativeSecret = false }) {
