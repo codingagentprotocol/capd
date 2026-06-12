@@ -589,12 +589,6 @@ func newCodexAccountsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if len(list) == 0 {
-				return fmt.Errorf("no imported Codex accounts; run capd accounts codex import first")
-			}
-			if requireMultiple && len(list) < 2 {
-				return fmt.Errorf("expected multiple Codex accounts, found %d", len(list))
-			}
 			sort.Slice(list, func(i, j int) bool {
 				return list[i].ID < list[j].ID
 			})
@@ -609,8 +603,14 @@ func newCodexAccountsCmd() *cobra.Command {
 				SecretBackend:   secrets.Backend(),
 				Accounts:        make([]codexSmokeAccount, 0, len(list)),
 			}
+			if len(list) == 0 {
+				return codexSmokeFail(cmd, jsonOut, result, "no imported Codex accounts; run capd accounts codex import first", "import Codex auth with: capd accounts codex import")
+			}
+			if requireMultiple && len(list) < 2 {
+				return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("expected multiple Codex accounts, found %d", len(list)), "import a second Codex account with: capd accounts codex import --auth /path/to/auth.json")
+			}
 			if requireSecretBackend != "" && requireSecretBackend != result.SecretBackend {
-				return fmt.Errorf("secret backend = %q, want %q", result.SecretBackend, requireSecretBackend)
+				return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("secret backend = %q, want %q", result.SecretBackend, requireSecretBackend), "rerun with CAPD_SECRET_BACKEND="+requireSecretBackend)
 			}
 			for _, acc := range list {
 				ref, err := secret.ParseRef(acc.SecretRef)
@@ -678,9 +678,6 @@ func newCodexAccountsCmd() *cobra.Command {
 					row.PrimaryUsed = "cached-missing"
 					row.QuotaState = protocol.AccountQuotaStateMissing
 				}
-				if requireAllFreshQuota && !row.QuotaFresh {
-					return fmt.Errorf("%s: quota is %s; run with --quota or refresh every account first", acc.ID, row.QuotaState)
-				}
 				result.Accounts = append(result.Accounts, row)
 			}
 			if route, err := codexSmokeAutoRouteEvidence(accounts); err != nil {
@@ -691,8 +688,19 @@ func newCodexAccountsCmd() *cobra.Command {
 			if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil {
 				result.RouteCandidates = candidates
 			}
+			if requireAllFreshQuota {
+				var stale []string
+				for _, row := range result.Accounts {
+					if !row.QuotaFresh {
+						stale = append(stale, fmt.Sprintf("%s=%s", row.ID, row.QuotaState))
+					}
+				}
+				if len(stale) > 0 {
+					return codexSmokeFail(cmd, jsonOut, result, "quota is not fresh for "+strings.Join(stale, ", "), "run with --quota or refresh every account first")
+				}
+			}
 			if requireFreshQuota && (result.AutoRoute == nil || !result.AutoRoute.Fresh) {
-				return fmt.Errorf("auto route does not have fresh cached quota; run with --quota or refresh quota first")
+				return codexSmokeFail(cmd, jsonOut, result, "auto route does not have fresh cached quota", "run with --quota or refresh quota first")
 			}
 			if jsonOut {
 				out, _ := json.MarshalIndent(result, "", "  ")
@@ -789,6 +797,28 @@ type codexSmokeResult struct {
 	AutoRoute       *codexSmokeAutoRoute            `json:"autoRoute,omitempty"`
 	RouteCandidates []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
 	Accounts        []codexSmokeAccount             `json:"accounts"`
+	Issues          []string                        `json:"issues,omitempty"`
+	NextSteps       []string                        `json:"nextSteps,omitempty"`
+}
+
+func codexSmokeFail(cmd *cobra.Command, jsonOut bool, result codexSmokeResult, issue, nextStep string) error {
+	result.OK = false
+	if issue != "" {
+		result.Issues = append(result.Issues, issue)
+	}
+	if nextStep != "" {
+		result.NextSteps = append(result.NextSteps, nextStep)
+	}
+	if jsonOut {
+		cmd.SilenceUsage = true
+		cmd.SilenceErrors = true
+		out, _ := json.MarshalIndent(result, "", "  ")
+		fmt.Fprintln(cmd.OutOrStdout(), string(out))
+	}
+	if issue == "" {
+		issue = "Codex account smoke check failed"
+	}
+	return fmt.Errorf("%s", issue)
 }
 
 type codexSmokeAutoRoute struct {

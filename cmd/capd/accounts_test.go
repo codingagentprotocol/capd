@@ -1725,7 +1725,7 @@ func TestCodexAccountsSmokeRequireAllFreshQuota(t *testing.T) {
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	err = cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "codex-low: quota is stale") {
+	if err == nil || !strings.Contains(err.Error(), "quota is not fresh for codex-low=stale") {
 		t.Fatalf("err = %v", err)
 	}
 
@@ -1747,6 +1747,41 @@ func TestCodexAccountsSmokeRequireAllFreshQuota(t *testing.T) {
 	for _, acc := range result.Accounts {
 		if acc.QuotaState != protocol.AccountQuotaStateFresh || !acc.QuotaFresh {
 			t.Fatalf("account quota = %+v", acc)
+		}
+	}
+}
+
+func TestCodexAccountsSmokeJSONFailureKeepsPartialEvidence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 4}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json", "--require-multiple", "--require-secret-backend", "file"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "expected multiple Codex accounts, found 1") {
+		t.Fatalf("err = %v", err)
+	}
+	var got codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("json err = %v output=%s stderr=%s", err, out.String(), errOut.String())
+	}
+	if got.OK || got.CheckedAccounts != 1 || got.SecretBackend != "file" || !containsString(got.Issues, "expected multiple Codex accounts, found 1") {
+		t.Fatalf("result = %+v", got)
+	}
+	if len(got.RouteCandidates) != 0 || len(got.Accounts) != 0 {
+		t.Fatalf("preflight failure should not project accounts before require-multiple passes: %+v", got)
+	}
+	for _, secret := range []string{"access-secret", "refresh-secret", "secretRef", "secret_ref", "rawAuthJson"} {
+		if strings.Contains(out.String(), secret) {
+			t.Fatalf("smoke failure JSON leaked %q: %s", secret, out.String())
 		}
 	}
 }

@@ -74,7 +74,7 @@ For multi-account routing readiness:
 
 ```bash
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all
-CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
+CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
 CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native
 

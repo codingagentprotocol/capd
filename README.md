@@ -154,7 +154,7 @@ capd accounts codex project  # create a per-account CODEX_HOME projection
 capd accounts codex quota    # refresh quota and print a safe summary
 capd accounts codex quota auto
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all
-CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
+CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
 CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native # verify native SecretStore directly
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native # readiness gate
 CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
