@@ -1977,6 +1977,54 @@ func TestCodexAccountsSmokeJSONMarksAutoRouteMissingQuota(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsSmokeRequireMultipleReturnsPartialAccountEvidence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	staleAt := time.Now().Add(-account.QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 11, CheckedAt: staleAt}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json", "--require-multiple"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "expected multiple Codex accounts") {
+		t.Fatalf("err = %v", err)
+	}
+	text := out.String()
+	for _, leaked := range []string{"access-secret", "refresh-secret", "secretRef", "file:codex-test", "CODEX_HOME"} {
+		if strings.Contains(text, leaked) {
+			t.Fatalf("partial smoke json leaked %q: %s", leaked, text)
+		}
+	}
+	var result codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.OK || result.CheckedAccounts != 1 || len(result.Accounts) != 1 || result.Accounts[0].ID != "codex-test" {
+		t.Fatalf("partial result = %+v", result)
+	}
+	if result.Accounts[0].SecretReadable || result.Accounts[0].ProjectionOK || result.Accounts[0].ProjectedCodexHome != "" {
+		t.Fatalf("partial result should not read secret or project runtime: %+v", result.Accounts[0])
+	}
+	if result.Accounts[0].QuotaState != protocol.AccountQuotaStateStale || result.Accounts[0].QuotaFresh || result.Accounts[0].PrimaryUsedPercent == nil || *result.Accounts[0].PrimaryUsedPercent != 11 {
+		t.Fatalf("partial account quota = %+v", result.Accounts[0])
+	}
+	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateStale || result.AutoRoute.Fresh {
+		t.Fatalf("partial auto route = %+v", result.AutoRoute)
+	}
+	if len(result.RouteCandidates) != 1 || result.RouteCandidates[0].AccountID != "codex-test" || result.RouteCandidates[0].Reason != "auto account codex-test without fresh cached quota; current account tie-break" {
+		t.Fatalf("partial route candidates = %+v", result.RouteCandidates)
+	}
+	if len(result.NextSteps) != 1 || !strings.Contains(result.NextSteps[0], "import a second Codex account") {
+		t.Fatalf("next steps = %+v", result.NextSteps)
+	}
+}
+
 func TestCodexAccountsSmokeJSONMarksAutoRouteStaleQuota(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)
@@ -2175,8 +2223,14 @@ func TestCodexAccountsSmokeJSONFailureKeepsPartialEvidence(t *testing.T) {
 	if !containsString(got.NextSteps, "import a second Codex account with: capd accounts codex import --auth /path/to/auth.json") {
 		t.Fatalf("nextSteps = %+v", got.NextSteps)
 	}
-	if len(got.RouteCandidates) != 0 || len(got.Accounts) != 0 {
-		t.Fatalf("preflight failure should not project accounts before require-multiple passes: %+v", got)
+	if got.AutoRoute == nil || got.AutoRoute.AccountID != "codex-test" || !got.AutoRoute.Fresh || got.AutoRoute.Primary == nil || *got.AutoRoute.Primary != 4 {
+		t.Fatalf("preflight failure should keep auto-route evidence: %+v", got)
+	}
+	if len(got.RouteCandidates) != 1 || got.RouteCandidates[0].AccountID != "codex-test" || !got.RouteCandidates[0].Fresh {
+		t.Fatalf("preflight failure should keep route candidates: %+v", got.RouteCandidates)
+	}
+	if len(got.Accounts) != 1 || got.Accounts[0].ID != "codex-test" || !got.Accounts[0].QuotaFresh || got.Accounts[0].SecretReadable || got.Accounts[0].ProjectionOK || got.Accounts[0].ProjectedCodexHome != "" {
+		t.Fatalf("preflight failure should keep cached account evidence without secret/runtime projection: %+v", got)
 	}
 	for _, secret := range []string{"access-secret", "refresh-secret", "secretRef", "secret_ref", "rawAuthJson"} {
 		if strings.Contains(out.String(), secret) {

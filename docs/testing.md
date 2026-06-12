@@ -228,6 +228,11 @@ fresh cached quota snapshot; use `--require-all-fresh-quota` to fail unless
 every imported account has fresh cached quota. Use
 `--require-secret-backend native` to fail unless smoke is reading credentials
 from the OS secret backend.
+When smoke fails before SecretStore reads, such as `--require-multiple` with
+only one imported account or a requested SecretStore backend mismatch, JSON
+output still includes safe cached account, quota, auto-route, and
+`routeCandidates` evidence so live readiness logs show the real missing gate
+without prompting for OS credentials.
 Projection, quota refresh, and smoke all fail closed if an account `secret_ref`
 points at a different backend than the active SecretStore. Use `--json` to
 capture machine-readable smoke evidence in long tasks or CI logs.

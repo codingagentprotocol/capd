@@ -758,12 +758,14 @@ the native OS backend and keeps the source secret as a rollback path. Add
 			if len(list) == 0 {
 				return codexSmokeFail(cmd, jsonOut, result, "no imported Codex accounts; run capd accounts codex import first", codexLocalImportNextStep(result.SecretBackend, false))
 			}
+			populateCodexSmokeCachedEvidence(&result, accounts, list)
 			if requireMultiple && len(list) < 2 {
 				return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("expected multiple Codex accounts, found %d", len(list)), codexLocalImportNextStep(result.SecretBackend, true))
 			}
 			if requireSecretBackend != "" && requireSecretBackend != result.SecretBackend {
 				return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("secret backend = %q, want %q", result.SecretBackend, requireSecretBackend), "rerun with CAPD_SECRET_BACKEND="+requireSecretBackend)
 			}
+			result.Accounts = result.Accounts[:0]
 			for _, acc := range list {
 				ref, err := secret.ParseRef(acc.SecretRef)
 				if err != nil {
@@ -1039,6 +1041,42 @@ func codexSmokeSecretNextStep(state, backend string) string {
 	default:
 		return "re-import the failing Codex account with: capd accounts codex import --auth /path/to/auth.json"
 	}
+}
+
+func populateCodexSmokeCachedEvidence(result *codexSmokeResult, accounts *account.Store, list []account.Account) {
+	if result == nil || accounts == nil || len(list) == 0 {
+		return
+	}
+	if len(result.Accounts) == 0 {
+		result.Accounts = make([]codexSmokeAccount, 0, len(list))
+		for _, acc := range list {
+			result.Accounts = append(result.Accounts, codexSmokeCachedAccountRow(accounts, acc))
+		}
+	}
+	if result.AutoRoute == nil {
+		if route, err := codexSmokeAutoRouteEvidence(accounts); err == nil {
+			result.AutoRoute = route
+		}
+	}
+	if len(result.RouteCandidates) == 0 {
+		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil {
+			result.RouteCandidates = candidates
+		}
+	}
+}
+
+func codexSmokeCachedAccountRow(accounts *account.Store, acc account.Account) codexSmokeAccount {
+	row := codexSmokeAccount{
+		ID:          acc.ID,
+		Email:       acc.Email,
+		AuthMode:    acc.AuthMode,
+		PrimaryUsed: "cached-missing",
+		QuotaState:  protocol.AccountQuotaStateMissing,
+	}
+	if q, err := accounts.LoadQuota(acc.ID); err == nil {
+		setCodexSmokeQuotaEvidence(&row, q)
+	}
+	return row
 }
 
 func secretRefBackendLabel(ref secret.Ref) string {
