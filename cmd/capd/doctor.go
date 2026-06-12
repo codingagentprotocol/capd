@@ -29,11 +29,18 @@ func newDoctorCmd() *cobra.Command {
 			failOnIssues, _ := cmd.Flags().GetBool("fail")
 			verifySecretStore, _ := cmd.Flags().GetBool("verify-secretstore")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
+			timeout, _ := cmd.Flags().GetDuration("timeout")
 			requireSecretBackend, err := secret.NormalizeBackend(requireSecretBackend)
 			if err != nil {
 				return err
 			}
-			report, err := buildDoctorReport(cmd.Context(), doctorOptions{
+			checkCtx := cmd.Context()
+			var cancel context.CancelFunc
+			if timeout > 0 {
+				checkCtx, cancel = context.WithTimeout(checkCtx, timeout)
+				defer cancel()
+			}
+			report, err := buildDoctorReport(checkCtx, doctorOptions{
 				RequireSecretBackend: requireSecretBackend,
 				VerifySecretStore:    verifySecretStore,
 			})
@@ -59,6 +66,7 @@ func newDoctorCmd() *cobra.Command {
 	cmd.Flags().Bool("fail", false, "return a non-zero exit code when readiness issues are found, including with --json")
 	cmd.Flags().Bool("verify-secretstore", false, "write, read, and delete a diagnostic secret to verify the active SecretStore backend")
 	cmd.Flags().String("require-secret-backend", "", "fail unless this SecretStore backend is active (file or native)")
+	cmd.Flags().Duration("timeout", 2*time.Minute, "maximum time to wait for doctor checks, including native SecretStore access")
 	return cmd
 }
 
@@ -81,21 +89,23 @@ type doctorReport struct {
 }
 
 type doctorSummaryReport struct {
-	Ready                  bool   `json:"ready"`
-	ImportedAccounts       int    `json:"importedAccounts"`
-	RequiredAccounts       int    `json:"requiredAccounts"`
-	MissingAccounts        int    `json:"missingAccounts"`
-	FreshQuotaAccounts     int    `json:"freshQuotaAccounts"`
-	StaleQuotaAccounts     int    `json:"staleQuotaAccounts"`
-	MissingQuotaAccounts   int    `json:"missingQuotaAccounts"`
-	AutoRouteAccountID     string `json:"autoRouteAccountId,omitempty"`
-	AutoRouteFresh         bool   `json:"autoRouteFresh"`
-	DaemonHealthy          bool   `json:"daemonHealthy"`
-	DaemonAccountsCheckOK  bool   `json:"daemonAccountsCheckOk"`
-	SecretBackend          string `json:"secretBackend,omitempty"`
-	RequiredSecretBackend  string `json:"requiredSecretBackend,omitempty"`
-	SecretBackendOK        bool   `json:"secretBackendOk"`
-	SecretStoreRoundTripOK *bool  `json:"secretStoreRoundTripOk,omitempty"`
+	Ready                    bool   `json:"ready"`
+	ImportedAccounts         int    `json:"importedAccounts"`
+	RequiredAccounts         int    `json:"requiredAccounts"`
+	MissingAccounts          int    `json:"missingAccounts"`
+	FreshQuotaAccounts       int    `json:"freshQuotaAccounts"`
+	StaleQuotaAccounts       int    `json:"staleQuotaAccounts"`
+	MissingQuotaAccounts     int    `json:"missingQuotaAccounts"`
+	AutoRouteAccountID       string `json:"autoRouteAccountId,omitempty"`
+	AutoRouteFresh           bool   `json:"autoRouteFresh"`
+	DaemonHealthy            bool   `json:"daemonHealthy"`
+	DaemonAccountsCheckOK    bool   `json:"daemonAccountsCheckOk"`
+	SecretBackend            string `json:"secretBackend,omitempty"`
+	RequiredSecretBackend    string `json:"requiredSecretBackend,omitempty"`
+	SecretBackendOK          bool   `json:"secretBackendOk"`
+	SecretReadableAccounts   int    `json:"secretReadableAccounts"`
+	SecretUnreadableAccounts int    `json:"secretUnreadableAccounts"`
+	SecretStoreRoundTripOK   *bool  `json:"secretStoreRoundTripOk,omitempty"`
 }
 
 type doctorDaemonReport struct {
@@ -112,26 +122,28 @@ type doctorAgentReport struct {
 }
 
 type doctorCodexReport struct {
-	CLIAvailable          bool                            `json:"cliAvailable"`
-	ImportedAccounts      int                             `json:"importedAccounts"`
-	CurrentAccountID      string                          `json:"currentAccountId,omitempty"`
-	SecretBackend         string                          `json:"secretBackend,omitempty"`
-	DaemonCheckOK         bool                            `json:"daemonCheckOk"`
-	DaemonCheckedAccounts int                             `json:"daemonCheckedAccounts,omitempty"`
-	DaemonSecretBackend   string                          `json:"daemonSecretBackend,omitempty"`
-	DaemonCheckError      string                          `json:"daemonCheckError,omitempty"`
-	FreshQuotaAccounts    int                             `json:"freshQuotaAccounts"`
-	StaleQuotaAccounts    int                             `json:"staleQuotaAccounts"`
-	MissingQuotaAccounts  int                             `json:"missingQuotaAccounts"`
-	Accounts              []doctorCodexAccountReport      `json:"accounts,omitempty"`
-	AutoRouteAccountID    string                          `json:"autoRouteAccountId,omitempty"`
-	AutoRouteQuotaState   string                          `json:"autoRouteQuotaState,omitempty"`
-	AutoRouteFresh        bool                            `json:"autoRouteFresh"`
-	AutoRouteScore        float64                         `json:"autoRouteScore,omitempty"`
-	AutoRouteReason       string                          `json:"autoRouteReason,omitempty"`
-	AutoRouteCheckedAt    int64                           `json:"autoRouteCheckedAt,omitempty"`
-	AutoRoutePrimary      *float64                        `json:"autoRoutePrimaryUsedPercent,omitempty"`
-	RouteCandidates       []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
+	CLIAvailable             bool                            `json:"cliAvailable"`
+	ImportedAccounts         int                             `json:"importedAccounts"`
+	CurrentAccountID         string                          `json:"currentAccountId,omitempty"`
+	SecretBackend            string                          `json:"secretBackend,omitempty"`
+	DaemonCheckOK            bool                            `json:"daemonCheckOk"`
+	DaemonCheckedAccounts    int                             `json:"daemonCheckedAccounts,omitempty"`
+	DaemonSecretBackend      string                          `json:"daemonSecretBackend,omitempty"`
+	DaemonCheckError         string                          `json:"daemonCheckError,omitempty"`
+	FreshQuotaAccounts       int                             `json:"freshQuotaAccounts"`
+	StaleQuotaAccounts       int                             `json:"staleQuotaAccounts"`
+	MissingQuotaAccounts     int                             `json:"missingQuotaAccounts"`
+	SecretReadableAccounts   int                             `json:"secretReadableAccounts"`
+	SecretUnreadableAccounts int                             `json:"secretUnreadableAccounts"`
+	Accounts                 []doctorCodexAccountReport      `json:"accounts,omitempty"`
+	AutoRouteAccountID       string                          `json:"autoRouteAccountId,omitempty"`
+	AutoRouteQuotaState      string                          `json:"autoRouteQuotaState,omitempty"`
+	AutoRouteFresh           bool                            `json:"autoRouteFresh"`
+	AutoRouteScore           float64                         `json:"autoRouteScore,omitempty"`
+	AutoRouteReason          string                          `json:"autoRouteReason,omitempty"`
+	AutoRouteCheckedAt       int64                           `json:"autoRouteCheckedAt,omitempty"`
+	AutoRoutePrimary         *float64                        `json:"autoRoutePrimaryUsedPercent,omitempty"`
+	RouteCandidates          []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
 }
 
 type doctorCodexAccountReport struct {
@@ -139,6 +151,8 @@ type doctorCodexAccountReport struct {
 	Email              string   `json:"email,omitempty"`
 	Current            bool     `json:"current,omitempty"`
 	Plan               string   `json:"plan,omitempty"`
+	SecretBackendOK    bool     `json:"secretBackendOk"`
+	SecretReadable     bool     `json:"secretReadable"`
 	QuotaState         string   `json:"quotaState"`
 	QuotaFresh         bool     `json:"quotaFresh"`
 	QuotaCheckedAt     int64    `json:"quotaCheckedAt,omitempty"`
@@ -272,6 +286,22 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			Plan:       acc.Plan,
 			QuotaState: protocol.AccountQuotaStateMissing,
 		}
+		ref, err := secret.ParseRef(acc.SecretRef)
+		if err == nil {
+			if err := secret.EnsureRefBackend(secrets, ref); err == nil {
+				row.SecretBackendOK = true
+				if _, err := secrets.Get(ctx, ref); err == nil {
+					row.SecretReadable = true
+					report.Codex.SecretReadableAccounts++
+				} else {
+					report.Codex.SecretUnreadableAccounts++
+				}
+			} else {
+				report.Codex.SecretUnreadableAccounts++
+			}
+		} else {
+			report.Codex.SecretUnreadableAccounts++
+		}
 		q, err := accounts.LoadQuota(acc.ID)
 		if err != nil {
 			report.Codex.MissingQuotaAccounts++
@@ -295,6 +325,17 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		}
 		report.Codex.Accounts = append(report.Codex.Accounts, row)
 	}
+	allSecretsReadable := len(list) > 0 && report.Codex.SecretReadableAccounts == len(list)
+	if len(list) > 0 && !allSecretsReadable {
+		report.Issues = append(report.Issues, "not every imported Codex account has readable SecretStore credentials")
+		report.NextSteps = append(report.NextSteps, doctorSecretReadinessNextStep(report.Daemon.OK))
+	}
+	report.Checks = append(report.Checks, doctorCheckReport{
+		Name:     "Codex SecretStore credentials",
+		OK:       allSecretsReadable,
+		Evidence: fmt.Sprintf("readable %d/%d, unreadable %d", report.Codex.SecretReadableAccounts, len(list), report.Codex.SecretUnreadableAccounts),
+		NextStep: doctorCheckNextStep(!allSecretsReadable, doctorSecretReadinessNextStep(report.Daemon.OK)),
+	})
 	if len(list) > 0 && report.Codex.FreshQuotaAccounts < len(list) {
 		report.Issues = append(report.Issues, "not every imported Codex account has fresh quota evidence")
 		report.NextSteps = append(report.NextSteps, doctorReadinessNextStep())
@@ -377,20 +418,22 @@ func doctorSummary(report doctorReport, opts doctorOptions) doctorSummaryReport 
 	}
 	secretBackendOK := opts.RequireSecretBackend == "" || opts.RequireSecretBackend == report.Codex.SecretBackend
 	summary := doctorSummaryReport{
-		Ready:                 report.OK,
-		ImportedAccounts:      report.Codex.ImportedAccounts,
-		RequiredAccounts:      2,
-		MissingAccounts:       missingAccounts,
-		FreshQuotaAccounts:    report.Codex.FreshQuotaAccounts,
-		StaleQuotaAccounts:    report.Codex.StaleQuotaAccounts,
-		MissingQuotaAccounts:  report.Codex.MissingQuotaAccounts,
-		AutoRouteAccountID:    report.Codex.AutoRouteAccountID,
-		AutoRouteFresh:        report.Codex.AutoRouteFresh,
-		DaemonHealthy:         report.Daemon.OK,
-		DaemonAccountsCheckOK: report.Codex.DaemonCheckOK,
-		SecretBackend:         report.Codex.SecretBackend,
-		RequiredSecretBackend: opts.RequireSecretBackend,
-		SecretBackendOK:       secretBackendOK,
+		Ready:                    report.OK,
+		ImportedAccounts:         report.Codex.ImportedAccounts,
+		RequiredAccounts:         2,
+		MissingAccounts:          missingAccounts,
+		FreshQuotaAccounts:       report.Codex.FreshQuotaAccounts,
+		StaleQuotaAccounts:       report.Codex.StaleQuotaAccounts,
+		MissingQuotaAccounts:     report.Codex.MissingQuotaAccounts,
+		AutoRouteAccountID:       report.Codex.AutoRouteAccountID,
+		AutoRouteFresh:           report.Codex.AutoRouteFresh,
+		DaemonHealthy:            report.Daemon.OK,
+		DaemonAccountsCheckOK:    report.Codex.DaemonCheckOK,
+		SecretBackend:            report.Codex.SecretBackend,
+		RequiredSecretBackend:    opts.RequireSecretBackend,
+		SecretBackendOK:          secretBackendOK,
+		SecretReadableAccounts:   report.Codex.SecretReadableAccounts,
+		SecretUnreadableAccounts: report.Codex.SecretUnreadableAccounts,
 	}
 	if opts.VerifySecretStore {
 		roundTripOK := false
@@ -502,6 +545,13 @@ func doctorQuotaCheckNextStep(imported int, daemonOK bool) string {
 	return doctorReadinessNextStep()
 }
 
+func doctorSecretReadinessNextStep(daemonOK bool) string {
+	if daemonOK {
+		return "re-import affected Codex accounts through CAP with the active SecretStore backend: capd accounts import --auth /path/to/auth.json"
+	}
+	return "restart capd with the active SecretStore backend, then re-import affected Codex accounts"
+}
+
 func doctorRouteCheckNextStep(imported int, daemonOK bool) string {
 	if imported == 0 {
 		return doctorImportNextStep(daemonOK)
@@ -529,11 +579,13 @@ func printDoctorReport(cmd *cobra.Command, report doctorReport) {
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), " failed: %s\n", report.Daemon.Error)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "codex: cli=%t accounts=%d current=%s secretBackend=%s freshQuota=%d staleQuota=%d missingQuota=%d\n",
+	fmt.Fprintf(cmd.OutOrStdout(), "codex: cli=%t accounts=%d current=%s secretBackend=%s secretReadable=%d secretUnreadable=%d freshQuota=%d staleQuota=%d missingQuota=%d\n",
 		report.Codex.CLIAvailable,
 		report.Codex.ImportedAccounts,
 		emptyDash(report.Codex.CurrentAccountID),
 		emptyDash(report.Codex.SecretBackend),
+		report.Codex.SecretReadableAccounts,
+		report.Codex.SecretUnreadableAccounts,
 		report.Codex.FreshQuotaAccounts,
 		report.Codex.StaleQuotaAccounts,
 		report.Codex.MissingQuotaAccounts,

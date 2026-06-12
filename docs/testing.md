@@ -76,7 +76,7 @@ For multi-account routing readiness:
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all --timeout 2m
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native --timeout 2m
 CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native --timeout 2m
-CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native
+CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native --timeout 2m
 
 # In another terminal, keep the daemon running for CAP/WebSocket checks:
 CAPD_SECRET_BACKEND=native capd start
@@ -142,18 +142,19 @@ smallest direct native SecretStore gate. It opens the active backend, writes,
 reads, and deletes a diagnostic secret, and fails before account checks if the
 daemon/live shell is using the wrong backend or an OS credential prompt stalls
 native access. `capd doctor --json --fail
---verify-secretstore --require-secret-backend native`
+--verify-secretstore --require-secret-backend native --timeout 2m`
 is the recommended preflight before the live chain. It does not refresh quota or
 read token material into the output; it reports daemon health, Codex CLI
 availability, imported account count, cached quota freshness, auto-route
-freshness, SecretStore backend, an explicit SecretStore write/read/delete
-roundtrip, daemon-side CAP `accounts/check` reachability, readiness issues, and
-concrete next steps. Its JSON also includes the same `routeCandidates` ordering
-used by `agents/route --account auto`, so live preflight evidence explains why
-one account would be selected. The top-level `summary` object is the compact
-CI/Web view of missing accounts, quota freshness, auto-route freshness,
-SecretStore backend status, and daemon CAP reachability. After fixing account or
-quota issues, use
+freshness, SecretStore backend, per-account SecretStore credential readability,
+an explicit SecretStore write/read/delete roundtrip, daemon-side CAP
+`accounts/check` reachability, readiness issues, and concrete next steps. Its
+JSON also includes the same `routeCandidates` ordering used by
+`agents/route --account auto`, so live preflight evidence explains why one
+account would be selected. The top-level `summary` object is the compact
+CI/Web view of missing accounts, account credential readability, quota
+freshness, auto-route freshness, SecretStore backend status, and daemon CAP
+reachability. After fixing account or quota issues, use
 `capd accounts check --json --readiness` to
 refresh and verify the daemon-side readiness gate before the final live run,
 with safe partial evidence printed on failure.

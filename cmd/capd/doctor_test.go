@@ -16,6 +16,7 @@ import (
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/server"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
@@ -98,10 +99,25 @@ func TestDoctorTextReturnsErrorWhenNotReady(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	text := out.String()
-	for _, want := range []string{"capd doctor: needs attention", "daemon:", "codex:", "CHECK", "daemon health", "fail", "issues:", "next steps:"} {
+	for _, want := range []string{"capd doctor: needs attention", "daemon:", "codex:", "secretReadable=", "CHECK", "daemon health", "fail", "issues:", "next steps:"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("doctor text missing %q: %s", want, text)
 		}
+	}
+}
+
+func TestDoctorHelpIncludesTimeout(t *testing.T) {
+	var out bytes.Buffer
+	cmd := newDoctorCmd()
+	cmd.SetArgs([]string{"--help"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if !strings.Contains(text, "--timeout") || !strings.Contains(text, "2m") {
+		t.Fatalf("doctor help missing timeout: %s", text)
 	}
 }
 
@@ -318,15 +334,26 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	t.Setenv("CAPD_HOST", host)
 	t.Setenv("CAPD_PORT", port)
 
-	accounts, _ := seedCodexAccount(t)
+	accounts, secrets := seedCodexAccount(t)
 	defer accounts.Close()
+	ref, err := secrets.Put(context.Background(), "codex-low", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "chatgpt",
+		AccessToken: "low-access-secret",
+		AccountID:   "acct_low",
+		Email:       "low@example.com",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"low-access-secret","account_id":"acct_low"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := accounts.UpsertAccount(account.Account{
 		ID:        "codex-low",
 		Provider:  codexauth.Provider,
 		AuthMode:  "chatgpt",
 		Email:     "low@example.com",
 		AccountID: "acct_low",
-		SecretRef: "file:codex-low",
+		SecretRef: ref.String(),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -384,7 +411,7 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, leaked := range []string{"secretRef", "file:codex", "access-secret", "refresh-secret"} {
+	for _, leaked := range []string{"secretRef", "file:codex", "access-secret", "refresh-secret", "low-access-secret"} {
 		if strings.Contains(string(data), leaked) {
 			t.Fatalf("doctor report leaked %q: %s", leaked, data)
 		}
@@ -492,6 +519,54 @@ func TestDoctorReportsStaleAndMissingAccountQuota(t *testing.T) {
 		NextStep: "refresh and verify daemon-side readiness with: capd accounts check --json --readiness",
 	}) {
 		t.Fatalf("missing quota freshness check: %+v", report.Checks)
+	}
+}
+
+func TestDoctorReportsUnreadableAccountSecretsSafely(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = secret.BackendNative + ":codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := buildDoctorReport(t.Context(), doctorOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Codex.SecretReadableAccounts != 0 || report.Codex.SecretUnreadableAccounts != 1 {
+		t.Fatalf("secret readability = %+v", report.Codex)
+	}
+	if report.Summary.SecretReadableAccounts != 0 || report.Summary.SecretUnreadableAccounts != 1 {
+		t.Fatalf("summary secret readability = %+v", report.Summary)
+	}
+	if !containsString(report.Issues, "not every imported Codex account has readable SecretStore credentials") {
+		t.Fatalf("missing secret readability issue: %+v", report.Issues)
+	}
+	if !containsDoctorCheck(report.Checks, doctorCheckReport{
+		Name:     "Codex SecretStore credentials",
+		OK:       false,
+		Evidence: "readable 0/1, unreadable 1",
+		NextStep: "restart capd with the active SecretStore backend, then re-import affected Codex accounts",
+	}) {
+		t.Fatalf("missing secret readability check: %+v", report.Checks)
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leaked := range []string{"secretRef", "native:codex-test", "access-secret", "refresh-secret", home} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("doctor secret readability leaked %q: %s", leaked, data)
+		}
 	}
 }
 

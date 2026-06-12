@@ -69,8 +69,9 @@ daemon-side account readiness checks.
 ### `capd doctor` — local readiness preflight
 
 Runs a read-only readiness preflight across daemon health, local agent
-discovery, imported Codex account count, cached quota freshness, auto-route
-freshness, and the active SecretStore backend. Use
+discovery, imported Codex account count, per-account SecretStore credential
+readability, cached quota freshness, auto-route freshness, and the active
+SecretStore backend. Use
 `--require-secret-backend native` to turn native SecretStore into an explicit
 readiness issue. When the daemon is healthy, doctor also calls daemon-side
 `accounts/check` over CAP/WebSocket to confirm the same account evidence that
@@ -82,17 +83,18 @@ and next steps without token material or local secret paths; add `--fail` when
 JSON output should also return non-zero on readiness issues. Auto-route evidence
 includes the selected account id, quota state, freshness, primary quota usage,
 routing score, checked time, and the same human-readable reason used by routing previews. The
-`codex.accounts` JSON array lists safe per-account quota evidence (id, email,
-current marker, plan, quota state, freshness, primary usage, checked time) and
-never includes SecretStore refs, token material, runtime paths, or raw auth JSON.
+`codex.accounts` JSON array lists safe per-account credential and quota evidence
+(id, email, current marker, plan, `secretBackendOk`, `secretReadable`, quota
+state, freshness, primary usage, checked time) and never includes SecretStore
+refs, token material, runtime paths, or raw auth JSON.
 The top-level `summary` object gives CI and Web clients a compact readiness
-view: required/missing account counts, fresh/stale/missing quota counts,
-auto-route freshness, daemon CAP status, SecretStore backend match, and optional
-SecretStore roundtrip status.
+view: required/missing account counts, readable/unreadable SecretStore credential
+counts, fresh/stale/missing quota counts, auto-route freshness, daemon CAP
+status, SecretStore backend match, and optional SecretStore roundtrip status.
 The top-level `checks` array is a stable readiness checklist with
 `name`, `ok`, `evidence`, and optional `nextStep` fields for daemon health,
-Codex CLI availability, SecretStore backend, multi-account import, quota
-freshness, and auto-route freshness.
+Codex CLI availability, SecretStore backend, per-account SecretStore credential
+readability, multi-account import, quota freshness, and auto-route freshness.
 When accounts are missing and the daemon is healthy, doctor next steps point to
 `capd accounts import` so the fix exercises the same CAP/WebSocket import path
 as web clients; when a second account is needed, the next step points to
@@ -143,7 +145,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 | `capd console [--probe] [--url]` | opens the local web console, or the compact validation probe with `--probe`, after checking daemon health. By default it passes the daemon token to the browser without printing it; `--url` prints the tokenized URL only when explicitly requested. |
 | `capd probe data [--json] [--readiness] [--fail] [--require-secret-backend <file\|native>] [--timeout 2m]` | fetches `/probe/data` with `Authorization: Bearer <daemon-token>` and prints safe diagnostics for automation. Text output includes a compact readiness summary when the daemon returns one. `--readiness` requests the stronger readiness view, `--require-secret-backend` passes the expected backend to the daemon, `--timeout` bounds HTTP waits, and `--fail` exits non-zero when the probe reports `ok=false` or an HTTP error status. |
 | `GET /probe/data` | authenticated HTTP diagnostics endpoint for Web clients and smoke tests. Requires `Authorization: Bearer <daemon-token>`, returns safe JSON health, a compact `summary`, `accounts/check`, `agents/route`, `routeCandidates`, and pass/fail `checks`; use `?readiness=1&requireSecretBackend=native` for the stronger live readiness view. The top-level `summary` reuses `accounts/check.summary` for account, quota, auto-route, and SecretStore evidence, then adds route-decision status for the full Web diagnostics path. The handler also bounds server-side work: ordinary probes get 12s and readiness probes get 2m. |
-| `capd doctor [--json] [--fail] [--verify-secretstore] [--require-secret-backend <file\|native>]` | local readiness preflight for daemon health, Codex CLI availability, imported account count, quota freshness, auto-route freshness, daemon-side CAP account evidence, and SecretStore backend; `--verify-secretstore` performs an explicit write/read/delete diagnostic roundtrip; text mode fails when issues are found, and `--fail` makes JSON mode fail too |
+| `capd doctor [--json] [--fail] [--verify-secretstore] [--require-secret-backend <file\|native>] [--timeout 2m]` | local readiness preflight for daemon health, Codex CLI availability, imported account count, per-account SecretStore credential readability, quota freshness, auto-route freshness, daemon-side CAP account evidence, and SecretStore backend; `--verify-secretstore` performs an explicit write/read/delete diagnostic roundtrip; `--timeout` bounds native SecretStore and account checks; text mode fails when issues are found, and `--fail` makes JSON mode fail too |
 | `capd agents list` | table: id, available/not installed, version, binary path |
 | `capd agents route [--account <id\|auto>] [--capability name] [--require-fresh-quota] [--json]` | preview local routing without starting a session; with `--account auto`, shows the Codex account selected by conservative quota scoring. JSON includes `routeCandidates`, sorted by the same account-aware routing score. `--require-fresh-quota` fails unless that auto selection is backed by fresh cached quota |
 | `capd agents usage <id>` | account snapshot JSON: plan, 5h/weekly window used %, reset timestamps, credits (codex) |

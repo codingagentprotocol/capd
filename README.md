@@ -156,7 +156,7 @@ capd accounts codex quota auto
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all --timeout 2m
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native --timeout 2m
 CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native --timeout 2m # verify native SecretStore directly
-CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native # readiness gate
+CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native --timeout 2m # readiness gate
 CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
 capd console --probe         # simple web data probe; opens with daemon token without printing it
 capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail # same probe diagnostics for automation
@@ -171,12 +171,13 @@ capd agents route --account auto --require-fresh-quota
 For deterministic local regression, run `make verify`; for native SecretStore
 coverage, run `make verify-secretstore`; for a no-real-account Codex
 multi-account quota/routing/readiness regression, run
-`make verify-codex-readiness-sim`. `capd doctor --json --fail` is a safe
+`make verify-codex-readiness-sim`. `capd doctor --json --fail --timeout 2m` is a safe
 readiness audit for live Codex work: it checks daemon health, Codex CLI
-availability, imported account count, quota freshness, auto-route freshness,
-the active SecretStore backend, and daemon-side CAP `accounts/check` reachability
-without printing token material. Add `--verify-secretstore` before native live
-runs to write, read, and delete a diagnostic secret in the active backend. When
+availability, imported account count, per-account SecretStore credential
+readability, quota freshness, auto-route freshness, the active SecretStore
+backend, and daemon-side CAP `accounts/check` reachability without printing
+token material. Add `--verify-secretstore` before native live runs to write,
+read, and delete a diagnostic secret in the active backend. When
 accounts are missing, use
 `capd accounts import --auth ...` to exercise the same daemon-side CAP path as
 the Web Console. Use `capd accounts check --json --readiness` for the
