@@ -298,6 +298,10 @@ different `--require-secret-backend` is supplied.
 `quotaRefreshed:true` means the returned evidence follows a successful quota
 refresh in this same call. The response never returns token material,
 `secret_ref`, raw auth JSON, or local filesystem paths.
+When a readiness gate fails after account metadata is loaded, the JSON-RPC
+error `data` may contain the same safe `accounts/check` evidence accumulated so
+far. Clients should treat it as partial evidence for diagnostics, not as a
+successful readiness result.
 
 ### `accounts/quota`
 

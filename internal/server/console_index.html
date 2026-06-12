@@ -148,6 +148,12 @@ function call(method, p) {
   });
 }
 
+function rpcError(error) {
+  const e = new Error(error.message || JSON.stringify(error));
+  e.data = error.data;
+  return e;
+}
+
 function onEvent(ev) {
   const d = ev.data || {};
   switch (ev.type) {
@@ -677,7 +683,7 @@ async function connect() {
     const msg = JSON.parse(m.data);
     if (msg.method === "event") { onEvent(msg.params); return; }
     const p = pending[msg.id];
-    if (p) { delete pending[msg.id]; msg.error ? p.reject(msg.error) : p.resolve(msg.result); }
+    if (p) { delete pending[msg.id]; msg.error ? p.reject(rpcError(msg.error)) : p.resolve(msg.result); }
   };
   ws.onclose = () => {
     statusEl.textContent = "连接断开";

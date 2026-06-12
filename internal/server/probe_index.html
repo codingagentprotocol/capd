@@ -73,6 +73,11 @@ function httpURL(path) { return `${location.protocol === "https:" ? "https" : "h
 function wsURL() { return `${location.protocol === "https:" ? "wss" : "ws"}://${capdHost()}/ws?token=${encodeURIComponent(TOKEN)}`; }
 function showJSON(data) { $("json").textContent = JSON.stringify(data, null, 2); }
 function showSummary(lines) { $("summary").textContent = lines.join("\n"); }
+function rpcError(error) {
+  const e = new Error(error.message || JSON.stringify(error));
+  e.data = error.data;
+  return e;
+}
 function showTests(rows) {
   const tbody = $("tests");
   tbody.textContent = "";
@@ -114,7 +119,7 @@ async function connect() {
     if (msg.id && state.pending[msg.id]) {
       const pending = state.pending[msg.id];
       delete state.pending[msg.id];
-      msg.error ? pending.reject(new Error(msg.error.message || JSON.stringify(msg.error))) : pending.resolve(msg.result);
+      msg.error ? pending.reject(rpcError(msg.error)) : pending.resolve(msg.result);
     }
   };
   await new Promise((resolve, reject) => {
@@ -191,7 +196,7 @@ async function refresh(readiness = false) {
     } catch (e) {
       if (!readiness) throw e;
       readinessError = e.message || String(e);
-      result = await call("accounts/check", { provider:"codex" });
+      result = e.data || await call("accounts/check", { provider:"codex" });
     }
     let route = result.autoRoute || null;
     let routeDecision = null;

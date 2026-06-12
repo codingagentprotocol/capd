@@ -324,21 +324,6 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 	sort.Slice(accounts, func(i, j int) bool {
 		return accounts[i].ID < accounts[j].ID
 	})
-	if perr := validateAccountsCheckPreflight(s.opts.Secrets.Backend(), len(accounts), params); perr != nil {
-		return protocol.AccountsCheckResult{}, perr
-	}
-	if params.RefreshQuota {
-		if _, perr := s.refreshAccountQuota(ctx, protocol.AccountsQuotaParams{Provider: provider, AccountID: protocol.AccountAll}); perr != nil {
-			return protocol.AccountsCheckResult{}, protocol.NewError(perr.Code, "refresh quota: %s", perr.Message)
-		}
-		accounts, err = s.opts.Accounts.ListAccounts(provider)
-		if err != nil {
-			return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "list refreshed accounts: %v", err)
-		}
-		sort.Slice(accounts, func(i, j int) bool {
-			return accounts[i].ID < accounts[j].ID
-		})
-	}
 	result := protocol.AccountsCheckResult{
 		Provider:         provider,
 		CurrentAccountID: current,
@@ -347,25 +332,50 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		QuotaRefreshed:   params.RefreshQuota,
 		Accounts:         make([]protocol.AccountCheckEvidence, 0, len(accounts)),
 	}
+	if perr := validateAccountsCheckPreflight(s.opts.Secrets.Backend(), len(accounts), params); perr != nil {
+		return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result)
+	}
+	if params.RefreshQuota {
+		if _, perr := s.refreshAccountQuota(ctx, protocol.AccountsQuotaParams{Provider: provider, AccountID: protocol.AccountAll}); perr != nil {
+			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(protocol.NewError(perr.Code, "refresh quota: %s", perr.Message), result)
+		}
+		accounts, err = s.opts.Accounts.ListAccounts(provider)
+		if err != nil {
+			return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "list refreshed accounts: %v", err)
+		}
+		sort.Slice(accounts, func(i, j int) bool {
+			return accounts[i].ID < accounts[j].ID
+		})
+		result.CheckedAccounts = len(accounts)
+		result.Accounts = make([]protocol.AccountCheckEvidence, 0, len(accounts))
+	}
 	for _, acc := range accounts {
 		row, perr := s.checkAccount(ctx, acc, current)
 		if perr != nil {
-			return protocol.AccountsCheckResult{}, perr
+			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result)
 		}
 		result.Accounts = append(result.Accounts, row)
 	}
 	if len(accounts) > 0 {
 		selected, _, perr := s.selectCodexAccountForRoute()
 		if perr != nil {
-			return protocol.AccountsCheckResult{}, perr
+			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result)
 		}
 		evidence := account.QuotaRouteEvidence(s.opts.Accounts, selected)
 		result.AutoRoute = &evidence
 	}
 	if perr := validateAccountsCheckResult(result, params); perr != nil {
-		return protocol.AccountsCheckResult{}, perr
+		return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result)
 	}
 	return result, nil
+}
+
+func accountsCheckErrorWithEvidence(perr *protocol.Error, result protocol.AccountsCheckResult) *protocol.Error {
+	if perr == nil {
+		return nil
+	}
+	perr.Data = result
+	return perr
 }
 
 func validateAccountsCheckPreflight(secretBackend string, checkedAccounts int, params protocol.AccountsCheckParams) *protocol.Error {

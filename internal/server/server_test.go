@@ -104,7 +104,7 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 		t.Fatalf("csp = %q", got)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"CAPD Probe", "accounts/check", "agents/route", "/healthz", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "checks", "validationRows", "showTests", "daemon health", "multi-account readiness", "quota freshness", "auto route fresh", "native secret backend", "readiness gate", "capd accounts check --readiness", "capd agents route --account auto", "CAPD_SECRET_BACKEND=native capd start", "readinessError", "routeError", "routeDecision", "routeDecisionText", "decision.reason", `call("accounts/check", { provider:"codex" })`} {
+	for _, want := range []string{"CAPD Probe", "accounts/check", "agents/route", "/healthz", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "checks", "validationRows", "showTests", "daemon health", "multi-account readiness", "quota freshness", "auto route fresh", "native secret backend", "readiness gate", "rpcError", "e.data", "capd accounts check --readiness", "capd agents route --account auto", "CAPD_SECRET_BACKEND=native capd start", "readinessError", "routeError", "routeDecision", "routeDecisionText", "decision.reason", `call("accounts/check", { provider:"codex" })`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("probe HTML missing %q", want)
 		}
@@ -234,6 +234,8 @@ func TestConsoleStaticContract(t *testing.T) {
 		"s.accountId",
 		"button.disabled = true",
 		"rejectAllPending",
+		"rpcError",
+		"error.data",
 		"CAP WebSocket is not connected",
 		"CAP WebSocket closed",
 		"CAP WebSocket error",

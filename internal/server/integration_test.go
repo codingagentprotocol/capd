@@ -1549,6 +1549,16 @@ func TestAccountsCheckAllFreshFailureReportsEveryStaleAccountSafely(t *testing.T
 			t.Fatalf("accounts/check all-fresh error leaked %q: %s", leaked, resp.Error.Message)
 		}
 	}
+	partial := accountsCheckErrorData(t, resp.Error)
+	if partial.CheckedAccounts != 2 || len(partial.Accounts) != 2 || partial.Accounts[0].ID != "codex-missing" || partial.Accounts[1].QuotaState != protocol.AccountQuotaStateStale {
+		t.Fatalf("partial evidence = %+v", partial)
+	}
+	data, _ := json.Marshal(partial)
+	for _, leaked := range []string{"test-token", "missing-token", "must-not-return", "secretRef", "file:codex", "CODEX_HOME", s.opts.RuntimeRoot} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("accounts/check error data leaked %q: %s", leaked, data)
+		}
+	}
 }
 
 func TestAccountsCheckReadinessPreflightAvoidsQuotaCalls(t *testing.T) {
@@ -1591,6 +1601,10 @@ func TestAccountsCheckReadinessPreflightAvoidsQuotaCalls(t *testing.T) {
 			if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, tc.want) {
 				t.Fatalf("response = %+v", resp)
 			}
+			partial := accountsCheckErrorData(t, resp.Error)
+			if partial.CheckedAccounts != 1 || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 0 {
+				t.Fatalf("partial evidence = %+v", partial)
+			}
 			if quotaCalls.Load() != 0 {
 				t.Fatalf("quota calls = %d", quotaCalls.Load())
 			}
@@ -1632,6 +1646,10 @@ func TestAccountsCheckHandlesEmptyAndRejectsBackendMismatch(t *testing.T) {
 		if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "no Codex accounts checked") {
 			t.Fatalf("empty gate response = %+v", resp)
 		}
+		partial := accountsCheckErrorData(t, resp.Error)
+		if partial.CheckedAccounts != 0 || len(partial.Accounts) != 0 {
+			t.Fatalf("partial evidence = %+v", partial)
+		}
 	}
 
 	ref, err := s.opts.Secrets.Put(context.Background(), "codex-test", secret.Bundle{
@@ -1668,6 +1686,26 @@ func TestAccountsCheckHandlesEmptyAndRejectsBackendMismatch(t *testing.T) {
 	if strings.Contains(resp.Error.Message, "test-token") {
 		t.Fatalf("check error leaked token: %v", resp.Error)
 	}
+	partial := accountsCheckErrorData(t, resp.Error)
+	if partial.CheckedAccounts != 1 || len(partial.Accounts) != 0 {
+		t.Fatalf("partial evidence = %+v", partial)
+	}
+}
+
+func accountsCheckErrorData(t *testing.T, perr *protocol.Error) protocol.AccountsCheckResult {
+	t.Helper()
+	if perr == nil || perr.Data == nil {
+		t.Fatalf("missing error data: %+v", perr)
+	}
+	data, err := json.Marshal(perr.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result protocol.AccountsCheckResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatal(err)
+	}
+	return result
 }
 
 func TestAccountsRemoveDeletesSecretProjectionAndMetadata(t *testing.T) {
