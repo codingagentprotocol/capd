@@ -61,25 +61,7 @@ func newAccountsCmd() *cobra.Command {
 					}
 					currentByProvider[acc.Provider] = current
 				}
-				row := accountListRow{
-					Current:       acc.ID == current,
-					ID:            acc.ID,
-					Provider:      acc.Provider,
-					AuthMode:      acc.AuthMode,
-					Email:         acc.Email,
-					AccountID:     acc.AccountID,
-					Plan:          acc.Plan,
-					SecretBackend: accountSecretBackend(acc.SecretRef),
-					QuotaState:    protocol.AccountQuotaStateMissing,
-				}
-				if q, err := accounts.LoadQuota(acc.ID); err == nil {
-					if row.Plan == "" {
-						row.Plan = q.Plan
-					}
-					row.PrimaryUsed = formatPercent(q.PrimaryUsedPercent)
-					row.QuotaState = accountQuotaState(q)
-					row.QuotaCheckedAt = q.CheckedAt
-				}
+				row := makeAccountListRow(accounts, acc, current)
 				rows = append(rows, row)
 			}
 			if jsonOut {
@@ -88,14 +70,14 @@ func newAccountsCmd() *cobra.Command {
 				return nil
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "CURRENT\tPROVIDER\tID\tMODE\tEMAIL\tREMOTE_ACCOUNT\tPLAN\tSECRET_BACKEND\tPRIMARY_USED\tQUOTA_STATE")
+			fmt.Fprintln(w, "CURRENT\tPROVIDER\tID\tMODE\tEMAIL\tREMOTE_ACCOUNT\tPLAN\tSECRET_BACKEND\tPRIMARY_USED\tQUOTA_STATE\tFRESH\tROUTE_SCORE")
 			for _, row := range rows {
 				mark := ""
 				if row.Current {
 					mark = "*"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-					mark, row.Provider, row.ID, row.AuthMode, row.Email, row.AccountID, row.Plan, row.SecretBackend, row.PrimaryUsed, row.QuotaState)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%t\t%s\n",
+					mark, row.Provider, row.ID, row.AuthMode, row.Email, row.AccountID, row.Plan, row.SecretBackend, row.PrimaryUsed, row.QuotaState, row.QuotaFresh, routeScoreText(row.RouteScore))
 			}
 			return w.Flush()
 		},
@@ -428,13 +410,13 @@ func newCodexAccountsCmd() *cobra.Command {
 			}
 			rows := makeAccountListRows(accounts, list, current)
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "CURRENT\tID\tMODE\tEMAIL\tCHATGPT_ACCOUNT\tPLAN\tSECRET_BACKEND\tPRIMARY_USED\tQUOTA_STATE")
+			fmt.Fprintln(w, "CURRENT\tID\tMODE\tEMAIL\tCHATGPT_ACCOUNT\tPLAN\tSECRET_BACKEND\tPRIMARY_USED\tQUOTA_STATE\tFRESH\tROUTE_SCORE")
 			for _, row := range rows {
 				mark := ""
 				if row.Current {
 					mark = "*"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", mark, row.ID, row.AuthMode, row.Email, row.AccountID, row.Plan, row.SecretBackend, row.PrimaryUsed, row.QuotaState)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%t\t%s\n", mark, row.ID, row.AuthMode, row.Email, row.AccountID, row.Plan, row.SecretBackend, row.PrimaryUsed, row.QuotaState, row.QuotaFresh, routeScoreText(row.RouteScore))
 			}
 			return w.Flush()
 		},
@@ -1399,44 +1381,64 @@ type codexSmokeProjection struct {
 }
 
 type accountListRow struct {
-	Current        bool   `json:"current"`
-	Provider       string `json:"provider"`
-	ID             string `json:"id"`
-	AuthMode       string `json:"authMode,omitempty"`
-	Email          string `json:"email,omitempty"`
-	AccountID      string `json:"accountId,omitempty"`
-	Plan           string `json:"plan,omitempty"`
-	SecretBackend  string `json:"secretBackend,omitempty"`
-	PrimaryUsed    string `json:"primaryUsed,omitempty"`
-	QuotaState     string `json:"quotaState"`
-	QuotaCheckedAt int64  `json:"quotaCheckedAt,omitempty"`
+	Current        bool     `json:"current"`
+	Provider       string   `json:"provider"`
+	ID             string   `json:"id"`
+	AuthMode       string   `json:"authMode,omitempty"`
+	Email          string   `json:"email,omitempty"`
+	AccountID      string   `json:"accountId,omitempty"`
+	Plan           string   `json:"plan,omitempty"`
+	SecretBackend  string   `json:"secretBackend,omitempty"`
+	PrimaryUsed    string   `json:"primaryUsed,omitempty"`
+	QuotaState     string   `json:"quotaState"`
+	QuotaFresh     bool     `json:"quotaFresh"`
+	QuotaCheckedAt int64    `json:"quotaCheckedAt,omitempty"`
+	RouteScore     *float64 `json:"routeScore,omitempty"`
+	RouteReason    string   `json:"routeReason,omitempty"`
 }
 
 func makeAccountListRows(accounts *account.Store, list []account.Account, current string) []accountListRow {
 	rows := make([]accountListRow, 0, len(list))
 	for _, acc := range list {
-		row := accountListRow{
-			Current:       acc.ID == current,
-			ID:            acc.ID,
-			Provider:      acc.Provider,
-			AuthMode:      acc.AuthMode,
-			Email:         acc.Email,
-			AccountID:     acc.AccountID,
-			Plan:          acc.Plan,
-			SecretBackend: accountSecretBackend(acc.SecretRef),
-			QuotaState:    protocol.AccountQuotaStateMissing,
-		}
-		if q, err := accounts.LoadQuota(acc.ID); err == nil {
-			if row.Plan == "" {
-				row.Plan = q.Plan
-			}
-			row.PrimaryUsed = formatPercent(q.PrimaryUsedPercent)
-			row.QuotaState = accountQuotaState(q)
-			row.QuotaCheckedAt = q.CheckedAt
-		}
-		rows = append(rows, row)
+		rows = append(rows, makeAccountListRow(accounts, acc, current))
 	}
 	return rows
+}
+
+func makeAccountListRow(accounts *account.Store, acc account.Account, current string) accountListRow {
+	row := accountListRow{
+		Current:       acc.ID == current,
+		ID:            acc.ID,
+		Provider:      acc.Provider,
+		AuthMode:      acc.AuthMode,
+		Email:         acc.Email,
+		AccountID:     acc.AccountID,
+		Plan:          acc.Plan,
+		SecretBackend: accountSecretBackend(acc.SecretRef),
+		QuotaState:    protocol.AccountQuotaStateMissing,
+	}
+	if q, err := accounts.LoadQuota(acc.ID); err == nil {
+		if row.Plan == "" {
+			row.Plan = q.Plan
+		}
+		row.PrimaryUsed = formatPercent(q.PrimaryUsedPercent)
+		row.QuotaState = accountQuotaState(q)
+		row.QuotaFresh = row.QuotaState == protocol.AccountQuotaStateFresh
+		row.QuotaCheckedAt = q.CheckedAt
+	}
+	if acc.Provider == codexauth.Provider {
+		score := account.QuotaRouteScore(accounts, acc, current)
+		row.RouteScore = &score
+		row.RouteReason = account.QuotaRouteReason(accounts, acc)
+	}
+	return row
+}
+
+func routeScoreText(score *float64) string {
+	if score == nil {
+		return ""
+	}
+	return fmt.Sprintf("%.2f", *score)
 }
 
 func accountSecretBackend(secretRef string) string {

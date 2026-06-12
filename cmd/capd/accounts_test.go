@@ -82,7 +82,7 @@ func TestCodexAccountsListShowsZeroQuotaWithoutLeakingSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	if !strings.Contains(text, "0.0%") || !strings.Contains(text, "SECRET_BACKEND") || !strings.Contains(text, secret.BackendFile) || !strings.Contains(text, "QUOTA_STATE") || !strings.Contains(text, protocol.AccountQuotaStateFresh) {
+	if !strings.Contains(text, "0.0%") || !strings.Contains(text, "SECRET_BACKEND") || !strings.Contains(text, secret.BackendFile) || !strings.Contains(text, "QUOTA_STATE") || !strings.Contains(text, protocol.AccountQuotaStateFresh) || !strings.Contains(text, "FRESH") || !strings.Contains(text, "ROUTE_SCORE") || !strings.Contains(text, "true") || !strings.Contains(text, "-0.01") {
 		t.Fatalf("output missing zero quota: %s", text)
 	}
 	if strings.Contains(text, "access-secret") || strings.Contains(text, "refresh-secret") || strings.Contains(text, "secretRef") {
@@ -121,7 +121,7 @@ func TestCodexAccountsListJSONShowsQuotaWithoutLeakingSecrets(t *testing.T) {
 		t.Fatalf("rows = %+v", rows)
 	}
 	row := rows[0]
-	if !row.Current || row.Provider != codexauth.Provider || row.ID != "codex-test" || row.SecretBackend != secret.BackendFile || row.Plan != "pro" || row.PrimaryUsed != "0.0%" || row.QuotaState != protocol.AccountQuotaStateFresh || row.QuotaCheckedAt != checkedAt {
+	if !row.Current || row.Provider != codexauth.Provider || row.ID != "codex-test" || row.SecretBackend != secret.BackendFile || row.Plan != "pro" || row.PrimaryUsed != "0.0%" || row.QuotaState != protocol.AccountQuotaStateFresh || !row.QuotaFresh || row.QuotaCheckedAt != checkedAt || row.RouteScore == nil || *row.RouteScore != -0.01 || row.RouteReason != "auto account codex-test primary 0%" {
 		t.Fatalf("row = %+v", row)
 	}
 }
@@ -1593,7 +1593,7 @@ func TestAccountsListShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	for _, want := range []string{"PROVIDER", "SECRET_BACKEND", "QUOTA_STATE", "codex-test", "gemini-test", "gemini@example.com", "0.0%", secret.BackendFile, protocol.AccountQuotaStateFresh, protocol.AccountQuotaStateMissing} {
+	for _, want := range []string{"PROVIDER", "SECRET_BACKEND", "QUOTA_STATE", "FRESH", "ROUTE_SCORE", "codex-test", "gemini-test", "gemini@example.com", "0.0%", secret.BackendFile, protocol.AccountQuotaStateFresh, protocol.AccountQuotaStateMissing} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("output missing %q: %s", want, text)
 		}
@@ -1655,19 +1655,19 @@ func TestAccountsListJSONShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 	if rows[0].Provider != codexauth.Provider || rows[0].ID != "codex-test" || rows[0].SecretBackend != secret.BackendFile || !rows[0].Current {
 		t.Fatalf("first row = %+v", rows[0])
 	}
-	if rows[0].QuotaState != protocol.AccountQuotaStateFresh || rows[0].QuotaCheckedAt == 0 || rows[0].PrimaryUsed != "0.0%" {
+	if rows[0].QuotaState != protocol.AccountQuotaStateFresh || !rows[0].QuotaFresh || rows[0].QuotaCheckedAt == 0 || rows[0].PrimaryUsed != "0.0%" || rows[0].RouteScore == nil || *rows[0].RouteScore != -0.01 {
 		t.Fatalf("first row quota = %+v", rows[0])
 	}
 	if rows[1].Provider != codexauth.Provider || rows[1].ID != "codex-zlow" || rows[1].SecretBackend != secret.BackendFile || rows[1].Current {
 		t.Fatalf("second row = %+v", rows[1])
 	}
-	if rows[1].QuotaState != protocol.AccountQuotaStateMissing || rows[1].QuotaCheckedAt != 0 {
+	if rows[1].QuotaState != protocol.AccountQuotaStateMissing || rows[1].QuotaFresh || rows[1].QuotaCheckedAt != 0 || rows[1].RouteScore == nil || *rows[1].RouteScore != 75 {
 		t.Fatalf("second row quota = %+v", rows[1])
 	}
 	if rows[2].Provider != "gemini" || rows[2].ID != "gemini-test" {
 		t.Fatalf("third row = %+v", rows[2])
 	}
-	if rows[2].QuotaState != protocol.AccountQuotaStateMissing || rows[2].QuotaCheckedAt != 0 {
+	if rows[2].QuotaState != protocol.AccountQuotaStateMissing || rows[2].QuotaFresh || rows[2].QuotaCheckedAt != 0 || rows[2].RouteScore != nil || rows[2].RouteReason != "" {
 		t.Fatalf("third row quota = %+v", rows[2])
 	}
 }

@@ -31,6 +31,28 @@ func TestReferenceDocsCoverRouteCandidateEvidence(t *testing.T) {
 	}
 }
 
+func TestReferenceDocsCoverAccountListRouteAudit(t *testing.T) {
+	data, err := os.ReadFile("../../docs/reference.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := string(data)
+
+	for _, want := range []string{
+		"`capd accounts list [--json]`",
+		"`capd accounts codex list [--json]`",
+		"`quotaFresh`",
+		"`routeScore`",
+		"`routeReason`",
+		"without reading SecretStore token material",
+		"without SecretStore refs or token material",
+	} {
+		if !strings.Contains(reference, want) {
+			t.Fatalf("reference docs missing account list route audit contract %q", want)
+		}
+	}
+}
+
 func TestReferenceDocsCoverProbeReadinessBackendDefaults(t *testing.T) {
 	data, err := os.ReadFile("../../docs/reference.md")
 	if err != nil {
