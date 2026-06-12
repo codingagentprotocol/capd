@@ -178,7 +178,8 @@ importing multiple Codex accounts and starting `capd start` with the same
 backend in another terminal, `make live-codex-readiness` runs the live
 quota/routing/readiness chain. Override the final prompt with
 `LIVE_PROMPT="..." make live-codex-readiness`; override the backend only for
-intentional testing with `LIVE_SECRET_BACKEND=file`. The live daemon-side
+intentional testing with `LIVE_SECRET_BACKEND=file`. The target runs every live
+command with the same `CAPD_SECRET_BACKEND` value, and the daemon-side
 readiness step uses `capd accounts check --json --readiness`, so failing gates
 still print safe partial evidence under `data` for quota, account, and
 SecretStore diagnostics.
