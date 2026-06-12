@@ -164,7 +164,7 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 			Cwd: cwd, PermissionMode: permission, Model: model, Effort: effort,
 		})
 		if err != nil {
-			return err
+			return runTaskErrorWithNextStep(err, o)
 		}
 		var created protocol.SessionCreateResult
 		json.Unmarshal(res, &created)
@@ -243,6 +243,16 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 			return nil
 		}
 	}
+}
+
+func runTaskErrorWithNextStep(err error, o runOpts) error {
+	if err == nil {
+		return nil
+	}
+	if o.requireFreshQuota && strings.Contains(strings.ToLower(err.Error()), "fresh") {
+		return fmt.Errorf("%w\nnext: refresh and verify Codex quota with: capd accounts check --readiness\nnext: or preview local account routing with: capd agents route --account auto --require-fresh-quota", err)
+	}
+	return err
 }
 
 // printEvent renders one event; returns true when the turn is over.
