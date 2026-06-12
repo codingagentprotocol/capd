@@ -100,6 +100,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"ProbeDataReturnsSafeAccountRouteEvidence",
 		"ProbeDataReadinessReturnsPartialEvidenceOnFailure",
 		"ProbeDataReadinessDefaultsToNativeAndAvoidsQuotaOnBackendMismatch",
+		"ProbeDataNextStepsUseRunnableNativeSecretStoreRetry",
 		"ProbeServedWithSecurityHeaders",
 		"ProbeValidationRowsStayUnique",
 		"ConsoleStaticContract",

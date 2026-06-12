@@ -363,7 +363,7 @@ func probeErrorNextStep(perr probeDataError) string {
 	case strings.Contains(msg, "macos keychain status -128"):
 		return "macOS Keychain denied or canceled credential access; approve the prompt, or avoid native prompts by restarting with: capd start --secret-backend file and re-importing accounts with: capd accounts --secret-backend file codex import --auth /path/to/auth.json"
 	case strings.Contains(msg, "keychain"):
-		return "unlock or approve OS SecretStore access, then rerun: capd probe data --readiness --require-secret-backend native"
+		return "unlock or approve OS SecretStore access, then rerun: capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail"
 	default:
 		return ""
 	}

@@ -379,6 +379,18 @@ func TestProbeDataNextStepsExplainMacOSKeychainCancellation(t *testing.T) {
 	}
 }
 
+func TestProbeDataNextStepsUseRunnableNativeSecretStoreRetry(t *testing.T) {
+	steps := probeDataNextSteps(nil, []probeDataError{{
+		Source:  "accounts/check",
+		Code:    protocol.CodeInternalError,
+		Message: "refresh quota: codex-test: load account secret: keychain interaction timed out",
+	}})
+	want := "unlock or approve OS SecretStore access, then rerun: capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail"
+	if len(steps) != 1 || steps[0] != want {
+		t.Fatalf("steps = %+v, want %q", steps, want)
+	}
+}
+
 func TestAccountSecretErrorStateClassifiesMacOSKeychainCancellation(t *testing.T) {
 	got := accountSecretErrorState(errors.New("load account secret: macOS keychain status -128"))
 	if got != protocol.AccountSecretStateAccessDenied {
