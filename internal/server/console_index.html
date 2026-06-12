@@ -237,6 +237,8 @@ async function checkAccounts(readinessGate = false) {
     const route = result.autoRoute ? ` · auto ${result.autoRoute.accountId || ""} ${result.autoRoute.quotaState}` : "";
     if (readinessGate) line("ev-sys", `· readiness quota refreshed ${result.quotaRefreshed ? "yes" : "no"}`);
     line("ev-sys", `· 账号检查完成 ${result.checkedAccounts} 个${route}`);
+    const evidence = accountCheckSummary(result.accounts || []);
+    if (evidence) line("ev-sys", `· quota evidence ${evidence}`);
     await loadAccounts();
   } catch (e) {
     const label = readinessGate ? "就绪门禁失败" : "账号检查失败";
@@ -244,6 +246,16 @@ async function checkAccounts(readinessGate = false) {
   } finally {
     button.disabled = false;
   }
+}
+
+function accountCheckSummary(accounts) {
+  return accounts.map(a => {
+    const parts = [a.id || "unknown", a.quotaState || "missing"];
+    if (typeof a.quotaFresh === "boolean") parts.push(a.quotaFresh ? "fresh" : "not-fresh");
+    if (hasNumber(a.primaryUsedPercent)) parts.push(`primary ${a.primaryUsedPercent}%`);
+    if (a.quotaCheckedAt) parts.push(`checked ${new Date(a.quotaCheckedAt * 1000).toLocaleString()}`);
+    return parts.join(" ");
+  }).join(" · ");
 }
 
 function renderAccounts(accounts, currentAccountId) {
