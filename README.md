@@ -131,6 +131,7 @@ Useful flags and companions:
 ```bash
 capd run --agent opencode "..."             # pick the agent
 capd run --agent codex --account codex-acct # use an imported Codex account
+capd run --agent codex --account auto --require-fresh-quota "..." # quota-aware Codex account
 capd run --model gpt-5.3-codex --effort high "..."
 capd run --permission acceptEdits "..."     # default | acceptEdits | full
 capd run --image diagram.png "what's wrong in this architecture?"

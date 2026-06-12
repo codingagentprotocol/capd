@@ -3,6 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -10,7 +14,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
+
 	"github.com/codingagentprotocol/capd/internal/config"
+	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
 func TestDaemonWSURLEncodesToken(t *testing.T) {
@@ -89,6 +96,121 @@ func TestRunTaskConnectErrorDoesNotLeakToken(t *testing.T) {
 	}
 	if !strings.Contains(text, "127.0.0.1:1") {
 		t.Fatalf("connect error missing display address: %s", text)
+	}
+}
+
+func TestRunTaskSendsRequireFreshQuotaForAutoAccount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	token := "tok-run-fresh"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	seenCreate := make(chan protocol.SessionCreateParams, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("token"); got != token {
+			t.Errorf("token = %q", got)
+		}
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			t.Errorf("accept: %v", err)
+			return
+		}
+		defer conn.CloseNow()
+		for {
+			_, data, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			var req struct {
+				ID     int             `json:"id"`
+				Method string          `json:"method"`
+				Params json.RawMessage `json:"params"`
+			}
+			if err := json.Unmarshal(data, &req); err != nil {
+				t.Errorf("request json: %v", err)
+				return
+			}
+			switch req.Method {
+			case protocol.MethodInitialize:
+				writeWSJSON(t, r.Context(), conn, map[string]any{
+					"jsonrpc": "2.0",
+					"id":      req.ID,
+					"result":  protocol.InitializeResult{ProtocolVersion: protocol.Version},
+				})
+			case protocol.MethodSessionCreate:
+				var params protocol.SessionCreateParams
+				if err := json.Unmarshal(req.Params, &params); err != nil {
+					t.Errorf("session/create params: %v", err)
+					return
+				}
+				seenCreate <- params
+				writeWSJSON(t, r.Context(), conn, map[string]any{
+					"jsonrpc": "2.0",
+					"id":      req.ID,
+					"result":  protocol.SessionCreateResult{SessionID: "s_test"},
+				})
+			case protocol.MethodTaskSend:
+				writeWSJSON(t, r.Context(), conn, map[string]any{
+					"jsonrpc": "2.0",
+					"id":      req.ID,
+					"result":  map[string]any{},
+				})
+				writeWSJSON(t, r.Context(), conn, map[string]any{
+					"jsonrpc": "2.0",
+					"method":  protocol.MethodEvent,
+					"params": protocol.Event{
+						SessionID: "s_test",
+						Seq:       1,
+						Type:      protocol.EventTaskDone,
+						Data:      map[string]any{"ok": true},
+					},
+				})
+				return
+			default:
+				t.Errorf("unexpected method %q", req.Method)
+				return
+			}
+		}
+	}))
+	defer ts.Close()
+	host, port, err := net.SplitHostPort(strings.TrimPrefix(ts.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := newRunCmd()
+	cmd.SetContext(ctx)
+	cmd.SetOut(&bytes.Buffer{})
+	if err := runTask(cmd, runOpts{
+		agent:             "codex",
+		account:           protocol.AccountAuto,
+		requireFreshQuota: true,
+		prompt:            "hello",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case params := <-seenCreate:
+		if params.AgentID != "codex" || params.AccountID != protocol.AccountAuto || !params.RequireFreshQuota {
+			t.Fatalf("session/create params = %+v", params)
+		}
+	case <-ctx.Done():
+		t.Fatal("did not receive session/create")
+	}
+}
+
+func writeWSJSON(t *testing.T, ctx context.Context, conn *websocket.Conn, v any) {
+	t.Helper()
+	data, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+		t.Fatal(err)
 	}
 }
 
