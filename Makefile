@@ -35,7 +35,7 @@ verify-secretstore:
 verify-codex-readiness-sim:
 	@echo "running deterministic simulated Codex multi-account quota/routing/readiness gates"
 	go test ./internal/server -run 'Test(AgentsRouteAutoAccountChoosesLowestCachedQuota|AgentsRouteAutoAccountRequireFreshQuota|AgentsRouteAutoAccountIgnoresStaleLowQuota|SessionCreateAutoAccountBindsLowestCachedQuota|AccountsCheckCanRefreshQuotaAndEnforceReadiness|AccountsCheckReadinessFailureIsDaemonSideAndSafe|AccountsCheckAllFreshFailureReportsEveryStaleAccountSafely|AccountsQuotaAllRefreshesEveryCodexAccountSafely)$$' -count=1
-	go test ./cmd/capd -run 'Test(AccountsCheckReadinessShortcutSetsDaemonGateParams|DoctorReportsMultiAccountQuotaAndAutoRoute|DoctorChecksDaemonAccountsThroughCAP|CodexAccountsSmokeRequireAllFreshQuota|RouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache|CodexAccountsQuotaAllRefreshesEveryAccountSafely)$$' -count=1
+	go test ./cmd/capd -run 'Test(AccountsCheckReadinessShortcutSetsDaemonGateParams|DoctorReportsMultiAccountQuotaAndAutoRoute|DoctorChecksDaemonAccountsThroughCAP|CodexAccountsSmokeRequireAllFreshQuota|CodexAccountsSmokeTextIncludesAutoRouteEvidence|RouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache|CodexAccountsQuotaAllRefreshesEveryAccountSafely)$$' -count=1
 
 live-codex-preflight:
 	@echo "live-codex-preflight requires >=2 imported Codex accounts, CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND), and a running daemon from: CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) capd start"
