@@ -82,7 +82,7 @@ func TestCodexAccountsListShowsZeroQuotaWithoutLeakingSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	if !strings.Contains(text, "0.0%") || !strings.Contains(text, "QUOTA_STATE") || !strings.Contains(text, protocol.AccountQuotaStateFresh) {
+	if !strings.Contains(text, "0.0%") || !strings.Contains(text, "SECRET_BACKEND") || !strings.Contains(text, secret.BackendFile) || !strings.Contains(text, "QUOTA_STATE") || !strings.Contains(text, protocol.AccountQuotaStateFresh) {
 		t.Fatalf("output missing zero quota: %s", text)
 	}
 	if strings.Contains(text, "access-secret") || strings.Contains(text, "refresh-secret") || strings.Contains(text, "secretRef") {
@@ -121,7 +121,7 @@ func TestCodexAccountsListJSONShowsQuotaWithoutLeakingSecrets(t *testing.T) {
 		t.Fatalf("rows = %+v", rows)
 	}
 	row := rows[0]
-	if !row.Current || row.Provider != codexauth.Provider || row.ID != "codex-test" || row.Plan != "pro" || row.PrimaryUsed != "0.0%" || row.QuotaState != protocol.AccountQuotaStateFresh || row.QuotaCheckedAt != checkedAt {
+	if !row.Current || row.Provider != codexauth.Provider || row.ID != "codex-test" || row.SecretBackend != secret.BackendFile || row.Plan != "pro" || row.PrimaryUsed != "0.0%" || row.QuotaState != protocol.AccountQuotaStateFresh || row.QuotaCheckedAt != checkedAt {
 		t.Fatalf("row = %+v", row)
 	}
 }
@@ -231,6 +231,22 @@ func TestMigrateCodexAccountSecretsSkipsSourceMismatch(t *testing.T) {
 	}
 	if !result.OK || len(result.Migrated) != 0 || len(result.Skipped) != 1 || result.Skipped[0].Reason != "source-backend-mismatch" {
 		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestAccountSecretBackendEvidenceIsSafe(t *testing.T) {
+	for _, tc := range []struct {
+		ref  string
+		want string
+	}{
+		{ref: "file:codex-test", want: secret.BackendFile},
+		{ref: "native:codex-test", want: secret.BackendNative},
+		{ref: "legacy-id", want: secret.BackendFile},
+		{ref: "native:", want: "malformed"},
+	} {
+		if got := accountSecretBackend(tc.ref); got != tc.want {
+			t.Fatalf("accountSecretBackend(%q) = %q, want %q", tc.ref, got, tc.want)
+		}
 	}
 }
 
@@ -1452,7 +1468,7 @@ func TestAccountsListShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	for _, want := range []string{"PROVIDER", "QUOTA_STATE", "codex-test", "gemini-test", "gemini@example.com", "0.0%", protocol.AccountQuotaStateFresh, protocol.AccountQuotaStateMissing} {
+	for _, want := range []string{"PROVIDER", "SECRET_BACKEND", "QUOTA_STATE", "codex-test", "gemini-test", "gemini@example.com", "0.0%", secret.BackendFile, protocol.AccountQuotaStateFresh, protocol.AccountQuotaStateMissing} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("output missing %q: %s", want, text)
 		}
@@ -1511,13 +1527,13 @@ func TestAccountsListJSONShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 	if len(rows) != 3 {
 		t.Fatalf("rows = %+v", rows)
 	}
-	if rows[0].Provider != codexauth.Provider || rows[0].ID != "codex-test" || !rows[0].Current {
+	if rows[0].Provider != codexauth.Provider || rows[0].ID != "codex-test" || rows[0].SecretBackend != secret.BackendFile || !rows[0].Current {
 		t.Fatalf("first row = %+v", rows[0])
 	}
 	if rows[0].QuotaState != protocol.AccountQuotaStateFresh || rows[0].QuotaCheckedAt == 0 || rows[0].PrimaryUsed != "0.0%" {
 		t.Fatalf("first row quota = %+v", rows[0])
 	}
-	if rows[1].Provider != codexauth.Provider || rows[1].ID != "codex-zlow" || rows[1].Current {
+	if rows[1].Provider != codexauth.Provider || rows[1].ID != "codex-zlow" || rows[1].SecretBackend != secret.BackendFile || rows[1].Current {
 		t.Fatalf("second row = %+v", rows[1])
 	}
 	if rows[1].QuotaState != protocol.AccountQuotaStateMissing || rows[1].QuotaCheckedAt != 0 {

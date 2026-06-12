@@ -171,7 +171,7 @@ the file backend.
 | Command | Meaning |
 |---------|---------|
 | `capd accounts codex import [--auth path ...]` | Import one or more Codex `auth.json` files into capd. Repeat `--auth` to import explicit paths in one command. Without `--auth`, `CAPD_CODEX_AUTH_PATHS` can provide an OS path-list of auth files (`:` on macOS/Linux, `;` on Windows); otherwise it defaults to `~/.codex/auth.json`. |
-| `capd accounts codex list [--json]` | List imported Codex account metadata; the current account is marked with `*`; quota state is reported as `fresh`, `stale`, or `missing`. `--json` prints safe account/quota metadata for live readiness audits without SecretStore refs or token material. |
+| `capd accounts codex list [--json]` | List imported Codex account metadata; the current account is marked with `*`; `secretBackend` shows the safe backend enum (`file`, `native`, or `malformed`) without the SecretStore ref id; quota state is reported as `fresh`, `stale`, or `missing`. `--json` prints safe account/quota metadata for live readiness audits without SecretStore refs or token material. |
 | `capd accounts codex current [account-id]` | Show or set the current Codex account. |
 | `capd accounts codex project [account-id]` | Create or refresh a capd-managed per-account `CODEX_HOME`; prints the path. |
 | `capd accounts codex remove <account-id>` | Remove an imported Codex account, its cached quota/session bindings, current-account state, SecretStore token bundle, and capd-managed `CODEX_HOME` projection. |

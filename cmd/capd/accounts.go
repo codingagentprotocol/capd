@@ -62,14 +62,15 @@ func newAccountsCmd() *cobra.Command {
 					currentByProvider[acc.Provider] = current
 				}
 				row := accountListRow{
-					Current:    acc.ID == current,
-					ID:         acc.ID,
-					Provider:   acc.Provider,
-					AuthMode:   acc.AuthMode,
-					Email:      acc.Email,
-					AccountID:  acc.AccountID,
-					Plan:       acc.Plan,
-					QuotaState: protocol.AccountQuotaStateMissing,
+					Current:       acc.ID == current,
+					ID:            acc.ID,
+					Provider:      acc.Provider,
+					AuthMode:      acc.AuthMode,
+					Email:         acc.Email,
+					AccountID:     acc.AccountID,
+					Plan:          acc.Plan,
+					SecretBackend: accountSecretBackend(acc.SecretRef),
+					QuotaState:    protocol.AccountQuotaStateMissing,
 				}
 				if q, err := accounts.LoadQuota(acc.ID); err == nil {
 					if row.Plan == "" {
@@ -87,14 +88,14 @@ func newAccountsCmd() *cobra.Command {
 				return nil
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "CURRENT\tPROVIDER\tID\tMODE\tEMAIL\tREMOTE_ACCOUNT\tPLAN\tPRIMARY_USED\tQUOTA_STATE")
+			fmt.Fprintln(w, "CURRENT\tPROVIDER\tID\tMODE\tEMAIL\tREMOTE_ACCOUNT\tPLAN\tSECRET_BACKEND\tPRIMARY_USED\tQUOTA_STATE")
 			for _, row := range rows {
 				mark := ""
 				if row.Current {
 					mark = "*"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-					mark, row.Provider, row.ID, row.AuthMode, row.Email, row.AccountID, row.Plan, row.PrimaryUsed, row.QuotaState)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					mark, row.Provider, row.ID, row.AuthMode, row.Email, row.AccountID, row.Plan, row.SecretBackend, row.PrimaryUsed, row.QuotaState)
 			}
 			return w.Flush()
 		},
@@ -376,24 +377,15 @@ func newCodexAccountsCmd() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))
 				return nil
 			}
+			rows := makeAccountListRows(accounts, list, current)
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "CURRENT\tID\tMODE\tEMAIL\tCHATGPT_ACCOUNT\tPLAN\tPRIMARY_USED\tQUOTA_STATE")
-			for _, acc := range list {
+			fmt.Fprintln(w, "CURRENT\tID\tMODE\tEMAIL\tCHATGPT_ACCOUNT\tPLAN\tSECRET_BACKEND\tPRIMARY_USED\tQUOTA_STATE")
+			for _, row := range rows {
 				mark := ""
-				if acc.ID == current {
+				if row.Current {
 					mark = "*"
 				}
-				plan := acc.Plan
-				used := ""
-				quotaState := protocol.AccountQuotaStateMissing
-				if q, err := accounts.LoadQuota(acc.ID); err == nil {
-					if plan == "" {
-						plan = q.Plan
-					}
-					used = formatPercent(q.PrimaryUsedPercent)
-					quotaState = accountQuotaState(q)
-				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", mark, acc.ID, acc.AuthMode, acc.Email, acc.AccountID, plan, used, quotaState)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", mark, row.ID, row.AuthMode, row.Email, row.AccountID, row.Plan, row.SecretBackend, row.PrimaryUsed, row.QuotaState)
 			}
 			return w.Flush()
 		},
@@ -1284,6 +1276,7 @@ type accountListRow struct {
 	Email          string `json:"email,omitempty"`
 	AccountID      string `json:"accountId,omitempty"`
 	Plan           string `json:"plan,omitempty"`
+	SecretBackend  string `json:"secretBackend,omitempty"`
 	PrimaryUsed    string `json:"primaryUsed,omitempty"`
 	QuotaState     string `json:"quotaState"`
 	QuotaCheckedAt int64  `json:"quotaCheckedAt,omitempty"`
@@ -1293,14 +1286,15 @@ func makeAccountListRows(accounts *account.Store, list []account.Account, curren
 	rows := make([]accountListRow, 0, len(list))
 	for _, acc := range list {
 		row := accountListRow{
-			Current:    acc.ID == current,
-			ID:         acc.ID,
-			Provider:   acc.Provider,
-			AuthMode:   acc.AuthMode,
-			Email:      acc.Email,
-			AccountID:  acc.AccountID,
-			Plan:       acc.Plan,
-			QuotaState: protocol.AccountQuotaStateMissing,
+			Current:       acc.ID == current,
+			ID:            acc.ID,
+			Provider:      acc.Provider,
+			AuthMode:      acc.AuthMode,
+			Email:         acc.Email,
+			AccountID:     acc.AccountID,
+			Plan:          acc.Plan,
+			SecretBackend: accountSecretBackend(acc.SecretRef),
+			QuotaState:    protocol.AccountQuotaStateMissing,
 		}
 		if q, err := accounts.LoadQuota(acc.ID); err == nil {
 			if row.Plan == "" {
@@ -1313,6 +1307,17 @@ func makeAccountListRows(accounts *account.Store, list []account.Account, curren
 		rows = append(rows, row)
 	}
 	return rows
+}
+
+func accountSecretBackend(secretRef string) string {
+	ref, err := secret.ParseRef(secretRef)
+	if err != nil {
+		return "malformed"
+	}
+	if ref.Backend == "" {
+		return secret.BackendFile
+	}
+	return ref.Backend
 }
 
 func accountQuotaState(q account.QuotaSnapshot) string {

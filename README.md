@@ -149,7 +149,7 @@ capd agents route --account auto --require-fresh-quota --json
 capd accounts codex import   # import local ~/.codex/auth.json into capd
 capd accounts codex import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # batch import explicit paths
 CAPD_CODEX_AUTH_PATHS="/tmp/a/auth.json:/tmp/b/auth.json" capd accounts codex import # batch import on macOS/Linux
-capd accounts codex list --json # imported Codex accounts, current account marked, safe quota metadata
+capd accounts codex list --json # imported accounts, current marker, safe secret backend and quota metadata
 capd accounts codex project  # create a per-account CODEX_HOME projection
 capd accounts codex migrate-secrets --from file --to native --dry-run # preview moving older imports to native SecretStore
 capd accounts codex migrate-secrets --from file --to native --timeout 2m # update account secret refs after writing native secrets
