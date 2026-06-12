@@ -48,7 +48,8 @@ fetches `/probe/data` with an Authorization header so Web clients can validate
 the HTTP diagnostics path without exposing the token in URLs, and its visible
 summary includes the daemon's compact readiness `summary`. The full console
 renders the same readiness concepts as visible pass/fail cards under the
-diagnostic line, includes a compact readiness summary, and shows the
+diagnostic line, includes a compact readiness summary, can run `深度验证`
+against the same header-authenticated `/probe/data` readiness endpoint, and shows the
 account-aware `routeCandidates` returned by `agents/route` and `accounts/check`
 so route choices can be audited from the browser without exposing token material
 or local runtime paths.

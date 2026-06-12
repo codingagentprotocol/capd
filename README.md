@@ -215,6 +215,9 @@ behind an OS credential prompt.
 `capd probe data --json --readiness --timeout 2m --fail` calls the same authenticated
 `/probe/data` endpoint used by the lightweight web probe, so live preflight also
 verifies the Web diagnostics path with header auth and safe partial evidence.
+The full Web Console's `深度验证` button runs that same header-authenticated
+readiness probe and renders the returned checks, errors, auto-route, and
+route-candidate evidence in place.
 The endpoint bounds server-side work too: ordinary probes get 12s and readiness
 probes get 2m. Its JSON includes a compact `summary` for account counts, quota
 freshness, auto-route freshness, route-decision status, and SecretStore backend

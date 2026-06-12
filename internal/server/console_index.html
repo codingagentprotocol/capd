@@ -71,6 +71,7 @@
   <label><input id="requireFreshQuota" type="checkbox" /> fresh quota</label>
   <button id="previewRoute">预览路由</button>
   <button id="refreshDiagnostic">刷新诊断</button>
+  <button id="deepVerify">深度验证</button>
   <button id="importCodex">导入 Codex</button>
   <button id="checkAccounts">检查账号</button>
   <button id="checkReady">就绪门禁</button>
@@ -373,6 +374,75 @@ async function refreshReadinessDiagnostic() {
       { name: "daemon/CAP diagnostic", ok: false, evidence: e.message || JSON.stringify(e), nextStep: "确认 capd start 正在运行，然后刷新诊断" }
     ]);
   }
+}
+
+async function deepVerify() {
+  const button = document.getElementById("deepVerify");
+  button.disabled = true;
+  try {
+    const requiredBackend = requiredSecretBackend();
+    line("ev-sys", `· deep verify start${requiredBackend ? ` · secret ${requiredBackend}` : ""}`);
+    const data = await fetchProbeData({ readiness: true, requireSecretBackend: requiredBackend });
+    renderProbeDataResult(data);
+    if (!data.ok) {
+      line("ev-err", "✗ deep verify not ready");
+      return;
+    }
+    line("ev-done", "✓ deep verify ready");
+  } catch (e) {
+    line("ev-err", `✗ deep verify failed: ${e.message || JSON.stringify(e)}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function fetchProbeData({ readiness = false, requireSecretBackend = "" } = {}) {
+  if (!TOKEN) throw new Error("missing daemon token for /probe/data");
+  const url = new URL(capdHTTPURL("/probe/data"));
+  if (readiness) url.searchParams.set("readiness", "1");
+  if (requireSecretBackend) url.searchParams.set("requireSecretBackend", requireSecretBackend);
+  const res = await fetch(url.toString(), {
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${TOKEN}` }
+  });
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (_) {
+    throw new Error(`/probe/data ${res.status}: ${text || "invalid JSON"}`);
+  }
+  if (!res.ok && !data) throw new Error(`/probe/data ${res.status}`);
+  return data;
+}
+
+function renderProbeDataResult(data) {
+  const result = data.accountsCheck || {};
+  result.summary = data.summary || result.summary || {};
+  result.checkedAccounts = result.checkedAccounts || result.summary.checkedAccounts || 0;
+  result.secretBackend = result.secretBackend || result.summary.secretBackend || "";
+  if (data.autoRoute && !result.autoRoute) result.autoRoute = data.autoRoute;
+  if (data.routeCandidates && !result.routeCandidates) result.routeCandidates = data.routeCandidates;
+  renderReadinessDiagnosticResult({
+    result,
+    route: data.routeDecision || { accountRoute: data.autoRoute, routeCandidates: data.routeCandidates },
+    routeError: probeErrorSummary(data.errors, "agents/route"),
+    readinessError: data.ok ? "" : probeErrorSummary(data.errors, "accounts/check"),
+    requiredSecretBackend: data.summary && data.summary.requiredSecretBackend || requiredSecretBackend()
+  });
+  const summary = data.summary || {};
+  line("ev-sys", `· probe summary ready=${!!summary.ready} accounts=${summary.checkedAccounts || 0}/${summary.requiredAccounts || 0} fresh=${summary.freshQuotaAccounts || 0} routeCandidates=${summary.routeCandidates || 0} secretOK=${!!summary.secretBackendOk}`);
+  for (const check of data.checks || []) {
+    line(check.ok ? "ev-done" : "ev-err", `${check.ok ? "✓" : "✗"} ${check.name}: ${check.evidence || ""}${check.nextStep ? ` · next ${check.nextStep}` : ""}`);
+  }
+  for (const err of data.errors || []) {
+    line("ev-err", `✗ ${err.source || "probe"} code=${err.code || 0} ${err.message || ""}`);
+  }
+}
+
+function probeErrorSummary(errors, source) {
+  const err = (errors || []).find(e => e.source === source);
+  return err ? err.message || "" : "";
 }
 
 function renderReadinessDiagnosticResult({ result, route, routeError = "", readinessError = "", requiredSecretBackend = "" }) {
@@ -970,6 +1040,7 @@ document.getElementById("cancel").onclick = () => sessionId && call("task/cancel
 document.getElementById("refreshSessions").onclick = loadSessions;
 document.getElementById("previewRoute").onclick = previewRoute;
 document.getElementById("refreshDiagnostic").onclick = refreshReadinessDiagnostic;
+document.getElementById("deepVerify").onclick = deepVerify;
 document.getElementById("importCodex").onclick = importCodexAccount;
 document.getElementById("checkAccounts").onclick = () => checkAccounts(false);
 document.getElementById("checkReady").onclick = () => checkAccounts(true);
