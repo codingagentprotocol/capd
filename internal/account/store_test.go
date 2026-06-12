@@ -158,6 +158,62 @@ func TestAccountStoreQuotaAndSessionBinding(t *testing.T) {
 	}
 }
 
+func TestDeleteAccountRemovesRelatedStateAndPromotesCurrent(t *testing.T) {
+	st := newStore(t)
+	for _, acc := range []Account{
+		{ID: "codex-one", Provider: "codex", AuthMode: "oauth"},
+		{ID: "codex-two", Provider: "codex", AuthMode: "oauth"},
+	} {
+		if err := st.UpsertAccount(acc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SetCurrentAccount("codex", "codex-one"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "codex-one", PrimaryUsedPercent: 5}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.BindSessionAccount("s_1", "codex-one"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := st.DeleteAccount("codex-one"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.LoadAccount("codex-one"); !errors.Is(err, ErrUnknownAccount) {
+		t.Fatalf("deleted account err = %v", err)
+	}
+	if _, err := st.LoadQuota("codex-one"); !errors.Is(err, ErrUnknownAccount) {
+		t.Fatalf("deleted quota err = %v", err)
+	}
+	sessionAccount, err := st.SessionAccount("s_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sessionAccount != "" {
+		t.Fatalf("session account = %q", sessionAccount)
+	}
+	current, err := st.CurrentAccount("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != "codex-two" {
+		t.Fatalf("current = %q", current)
+	}
+
+	if err := st.DeleteAccount("codex-two"); err != nil {
+		t.Fatal(err)
+	}
+	current, err = st.CurrentAccount("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != "" {
+		t.Fatalf("current after deleting last account = %q", current)
+	}
+}
+
 func TestSaveQuotaValidatesAccount(t *testing.T) {
 	st := newStore(t)
 	if err := st.SaveQuota(QuotaSnapshot{AccountID: ""}); err == nil || !strings.Contains(err.Error(), "account id is required") {

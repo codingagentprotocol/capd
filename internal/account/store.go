@@ -161,6 +161,51 @@ FROM accounts`
 	return out, rows.Err()
 }
 
+func (st *Store) DeleteAccount(id string) error {
+	if id == "" {
+		return fmt.Errorf("account id is required")
+	}
+	acc, err := st.LoadAccount(id)
+	if err != nil {
+		return err
+	}
+	tx, err := st.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM account_quota WHERE account_id = ?", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM session_accounts WHERE account_id = ?", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM accounts WHERE id = ?", id); err != nil {
+		return err
+	}
+	current, err := currentAccountTx(tx, acc.Provider)
+	if err != nil {
+		return err
+	}
+	if current == id {
+		next, err := nextProviderAccountTx(tx, acc.Provider)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`
+INSERT INTO account_state (provider, current_account_id) VALUES (?, ?)
+ON CONFLICT(provider) DO UPDATE SET current_account_id = excluded.current_account_id`,
+			acc.Provider, next); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return st.afterWrite(nil)
+}
+
 func (st *Store) SetCurrentAccount(provider, accountID string) error {
 	if provider == "" {
 		return fmt.Errorf("provider is required")
@@ -183,12 +228,7 @@ ON CONFLICT(provider) DO UPDATE SET current_account_id = excluded.current_accoun
 }
 
 func (st *Store) CurrentAccount(provider string) (string, error) {
-	var id string
-	err := st.db.QueryRow("SELECT current_account_id FROM account_state WHERE provider = ?", provider).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	return id, err
+	return currentAccountQuery(st.db, provider)
 }
 
 func (st *Store) SaveQuota(q QuotaSnapshot) error {
@@ -262,6 +302,36 @@ func (st *Store) afterWrite(err error) error {
 		return err
 	}
 	return st.tightenFilePermissions()
+}
+
+type queryer interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+func currentAccountTx(tx *sql.Tx, provider string) (string, error) {
+	return currentAccountQuery(tx, provider)
+}
+
+func currentAccountQuery(q queryer, provider string) (string, error) {
+	var id string
+	err := q.QueryRow("SELECT current_account_id FROM account_state WHERE provider = ?", provider).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return id, err
+}
+
+func nextProviderAccountTx(tx *sql.Tx, provider string) (string, error) {
+	var id string
+	err := tx.QueryRow(`
+SELECT id FROM accounts
+WHERE provider = ?
+ORDER BY updated_at DESC, id
+LIMIT 1`, provider).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return id, err
 }
 
 func (st *Store) tightenFilePermissions() error {

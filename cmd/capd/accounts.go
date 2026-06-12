@@ -244,6 +244,41 @@ func newCodexAccountsCmd() *cobra.Command {
 		},
 	}
 
+	removeCmd := &cobra.Command{
+		Use:   "remove <account-id>",
+		Short: "Remove an imported Codex account and its stored token material",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			accounts, secrets, err := accountDepsFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			acc, err := accounts.LoadAccount(args[0])
+			if err != nil {
+				return err
+			}
+			if acc.Provider != codexauth.Provider {
+				return fmt.Errorf("account %q belongs to provider %q, not %q", acc.ID, acc.Provider, codexauth.Provider)
+			}
+			ref, err := secret.ParseRef(acc.SecretRef)
+			if err != nil {
+				return err
+			}
+			if err := secret.EnsureRefBackend(secrets, ref); err != nil {
+				return err
+			}
+			if err := secrets.Delete(cmd.Context(), ref); err != nil {
+				return err
+			}
+			if err := accounts.DeleteAccount(acc.ID); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "removed %s\n", acc.ID)
+			return nil
+		},
+	}
+
 	quotaCmd := &cobra.Command{
 		Use:   "quota [account-id|auto]",
 		Short: "Fetch ChatGPT backend quota for an imported Codex account",
@@ -434,7 +469,7 @@ func newCodexAccountsCmd() *cobra.Command {
 	smokeCmd.Flags().String("require-secret-backend", "", "fail unless the active secret backend matches this value")
 	smokeCmd.Flags().Bool("json", false, "print machine-readable smoke evidence without token material")
 
-	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, quotaCmd, smokeCmd)
+	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, removeCmd, quotaCmd, smokeCmd)
 	return cmd
 }
 
@@ -546,6 +581,7 @@ type codexQuotaSummary struct {
 	SecondaryResetAt      string  `json:"secondaryResetAt,omitempty"`
 	CodeReviewUsedPercent float64 `json:"codeReviewUsedPercent"`
 	CheckedAt             int64   `json:"checkedAt"`
+	QuotaState            string  `json:"quotaState"`
 }
 
 func codexQuotaSummaryFrom(acc account.Account, q account.QuotaSnapshot) codexQuotaSummary {
@@ -565,6 +601,7 @@ func codexQuotaSummaryFrom(acc account.Account, q account.QuotaSnapshot) codexQu
 		SecondaryResetAt:      q.SecondaryResetAt,
 		CodeReviewUsedPercent: q.CodeReviewUsedPercent,
 		CheckedAt:             q.CheckedAt,
+		QuotaState:            accountQuotaState(q),
 	}
 }
 

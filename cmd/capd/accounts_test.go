@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -117,7 +118,7 @@ func TestCodexAccountsQuotaPrintsSafeSummaryByDefault(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.ID != "codex-test" || result.Provider != codexauth.Provider || result.Plan != "pro" || result.PrimaryUsedPercent != 37 {
+	if result.ID != "codex-test" || result.Provider != codexauth.Provider || result.Plan != "pro" || result.PrimaryUsedPercent != 37 || result.QuotaState != protocol.AccountQuotaStateFresh {
 		t.Fatalf("result = %+v", result)
 	}
 	if q, err := accounts.LoadQuota("codex-test"); err != nil || q.PrimaryUsedPercent != 37 {
@@ -714,6 +715,69 @@ func TestCodexAccountsSmokeFailsWithoutAccounts(t *testing.T) {
 	err := cmd.Execute()
 	if err == nil || !strings.Contains(err.Error(), "no imported Codex accounts") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCodexAccountsRemoveDeletesMetadataAndSecret(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, secrets := seedCodexAccount(t)
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 11}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.BindSessionAccount("s_1", "codex-test"); err != nil {
+		t.Fatal(err)
+	}
+	accounts.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "remove", "codex-test"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if !strings.Contains(text, "removed codex-test") {
+		t.Fatalf("output = %s", text)
+	}
+	for _, leaked := range []string{"access-secret", "refresh-secret", "secretRef", "file:codex-test"} {
+		if strings.Contains(text, leaked) {
+			t.Fatalf("remove output leaked %q: %s", leaked, text)
+		}
+	}
+	if _, err := secrets.Get(context.Background(), secret.Ref{Backend: secret.BackendFile, ID: "codex-test"}); err == nil {
+		t.Fatal("secret still readable after remove")
+	}
+
+	home, err := daemon.Home()
+	if err != nil {
+		t.Fatal(err)
+	}
+	accounts, err = account.OpenStore(filepath.Join(home, "accounts.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer accounts.Close()
+	if _, err := accounts.LoadAccount("codex-test"); !errors.Is(err, account.ErrUnknownAccount) {
+		t.Fatalf("deleted account err = %v", err)
+	}
+	if _, err := accounts.LoadQuota("codex-test"); !errors.Is(err, account.ErrUnknownAccount) {
+		t.Fatalf("deleted quota err = %v", err)
+	}
+	sessionAccount, err := accounts.SessionAccount("s_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sessionAccount != "" {
+		t.Fatalf("session account = %q", sessionAccount)
+	}
+	current, err := accounts.CurrentAccount(codexauth.Provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != "" {
+		t.Fatalf("current = %q", current)
 	}
 }
 
