@@ -222,7 +222,7 @@ No params. → `{"agents": [{"id", "name", "bin", "version", "available", "capab
 Ask capd to pick an installed agent. Params mirror route signals:
 `{"prompt", "attachments", "accountId", "model", "effort", "capabilities", "prefer", "requireFreshQuota"}`.
 
-→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"accountId": "codex-acct", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "score": 12, "checkedAt": 1781170000}, "reason": "matched capabilities: effort, review"}`
+→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"accountId": "codex-acct", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "score": 12, "checkedAt": 1781170000}, "routeCandidates": [{"accountId": "codex-acct", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "score": 12, "checkedAt": 1781170000}], "reason": "matched capabilities: effort, review"}`
 
 When `accountId` is present, routing is account-aware and currently selects
 Codex only, because imported account runtimes are Codex-specific. Use
@@ -234,7 +234,10 @@ with `accountId:"auto"` to fail instead of routing on missing or stale quota.
 When account routing is in play, `accountRoute` reports the selected
 `accountId`, score, `quotaState` (`fresh`, `stale`, or `missing`), freshness,
 optional primary usage percent, and optional checked timestamp without exposing
-token material.
+token material. `routeCandidates` contains the same safe evidence for every
+imported candidate account, sorted by the same conservative score used for
+selection; when routing succeeds, `accountRoute` should match the first
+candidate.
 
 ### `agents/usage`
 
@@ -293,7 +296,7 @@ or local filesystem paths.
 ### `accounts/check`
 
 `{"provider": "codex", "refreshQuota": true, "requireMultiple": true, "requireFreshQuota": true, "requireAllFreshQuota": true, "requireSecretBackend": "native"}` →
-`{"provider", "currentAccountId", "secretBackend", "checkedAccounts", "quotaRefreshed", "autoRoute", "accounts"}`.
+`{"provider", "currentAccountId", "secretBackend", "checkedAccounts", "quotaRefreshed", "autoRoute", "routeCandidates", "accounts"}`.
 
 Runs a safe local smoke check for imported Codex accounts: verifies SecretStore
 backend matching, credential readability, per-account runtime projection,
@@ -314,6 +317,9 @@ redaction contract as a successful `accounts/check` response.
 `quotaRefreshed:true` means the returned evidence follows a successful quota
 refresh in this same call. The response never returns token material,
 `secret_ref`, raw auth JSON, or local filesystem paths.
+When imported accounts are available, `routeCandidates` is included with the
+same ordering and redaction contract as `agents/route`, so Web clients can show
+why `autoRoute` was selected without making a second route call.
 When a readiness gate fails after account metadata is loaded, the JSON-RPC
 error `data` may contain the same safe `accounts/check` evidence accumulated so
 far. Clients should treat it as partial evidence for diagnostics, not as a
