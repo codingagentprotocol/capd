@@ -3,7 +3,7 @@ LIVE_PROMPT ?= say ready
 LIVE_SECRET_BACKEND ?= native
 LDFLAGS := -X github.com/codingagentprotocol/capd/internal/daemon.Version=$(VERSION)
 
-.PHONY: build run test vet tidy verify verify-secretstore verify-codex-readiness-sim live-codex-preflight live-codex-readiness
+.PHONY: build run test vet tidy verify verify-secretstore verify-codex-readiness-sim live-codex-preflight live-codex-readiness live-codex-selftest
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o capd ./cmd/capd
@@ -34,6 +34,7 @@ verify-secretstore:
 
 verify-codex-readiness-sim:
 	@echo "running deterministic simulated Codex multi-account quota/routing/readiness gates"
+	sh -n scripts/live_codex_selftest.sh
 	go test ./internal/account -run 'Test(QuotaFromUsageRedactsSensitiveRawJSON|QuotaFromUsageNormalizesOutOfRangePercentsConservatively|QuotaSnapshotFreshRejectsInvalidPrimaryPercent|SelectQuotaRouteAccountTreatsInvalidQuotaAsUnknown|ConcurrentQuotaRefreshAndRouting)$$' -count=1
 	go test ./internal/server -run 'Test(AgentsRouteAutoAccountChoosesLowestCachedQuota|AgentsRouteAutoAccountRequireFreshQuota|AgentsRouteAutoAccountIgnoresStaleLowQuota|SessionCreateAutoAccountBindsLowestCachedQuota|ClientDisconnectDoesNotEndLiveSessionAndReconnectCanContinue|AccountsCheckCanRefreshQuotaAndEnforceReadiness|AccountsCheckReadinessFailureIsDaemonSideAndSafe|AccountsCheckAllFreshFailureReportsEveryStaleAccountSafely|AccountsQuotaAllRefreshesEveryCodexAccountSafely|ConcurrentAccountsQuotaAllAndFreshRoute|ProbeDataReturnsSafeAccountRouteEvidence|ProbeDataReadinessReturnsPartialEvidenceOnFailure|ProbeDataReadinessDefaultsToNativeAndAvoidsQuotaOnBackendMismatch|ProbeServedWithSecurityHeaders|ProbeValidationRowsStayUnique|ConsoleStaticContract|ConsoleApprovalRendererHasSingleBoxDeclaration)$$' -count=1
 	go test ./cmd/capd -run 'Test(AccountsCheckReadinessShortcutSetsDaemonGateParams|DoctorReportsMultiAccountQuotaAndAutoRoute|DoctorChecksDaemonAccountsThroughCAP|CodexAccountsSmokeRequireAllFreshQuota|CodexAccountsSmokeTextIncludesAutoRouteEvidence|RouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing|RouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache|CodexAccountsQuotaAllRefreshesEveryAccountSafely|ProbeDataTextPrintsReadinessSummary|ProbeDataTextPrintsPartialRouteCandidates|ProbeDataReadinessCanOverrideRequiredSecretBackend|HealthRequireSecretBackendFailsOnMismatch|SecretStoreCheckJSONRoundTrip|MigrateCodexAccountSecretsVerifiesTargetReadableBeforeMetadataUpdate|RunTaskFreshQuotaFailureSuggestsReadiness|ReferenceDocsCoverRunFreshQuotaRecovery|ReferenceDocsCoverBrowserTokenCleanup)$$' -count=1
@@ -58,3 +59,6 @@ live-codex-preflight:
 live-codex-readiness: live-codex-preflight
 	@echo "running live Codex prompt with quota-aware auto account"
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd run --agent codex --account auto --require-fresh-quota "$(LIVE_PROMPT)"
+
+live-codex-selftest:
+	./scripts/live_codex_selftest.sh

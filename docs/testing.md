@@ -117,6 +117,15 @@ the same live preflight is available without sending a prompt:
 make live-codex-preflight
 ```
 
+For unattended live validation, let the repository start a temporary daemon,
+wait for `/healthz`, run the same preflight, and stop only the daemon it
+started:
+
+```bash
+make live-codex-selftest
+LIVE_RUN_PROMPT=1 LIVE_PROMPT="say ready" make live-codex-selftest
+```
+
 The full live chain, including the final prompt, is available as:
 
 ```bash
@@ -158,6 +167,11 @@ Override the prompt with
 `LIVE_PROMPT="..." make live-codex-readiness`. Override the backend with
 `LIVE_SECRET_BACKEND=file` only when intentionally testing the file SecretStore
 path; the default live backend is `native`.
+`make live-codex-selftest` is the same live gate for long tasks and release
+checks that should not depend on a second terminal. It reuses an already healthy
+daemon when one is listening on `CAPD_HOST`/`CAPD_PORT`; otherwise it starts a
+temporary foreground daemon in the background, waits for health with the
+requested SecretStore backend, and cleans up that temporary process on exit.
 When doctor reports missing accounts and the daemon is running, prefer
 `capd accounts import --auth ...` so the import uses the same CAP/WebSocket path
 as the Web Console. `capd accounts codex import` remains available for direct

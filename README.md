@@ -192,10 +192,12 @@ importing multiple Codex accounts and starting `capd start` with the same
 backend in another terminal, `make live-codex-preflight` verifies SecretStore,
 refreshes every Codex quota, runs doctor against fresh local evidence, then
 checks the tokenized Web probe URL plus daemon/Web quota/routing/readiness
-without sending a prompt. The final route gate runs as JSON so the log keeps
-the complete `routeCandidates` ordering used for account-aware selection. `make
-live-codex-readiness` runs the same preflight and then sends the final live
-prompt. Override the final prompt with
+without sending a prompt. For unattended release checks, `make
+live-codex-selftest` starts a temporary daemon when needed, waits for health,
+runs the same preflight, and cleans up only the daemon it started. The final
+route gate runs as JSON so the log keeps the complete `routeCandidates`
+ordering used for account-aware selection. `make live-codex-readiness` runs the
+same preflight and then sends the final live prompt. Override the final prompt with
 `LIVE_PROMPT="..." make live-codex-readiness`; override the backend only for
 intentional testing with `LIVE_SECRET_BACKEND=file`. The target runs every live
 command with the same `CAPD_SECRET_BACKEND` value, and the daemon-side
