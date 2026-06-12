@@ -141,26 +141,53 @@ func (s *Server) importAccount(ctx context.Context, params protocol.AccountsImpo
 	if provider != codexauth.Provider {
 		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInvalidParams, "account import is currently supported only for provider %q", codexauth.Provider)
 	}
-	authPath := strings.TrimSpace(params.AuthPath)
-	if authPath == "" {
+	authPaths := cleanImportAuthPaths(params.AuthPaths)
+	if len(authPaths) == 0 {
+		authPath := strings.TrimSpace(params.AuthPath)
+		if authPath != "" {
+			authPaths = append(authPaths, authPath)
+		}
+	}
+	if len(authPaths) == 0 {
 		var err error
-		authPath, err = codexauth.DefaultAuthPath("")
+		authPath, err := codexauth.DefaultAuthPath("")
 		if err != nil {
 			return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInternalError, "default auth path: %v", err)
 		}
+		authPaths = append(authPaths, authPath)
 	}
-	result, err := codexauth.Importer{Accounts: s.opts.Accounts, Secrets: s.opts.Secrets}.ImportAuthJSON(ctx, authPath)
-	if err != nil {
-		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInvalidParams, "import account: %s", codexauth.SafeImportError(err, authPath))
+	importer := codexauth.Importer{Accounts: s.opts.Accounts, Secrets: s.opts.Secrets}
+	imported := make([]protocol.AccountSummary, 0, len(authPaths))
+	for _, authPath := range authPaths {
+		result, err := importer.ImportAuthJSON(ctx, authPath)
+		if err != nil {
+			return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInvalidParams, "import account: %s", codexauth.SafeImportError(err, authPath))
+		}
+		imported = append(imported, accountSummary(result.Account, account.QuotaSnapshot{}))
 	}
 	current, err := s.opts.Accounts.CurrentAccount(provider)
 	if err != nil {
 		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
 	}
+	var last protocol.AccountSummary
+	if len(imported) > 0 {
+		last = imported[len(imported)-1]
+	}
 	return protocol.AccountsImportResult{
 		CurrentAccountID: current,
-		Account:          accountSummary(result.Account, account.QuotaSnapshot{}),
+		Account:          last,
+		Accounts:         imported,
 	}, nil
+}
+
+func cleanImportAuthPaths(paths []string) []string {
+	clean := make([]string, 0, len(paths))
+	for _, raw := range paths {
+		if path := strings.TrimSpace(raw); path != "" {
+			clean = append(clean, path)
+		}
+	}
+	return clean
 }
 
 func (s *Server) currentAccount(params protocol.AccountsCurrentParams) (protocol.AccountsCurrentResult, *protocol.Error) {

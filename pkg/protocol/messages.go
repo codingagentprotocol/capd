@@ -150,13 +150,15 @@ type AccountsListResult struct {
 }
 
 type AccountsImportParams struct {
-	Provider string `json:"provider,omitempty"` // empty = codex
-	AuthPath string `json:"authPath,omitempty"` // empty = provider default on daemon host
+	Provider  string   `json:"provider,omitempty"`  // empty = codex
+	AuthPath  string   `json:"authPath,omitempty"`  // empty = provider default on daemon host
+	AuthPaths []string `json:"authPaths,omitempty"` // optional batch import; overrides authPath when non-empty
 }
 
 type AccountsImportResult struct {
-	CurrentAccountID string         `json:"currentAccountId,omitempty"`
-	Account          AccountSummary `json:"account"`
+	CurrentAccountID string           `json:"currentAccountId,omitempty"`
+	Account          AccountSummary   `json:"account"`
+	Accounts         []AccountSummary `json:"accounts,omitempty"`
 }
 
 type AccountsCurrentParams struct {

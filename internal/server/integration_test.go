@@ -1127,6 +1127,52 @@ func TestAccountsImportCodexAuthJSONWithoutLeakingSecrets(t *testing.T) {
 	}
 }
 
+func TestAccountsImportCodexAuthPathsBatchWithoutLeakingSecrets(t *testing.T) {
+	_, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	dir := t.TempDir()
+	firstPath := filepath.Join(dir, "first-auth.json")
+	secondPath := filepath.Join(dir, "second-auth.json")
+	ignoredPath := filepath.Join(dir, "ignored-auth.json")
+	for path, body := range map[string]string{
+		firstPath:   `{"email":"first@example.com","tokens":{"access_token":"first-access-secret","refresh_token":"first-refresh-secret","account_id":"acct_first"}}`,
+		secondPath:  `{"email":"second@example.com","tokens":{"access_token":"second-access-secret","refresh_token":"second-refresh-secret","account_id":"acct_second"}}`,
+		ignoredPath: `{"email":"ignored@example.com","tokens":{"access_token":"ignored-access-secret","account_id":"acct_ignored"}}`,
+	} {
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := initialized(t, ts)
+
+	var result protocol.AccountsImportResult
+	c.mustResult(c.call(protocol.MethodAccountsImport, protocol.AccountsImportParams{
+		Provider:  codexauth.Provider,
+		AuthPath:  ignoredPath,
+		AuthPaths: []string{firstPath, " ", secondPath},
+	}), &result)
+	if result.Account.ID != "codex-acct_second" || len(result.Accounts) != 2 {
+		t.Fatalf("result = %+v", result)
+	}
+	if result.Accounts[0].ID != "codex-acct_first" || result.Accounts[1].ID != "codex-acct_second" {
+		t.Fatalf("accounts = %+v", result.Accounts)
+	}
+	if _, err := accounts.LoadAccount("codex-acct_first"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := accounts.LoadAccount("codex-acct_second"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := accounts.LoadAccount("codex-acct_ignored"); err == nil {
+		t.Fatal("authPaths should override authPath")
+	}
+	data, _ := json.Marshal(result)
+	for _, leaked := range []string{firstPath, secondPath, ignoredPath, "first-access-secret", "second-access-secret", "ignored-access-secret", "first-refresh-secret", "second-refresh-secret", "secretRef", "secret_ref"} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("accounts/import batch leaked %q: %s", leaked, data)
+		}
+	}
+}
+
 func TestAccountsImportRejectsUnsupportedProviderAndInvalidAuth(t *testing.T) {
 	_, ts, _, _ := newCodexAccountIntegrationServer(t)
 	dir := t.TempDir()

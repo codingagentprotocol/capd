@@ -213,15 +213,19 @@ async function loadAccounts() {
 }
 
 async function importCodexAccount() {
-  const authPath = prompt("Codex auth.json 路径（留空使用默认）", "");
+  const authPath = prompt("Codex auth.json 路径（留空使用默认；多个路径用逗号分隔）", "");
   if (authPath === null) return;
   const button = document.getElementById("importCodex");
   button.disabled = true;
   try {
     const params = { provider: "codex" };
-    if (authPath.trim()) params.authPath = authPath.trim();
-    const { account } = await call("accounts/import", params);
-    line("ev-sys", `· 已导入 Codex 账号 ${account.email || account.id}`);
+    const authPaths = authPath.split(",").map(p => p.trim()).filter(Boolean);
+    if (authPaths.length === 1) params.authPath = authPaths[0];
+    if (authPaths.length > 1) params.authPaths = authPaths;
+    const result = await call("accounts/import", params);
+    const imported = result.accounts && result.accounts.length ? result.accounts : [result.account].filter(Boolean);
+    const labels = imported.map(a => a.email || a.id).join(", ");
+    line("ev-sys", `· 已导入 Codex 账号 ${labels || "unknown"}${imported.length > 1 ? ` (${imported.length})` : ""}`);
     await loadAccounts();
   } catch (e) {
     line("ev-err", `✗ 导入 Codex 失败: ${e.message || JSON.stringify(e)}`);

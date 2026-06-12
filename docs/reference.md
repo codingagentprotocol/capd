@@ -229,13 +229,17 @@ JSON.
 
 ### `accounts/import`
 
-`{"provider": "codex", "authPath": "/path/to/auth.json"}` →
-`{"currentAccountId", "account": {...}}`.
+`{"provider": "codex", "authPath": "/path/to/auth.json"}` or
+`{"provider": "codex", "authPaths": ["/tmp/a/auth.json", "/tmp/b/auth.json"]}` →
+`{"currentAccountId", "account": {...}, "accounts": [{...}]}`.
 
-Imports a local Codex `auth.json` from the daemon host into capd. Omit
-`authPath` to use the daemon host default `~/.codex/auth.json`. The response
-returns the same safe account summary shape as `accounts/list` and never
-returns token material, `secret_ref`, raw auth JSON, or the auth file path.
+Imports one or more local Codex `auth.json` files from the daemon host into
+capd. `authPaths` imports multiple explicit paths and takes precedence over
+`authPath`. Omit both to use the daemon host default `~/.codex/auth.json`.
+The response returns the same safe account summary shape as `accounts/list`;
+`account` is the last imported account for older clients, while `accounts`
+contains every imported account. It never returns token material, `secret_ref`,
+raw auth JSON, or auth file paths.
 
 ### `accounts/current`
 
