@@ -317,7 +317,9 @@ refresh in this same call. The response never returns token material,
 When a readiness gate fails after account metadata is loaded, the JSON-RPC
 error `data` may contain the same safe `accounts/check` evidence accumulated so
 far. Clients should treat it as partial evidence for diagnostics, not as a
-successful readiness result.
+successful readiness result. If remote quota refresh fails before per-account
+runtime checks complete, partial evidence may still include cached
+`routeCandidates` so clients can show the pre-refresh account routing state.
 
 ### `accounts/quota`
 

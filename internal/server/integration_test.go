@@ -1505,6 +1505,16 @@ func TestAccountsCheckReadinessFailureIsDaemonSideAndSafe(t *testing.T) {
 			t.Fatalf("accounts/check readiness error leaked %q: %s", leaked, resp.Error.Message)
 		}
 	}
+	partial := accountsCheckErrorData(t, resp.Error)
+	if partial.CheckedAccounts != 1 || len(partial.RouteCandidates) != 1 || partial.RouteCandidates[0].AccountID != "codex-test" {
+		t.Fatalf("partial evidence = %+v", partial)
+	}
+	data, _ := json.Marshal(partial)
+	for _, leaked := range []string{"test-token", "backend-secret", "secretRef", "file:codex-test", "CODEX_HOME", s.opts.RuntimeRoot} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("accounts/check readiness error data leaked %q: %s", leaked, data)
+		}
+	}
 }
 
 func TestAccountsCheckAllFreshFailureReportsEveryStaleAccountSafely(t *testing.T) {

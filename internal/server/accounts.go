@@ -332,6 +332,11 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		QuotaRefreshed:   params.RefreshQuota,
 		Accounts:         make([]protocol.AccountCheckEvidence, 0, len(accounts)),
 	}
+	if len(accounts) > 0 {
+		if candidates, err := account.QuotaRouteCandidates(s.opts.Accounts, provider); err == nil {
+			result.RouteCandidates = candidates
+		}
+	}
 	if perr := validateAccountsCheckPreflight(s.opts.Secrets.Backend(), len(accounts), params); perr != nil {
 		return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result)
 	}
