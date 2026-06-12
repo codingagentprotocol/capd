@@ -101,9 +101,9 @@ capd service install && capd service start  # persistent
 ```
 
 The local web console is served by the daemon at
-`http://127.0.0.1:7777/console/`. Pass the daemon token from `~/.capd/token`
-as `?token=...` when opening it in a browser, or print a ready-to-open local
-URL with `capd token --url`.
+`http://127.0.0.1:7777/console/`. Open it with `capd console`; for the compact
+data validation page, use `capd console --probe`. The command passes the daemon
+token to the browser without printing it to the terminal.
 
 ## Quick start
 

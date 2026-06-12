@@ -62,6 +62,20 @@ func TestConsoleURLEncodesToken(t *testing.T) {
 	}
 }
 
+func TestProbeURLEncodesToken(t *testing.T) {
+	raw := probeURL(config.Config{Host: "localhost", Port: 17777}, "tok+with&chars")
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Scheme != "http" || u.Host != "localhost:17777" || u.Path != "/probe/" {
+		t.Fatalf("url = %q", raw)
+	}
+	if got := u.Query().Get("token"); got != "tok+with&chars" {
+		t.Fatalf("token = %q", got)
+	}
+}
+
 func TestDaemonAddrOmitsToken(t *testing.T) {
 	cfg := config.Config{Host: "127.0.0.1", Port: 7777}
 	if got := daemonAddr(cfg); got != "127.0.0.1:7777" {
