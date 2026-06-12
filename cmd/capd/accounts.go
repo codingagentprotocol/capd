@@ -16,6 +16,7 @@ import (
 	"github.com/codingagentprotocol/capd/internal/account/codexquota"
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/daemon"
+	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
 func newAccountsCmd() *cobra.Command {
@@ -338,6 +339,9 @@ func newCodexAccountsCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("%s: parse secret ref: %w", acc.ID, err)
 				}
+				if ref.Backend != "" && ref.Backend != secrets.Backend() {
+					return fmt.Errorf("%s: secret backend = %q, active backend = %q", acc.ID, ref.Backend, secrets.Backend())
+				}
 				bundle, err := secrets.Get(cmd.Context(), ref)
 				if err != nil {
 					return fmt.Errorf("%s: load secret: %w", acc.ID, err)
@@ -362,6 +366,8 @@ func newCodexAccountsCmd() *cobra.Command {
 					RuntimeEnvOK:       projection.RuntimeEnvOK,
 					AuthJSONPrivate:    projection.AuthJSONPrivate,
 					ProjectionMarkerOK: projection.ProjectionMarkerOK,
+					SecretBackendOK:    true,
+					SecretReadable:     true,
 				}
 				used := "cached-missing"
 				if refreshQuota {
@@ -507,6 +513,8 @@ type codexSmokeAccount struct {
 	RuntimeEnvOK       bool     `json:"runtimeEnvOk"`
 	AuthJSONPrivate    bool     `json:"authJsonPrivate"`
 	ProjectionMarkerOK bool     `json:"projectionMarkerOk"`
+	SecretBackendOK    bool     `json:"secretBackendOk"`
+	SecretReadable     bool     `json:"secretReadable"`
 	PrimaryUsed        string   `json:"primaryUsed"`
 	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
 }
@@ -571,17 +579,17 @@ func codexSmokeAutoRouteEvidence(accounts *account.Store) (*codexSmokeAutoRoute,
 	route := &codexSmokeAutoRoute{
 		AccountID:  acc.ID,
 		Score:      account.QuotaRouteScore(accounts, acc, current),
-		QuotaState: "missing",
+		QuotaState: protocol.AccountQuotaStateMissing,
 	}
 	if q, err := accounts.LoadQuota(acc.ID); err == nil {
 		route.CheckedAt = q.CheckedAt
 		route.Primary = &q.PrimaryUsedPercent
 		if account.QuotaSnapshotFresh(q, time.Now()) {
-			route.QuotaState = "fresh"
+			route.QuotaState = protocol.AccountQuotaStateFresh
 			route.Fresh = true
 			route.Reason = fmt.Sprintf("fresh primary quota %.1f%%", q.PrimaryUsedPercent)
 		} else {
-			route.QuotaState = "stale"
+			route.QuotaState = protocol.AccountQuotaStateStale
 			route.Reason = "conservative score with stale cached quota"
 		}
 	} else {
