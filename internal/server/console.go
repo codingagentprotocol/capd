@@ -95,6 +95,16 @@ func (s *Server) handleProbeData(w http.ResponseWriter, r *http.Request) {
 	if readiness && requireSecretBackend == "" {
 		requireSecretBackend = secret.BackendNative
 	}
+	var err error
+	requireSecretBackend, err = secret.NormalizeBackend(requireSecretBackend)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), probeDataTimeout(readiness))
 	defer cancel()
 	result := s.probeData(ctx, readiness, requireSecretBackend)

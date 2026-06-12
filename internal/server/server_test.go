@@ -176,6 +176,24 @@ func TestProbeDataRequiresAuthorizationHeader(t *testing.T) {
 	}
 }
 
+func TestProbeDataRejectsUnknownRequiredSecretBackend(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/probe/data?readiness=1&requireSecretBackend=mystery", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
+	rec := httptest.NewRecorder()
+	s.handleProbeData(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `unknown secret backend \"mystery\"`) || !strings.Contains(body, `"ok":false`) {
+		t.Fatalf("body = %s", body)
+	}
+	if strings.Contains(body, "test-token") {
+		t.Fatalf("body leaked token: %s", body)
+	}
+}
+
 func TestProbeDataTimeoutBudgetMatchesClientReadinessWindow(t *testing.T) {
 	if got := probeDataTimeout(false); got != 12*time.Second {
 		t.Fatalf("default probe timeout = %s", got)
