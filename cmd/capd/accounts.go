@@ -42,6 +42,12 @@ func newAccountsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			sort.Slice(list, func(i, j int) bool {
+				if list[i].Provider != list[j].Provider {
+					return list[i].Provider < list[j].Provider
+				}
+				return list[i].ID < list[j].ID
+			})
 			rows := make([]accountListRow, 0, len(list))
 			currentByProvider := map[string]string{}
 			for _, acc := range list {

@@ -99,6 +99,12 @@ func (s *Server) listAccounts(params protocol.AccountsListParams) (protocol.Acco
 	if err != nil {
 		return protocol.AccountsListResult{}, protocol.NewError(protocol.CodeInternalError, "list accounts: %v", err)
 	}
+	sort.Slice(accounts, func(i, j int) bool {
+		if accounts[i].Provider != accounts[j].Provider {
+			return accounts[i].Provider < accounts[j].Provider
+		}
+		return accounts[i].ID < accounts[j].ID
+	})
 	result := protocol.AccountsListResult{
 		CurrentAccountID: current,
 		Accounts:         make([]protocol.AccountSummary, 0, len(accounts)),

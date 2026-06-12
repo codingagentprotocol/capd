@@ -745,6 +745,15 @@ func TestAccountsListJSONShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 	accounts, _ := seedCodexAccount(t)
 	defer accounts.Close()
 	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-zlow",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "zlow@example.com",
+		SecretRef: "file:codex-zlow",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
 		ID:        "gemini-test",
 		Provider:  "gemini",
 		AuthMode:  "oauth",
@@ -775,7 +784,7 @@ func TestAccountsListJSONShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 2 {
+	if len(rows) != 3 {
 		t.Fatalf("rows = %+v", rows)
 	}
 	if rows[0].Provider != codexauth.Provider || rows[0].ID != "codex-test" || !rows[0].Current {
@@ -784,11 +793,17 @@ func TestAccountsListJSONShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 	if rows[0].QuotaState != protocol.AccountQuotaStateFresh || rows[0].QuotaCheckedAt == 0 || rows[0].PrimaryUsed != "0.0%" {
 		t.Fatalf("first row quota = %+v", rows[0])
 	}
-	if rows[1].Provider != "gemini" || rows[1].ID != "gemini-test" {
+	if rows[1].Provider != codexauth.Provider || rows[1].ID != "codex-zlow" || rows[1].Current {
 		t.Fatalf("second row = %+v", rows[1])
 	}
 	if rows[1].QuotaState != protocol.AccountQuotaStateMissing || rows[1].QuotaCheckedAt != 0 {
 		t.Fatalf("second row quota = %+v", rows[1])
+	}
+	if rows[2].Provider != "gemini" || rows[2].ID != "gemini-test" {
+		t.Fatalf("third row = %+v", rows[2])
+	}
+	if rows[2].QuotaState != protocol.AccountQuotaStateMissing || rows[2].QuotaCheckedAt != 0 {
+		t.Fatalf("third row quota = %+v", rows[2])
 	}
 }
 

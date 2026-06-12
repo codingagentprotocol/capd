@@ -912,6 +912,7 @@ func TestSessionForkInheritsAccountBinding(t *testing.T) {
 
 func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
+	addCodexAccountForTest(t, accounts, "codex-zlow", "zlow@example.com")
 	if err := accounts.SaveQuota(account.QuotaSnapshot{
 		AccountID:          "codex-test",
 		Plan:               "pro",
@@ -927,8 +928,11 @@ func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 	c.mustResult(c.call(protocol.MethodAccountsList, protocol.AccountsListParams{
 		Provider: " " + codexauth.Provider + " ",
 	}), &result)
-	if result.CurrentAccountID != "codex-test" || len(result.Accounts) != 1 {
+	if result.CurrentAccountID != "codex-test" || len(result.Accounts) != 2 {
 		t.Fatalf("accounts = %+v", result)
+	}
+	if result.Accounts[0].ID != "codex-test" || result.Accounts[1].ID != "codex-zlow" {
+		t.Fatalf("accounts not sorted by account id: %+v", result.Accounts)
 	}
 	acc := result.Accounts[0]
 	if acc.ID != "codex-test" || acc.Email != "codex@example.com" || acc.Quota == nil {
