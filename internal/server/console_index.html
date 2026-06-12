@@ -690,6 +690,13 @@ function renderAccounts(accounts, currentAccountId) {
     quota.className = "quota";
     quota.textContent = quotaLabel(a);
     card.append(name, provider, quota);
+    const routeAudit = routeAuditLabel(a);
+    if (routeAudit) {
+      const route = document.createElement("div");
+      route.className = "quota";
+      route.textContent = routeAudit;
+      card.appendChild(route);
+    }
     if (isCodex) {
       const current = document.createElement("button");
       current.textContent = "设为当前";
@@ -790,6 +797,14 @@ function quotaLabel(a) {
   if (hasNumber(a.quota.codeReviewUsedPercent)) parts.push(`review ${a.quota.codeReviewUsedPercent}%`);
   if (a.quota.checkedAt) parts.push(`checked ${new Date(a.quota.checkedAt * 1000).toLocaleString()}`);
   return parts.join(" · ") || "quota 已缓存";
+}
+
+function routeAuditLabel(a) {
+  if (a.provider !== "codex") return "";
+  const parts = [];
+  if (hasNumber(a.routeScore)) parts.push(`route score ${a.routeScore}`);
+  if (a.routeReason) parts.push(a.routeReason);
+  return parts.join(" · ");
 }
 
 function quotaState(q) {

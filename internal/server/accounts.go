@@ -112,20 +112,22 @@ func (s *Server) listAccounts(params protocol.AccountsListParams) (protocol.Acco
 		CurrentAccountID: current,
 		Accounts:         make([]protocol.AccountSummary, 0, len(accounts)),
 	}
+	currentByProvider := map[string]string{}
+	if provider != "" {
+		currentByProvider[provider] = current
+	}
 	for _, acc := range accounts {
-		summary := protocol.AccountSummary{
-			ID:        acc.ID,
-			Provider:  acc.Provider,
-			AuthMode:  acc.AuthMode,
-			Email:     acc.Email,
-			AccountID: acc.AccountID,
-			Plan:      acc.Plan,
-		}
-		if q, err := s.opts.Accounts.LoadQuota(acc.ID); err == nil {
-			summary.Quota = quotaSummary(q)
-			if summary.Plan == "" {
-				summary.Plan = q.Plan
+		accCurrent, ok := currentByProvider[acc.Provider]
+		if !ok {
+			accCurrent, err = s.opts.Accounts.CurrentAccount(acc.Provider)
+			if err != nil {
+				return protocol.AccountsListResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
 			}
+			currentByProvider[acc.Provider] = accCurrent
+		}
+		summary := accountSummaryWithRoute(s.opts.Accounts, acc, account.QuotaSnapshot{}, accCurrent)
+		if q, err := s.opts.Accounts.LoadQuota(acc.ID); err == nil {
+			summary = accountSummaryWithRoute(s.opts.Accounts, acc, q, accCurrent)
 		}
 		result.Accounts = append(result.Accounts, summary)
 	}
@@ -754,6 +756,10 @@ func (s *Server) removeAccount(ctx context.Context, params protocol.AccountsRemo
 }
 
 func accountSummary(acc account.Account, quota account.QuotaSnapshot) protocol.AccountSummary {
+	return accountSummaryWithRoute(nil, acc, quota, "")
+}
+
+func accountSummaryWithRoute(accounts *account.Store, acc account.Account, quota account.QuotaSnapshot, current string) protocol.AccountSummary {
 	summary := protocol.AccountSummary{
 		ID:        acc.ID,
 		Provider:  acc.Provider,
@@ -764,9 +770,15 @@ func accountSummary(acc account.Account, quota account.QuotaSnapshot) protocol.A
 	}
 	if quota.AccountID != "" {
 		summary.Quota = quotaSummary(quota)
+		summary.QuotaFresh = summary.Quota.QuotaState == protocol.AccountQuotaStateFresh
 	}
 	if summary.Plan == "" && quota.AccountID != "" {
 		summary.Plan = quota.Plan
+	}
+	if accounts != nil && acc.Provider == codexauth.Provider {
+		score := account.QuotaRouteScore(accounts, acc, current)
+		summary.RouteScore = &score
+		summary.RouteReason = account.QuotaRouteReason(accounts, acc)
 	}
 	return summary
 }

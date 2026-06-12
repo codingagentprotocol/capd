@@ -293,13 +293,16 @@ type AccountsRemoveResult struct {
 }
 
 type AccountSummary struct {
-	ID        string                `json:"id"`
-	Provider  string                `json:"provider"`
-	AuthMode  string                `json:"authMode,omitempty"`
-	Email     string                `json:"email,omitempty"`
-	AccountID string                `json:"accountId,omitempty"`
-	Plan      string                `json:"plan,omitempty"`
-	Quota     *AccountQuotaSnapshot `json:"quota,omitempty"`
+	ID          string                `json:"id"`
+	Provider    string                `json:"provider"`
+	AuthMode    string                `json:"authMode,omitempty"`
+	Email       string                `json:"email,omitempty"`
+	AccountID   string                `json:"accountId,omitempty"`
+	Plan        string                `json:"plan,omitempty"`
+	Quota       *AccountQuotaSnapshot `json:"quota,omitempty"`
+	QuotaFresh  bool                  `json:"quotaFresh,omitempty"`
+	RouteScore  *float64              `json:"routeScore,omitempty"`
+	RouteReason string                `json:"routeReason,omitempty"`
 }
 
 func (a AccountSummary) isZero() bool {
@@ -309,7 +312,10 @@ func (a AccountSummary) isZero() bool {
 		a.Email == "" &&
 		a.AccountID == "" &&
 		a.Plan == "" &&
-		a.Quota == nil
+		a.Quota == nil &&
+		!a.QuotaFresh &&
+		a.RouteScore == nil &&
+		a.RouteReason == ""
 }
 
 type AccountQuotaSnapshot struct {
