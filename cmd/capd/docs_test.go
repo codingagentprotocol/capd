@@ -69,3 +69,22 @@ func TestReferenceDocsCoverSecretMigrationReadbackSafety(t *testing.T) {
 		}
 	}
 }
+
+func TestReferenceDocsCoverRunFreshQuotaRecovery(t *testing.T) {
+	data, err := os.ReadFile("../../docs/reference.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := string(data)
+
+	for _, want := range []string{
+		"`--account auto --require-fresh-quota` fails",
+		"`capd accounts check --readiness`",
+		"`capd agents route --account auto --require-fresh-quota`",
+		"preview the route\ngate before sending another prompt",
+	} {
+		if !strings.Contains(reference, want) {
+			t.Fatalf("reference docs missing run fresh quota recovery contract %q", want)
+		}
+	}
+}
