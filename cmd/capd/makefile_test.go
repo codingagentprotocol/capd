@@ -70,6 +70,10 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 	for _, want := range []string{
 		"verify-codex-readiness-sim:",
 		"running deterministic simulated Codex multi-account quota/routing/readiness gates",
+		"QuotaFromUsageRedactsSensitiveRawJSON",
+		"QuotaFromUsageNormalizesOutOfRangePercentsConservatively",
+		"QuotaSnapshotFreshRejectsInvalidPrimaryPercent",
+		"SelectQuotaRouteAccountTreatsInvalidQuotaAsUnknown",
 		"AgentsRouteAutoAccountChoosesLowestCachedQuota",
 		"AgentsRouteAutoAccountRequireFreshQuota",
 		"AgentsRouteAutoAccountIgnoresStaleLowQuota",
