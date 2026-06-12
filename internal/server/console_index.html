@@ -20,6 +20,9 @@
   .acct .quota { color:#8b949e; font-size:12px; margin:4px 0; }
   .acct button { padding:3px 8px; }
   #routePreview { color:#8b949e; font-size:12px; margin:-4px 0 10px; min-height:18px; }
+  #readiness { color:#8b949e; font-size:12px; margin:-4px 0 10px; min-height:18px; }
+  #readiness.ok { color:#3fb950; }
+  #readiness.warn { color:#d29922; }
   #main { display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:12px; align-items:stretch; }
   #sessions, #log { background:#010409; border:1px solid #30363d; border-radius:8px; padding:12px; height:520px; overflow-y:auto; }
   #log { white-space:pre-wrap; }
@@ -51,6 +54,7 @@
   <input id="prompt" placeholder="让 agent 干点什么…" />
   <label><input id="requireFreshQuota" type="checkbox" /> fresh quota</label>
   <button id="previewRoute">预览路由</button>
+  <button id="refreshDiagnostic">刷新诊断</button>
   <button id="importCodex">导入 Codex</button>
   <button id="checkAccounts">检查账号</button>
   <button id="checkReady">就绪门禁</button>
@@ -62,6 +66,7 @@
 </div>
 <div id="accounts"></div>
 <div id="routePreview"></div>
+<div id="readiness">诊断等待连接…</div>
 <div id="main">
   <div id="sessions">
     <div id="sessionHead"><span>Sessions</span><button id="refreshSessions">刷新</button></div>
@@ -86,6 +91,7 @@ const log = document.getElementById("log");
 const sessionsEl = document.getElementById("sessions");
 const accountsEl = document.getElementById("accounts");
 const routePreviewEl = document.getElementById("routePreview");
+const readinessEl = document.getElementById("readiness");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
 
@@ -196,9 +202,12 @@ async function loadAccounts() {
       call("accounts/list", { provider: "codex" })
     ]);
     renderAccounts(allResult.accounts || [], codexResult.currentAccountId || "");
+    await refreshReadinessDiagnostic();
   } catch (e) {
     accountsEl.textContent = "";
     routePreviewEl.textContent = "";
+    readinessEl.className = "warn";
+    readinessEl.textContent = "诊断不可用: accounts/list";
     line("ev-sys", "· accounts/list 不可用");
   }
 }
@@ -245,6 +254,42 @@ async function checkAccounts(readinessGate = false) {
     line("ev-err", `✗ ${label}: ${e.message || JSON.stringify(e)}`);
   } finally {
     button.disabled = false;
+  }
+}
+
+async function refreshReadinessDiagnostic() {
+  readinessEl.className = "";
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    readinessEl.textContent = "诊断等待连接…";
+    return;
+  }
+  readinessEl.textContent = "诊断中…";
+  try {
+    await checkDaemonHealth(false);
+    const result = await call("accounts/check", { provider: "codex" });
+    let route = null;
+    try {
+      route = await call("agents/route", { accountId: "auto" });
+    } catch (_) {}
+    const accounts = result.accounts || [];
+    const freshCount = accounts.filter(a => a.quotaFresh).length;
+    const issues = [];
+    if ((result.checkedAccounts || 0) < 2) issues.push("需要至少 2 个 Codex 账号");
+    if (accounts.length && freshCount < accounts.length) issues.push("quota 未全部 fresh");
+    const autoRoute = result.autoRoute || (route && route.accountRoute);
+    if (!autoRoute || !autoRoute.fresh) issues.push("auto route 缺 fresh quota");
+    const parts = [
+      "daemon ok",
+      `codex ${result.checkedAccounts || 0}`,
+      `secret ${result.secretBackend || "unknown"}`,
+      `quota fresh ${freshCount}/${accounts.length}`
+    ];
+    if (autoRoute) parts.push(`auto ${autoRoute.accountId || (route && route.accountId) || "unknown"} ${routeEvidenceSummary(autoRoute)}`);
+    readinessEl.className = issues.length ? "warn" : "ok";
+    readinessEl.textContent = issues.length ? `${parts.join(" · ")} · ${issues.join(" · ")}` : `${parts.join(" · ")} · ready`;
+  } catch (e) {
+    readinessEl.className = "warn";
+    readinessEl.textContent = "诊断不可用: " + (e.message || JSON.stringify(e));
   }
 }
 
@@ -405,8 +450,8 @@ function capdHTTPURL(path) {
   return u.toString();
 }
 
-async function checkDaemonHealth() {
-  statusEl.textContent = "检查 daemon health…";
+async function checkDaemonHealth(updateStatus = true) {
+  if (updateStatus) statusEl.textContent = "检查 daemon health…";
   const res = await fetch(capdHTTPURL("/healthz"), { cache: "no-store" });
   const body = (await res.text()).trim();
   if (!res.ok || body !== "ok") throw new Error(`CAP health failed: ${res.status} ${body || "empty"}`);
@@ -613,6 +658,7 @@ document.getElementById("send").onclick = async () => {
 document.getElementById("cancel").onclick = () => sessionId && call("task/cancel", { sessionId });
 document.getElementById("refreshSessions").onclick = loadSessions;
 document.getElementById("previewRoute").onclick = previewRoute;
+document.getElementById("refreshDiagnostic").onclick = refreshReadinessDiagnostic;
 document.getElementById("importCodex").onclick = importCodexAccount;
 document.getElementById("checkAccounts").onclick = () => checkAccounts(false);
 document.getElementById("checkReady").onclick = () => checkAccounts(true);
