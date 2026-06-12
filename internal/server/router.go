@@ -64,6 +64,8 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
 		}
+		params.AgentID = strings.TrimSpace(params.AgentID)
+		params.AccountID = strings.TrimSpace(params.AccountID)
 		a, ok := s.opts.Registry.Get(params.AgentID)
 		if !ok {
 			return nil, protocol.NewError(protocol.CodeAgentNotFound, "unknown agent %q", params.AgentID)

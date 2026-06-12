@@ -536,11 +536,11 @@ func TestAgentsUsageWithCodexAccountProjectsRuntimeAndCachesQuota(t *testing.T) 
 
 	var result protocol.AgentsUsageResult
 	c.mustResult(c.call(protocol.MethodAgentsUsage, protocol.AgentsUsageParams{
-		AgentID:   "codex",
-		AccountID: "codex-test",
+		AgentID:   " codex ",
+		AccountID: " codex-test ",
 	}), &result)
-	if result.Usage["planType"] != "pro" {
-		t.Fatalf("usage = %+v", result.Usage)
+	if result.AgentID != "codex" || result.AccountID != "codex-test" || result.Usage["planType"] != "pro" {
+		t.Fatalf("usage result = %+v", result)
 	}
 	env := fake.lastUsageEnv()
 	if len(env) != 1 || !strings.HasPrefix(env[0], "CODEX_HOME=") {
