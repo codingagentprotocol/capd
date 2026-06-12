@@ -313,6 +313,12 @@ func (c *testClient) mustResult(resp *protocol.Response, into any) {
 	}
 }
 
+func testRequest(method string, params any) *protocol.Request {
+	id := json.RawMessage(`1`)
+	raw, _ := json.Marshal(params)
+	return &protocol.Request{JSONRPC: protocol.JSONRPCVersion, ID: &id, Method: method, Params: raw}
+}
+
 func newIntegration(t *testing.T) (*httptest.Server, *scriptedAdapter) {
 	t.Helper()
 	return newIntegrationWithToken(t, "it-token")
@@ -2245,6 +2251,115 @@ func TestAccountsQuotaAllRefreshesEveryCodexAccountSafely(t *testing.T) {
 		if strings.Contains(string(data), leaked) {
 			t.Fatalf("accounts/quota all leaked %q: %s", leaked, data)
 		}
+	}
+}
+
+func TestConcurrentAccountsQuotaAllAndFreshRoute(t *testing.T) {
+	s, _, _, accounts := newCodexAccountIntegrationServer(t)
+	ref, err := s.opts.Secrets.Put(context.Background(), "codex-low", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "low-token",
+		AccountID:   "acct_low",
+		Email:       "low@example.com",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"low-token","account_id":"acct_low"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-low",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "low@example.com",
+		AccountID: "acct_low",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 41}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", Plan: "team", PrimaryUsedPercent: 8}); err != nil {
+		t.Fatal(err)
+	}
+
+	var quotaCalls atomic.Int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		quotaCalls.Add(1)
+		used := 41
+		plan := "pro"
+		if r.Header.Get("Authorization") == "Bearer low-token" {
+			used = 8
+			plan = "team"
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": plan,
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": used},
+			},
+		})
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+
+	client := &wsClient{initialized: true, out: make(chan []byte, 1)}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 40)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp := s.dispatch(ctx, client, testRequest(protocol.MethodAccountsQuota, protocol.AccountsQuotaParams{
+				Provider:  codexauth.Provider,
+				AccountID: protocol.AccountAll,
+			}))
+			if resp.Error != nil {
+				errs <- fmt.Errorf("quota all: %s", resp.Error.Message)
+				return
+			}
+			var result protocol.AccountsQuotaResult
+			if err := json.Unmarshal(resp.Result, &result); err != nil {
+				errs <- err
+				return
+			}
+			if len(result.Accounts) != 2 {
+				errs <- fmt.Errorf("quota all accounts = %+v", result.Accounts)
+			}
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp := s.dispatch(ctx, client, testRequest(protocol.MethodAgentsRoute, protocol.AgentRouteParams{
+				AccountID:         protocol.AccountAuto,
+				RequireFreshQuota: true,
+			}))
+			if resp.Error != nil {
+				errs <- fmt.Errorf("route: %s", resp.Error.Message)
+				return
+			}
+			var result protocol.AgentRouteResult
+			if err := json.Unmarshal(resp.Result, &result); err != nil {
+				errs <- err
+				return
+			}
+			if result.AccountID != "codex-low" || result.AccountRoute == nil || !result.AccountRoute.Fresh || len(result.RouteCandidates) != 2 {
+				errs <- fmt.Errorf("route result = %+v", result)
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if quotaCalls.Load() == 0 {
+		t.Fatal("quota backend was not called")
 	}
 }
 
