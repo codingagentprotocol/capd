@@ -273,9 +273,13 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 	routeFresh := autoRoute != nil && autoRoute.Fresh
 	candidates := len(result.RouteCandidates)
 	secretStates := accountSecretStatesEvidence(accounts)
+	credentialReady, credentialEvidence := accountCredentialEvidence(checked, accounts)
+	runtimeReady, runtimeEvidence := accountRuntimeEvidence(checked, accounts)
 	checks := []probeDataCheck{
 		{Name: "daemon health", OK: true, Evidence: "health ok"},
 		{Name: "accounts/check data", OK: result.AccountsCheck != nil, Evidence: checkedEvidence(checked, secretBackend, secretStates), NextStep: missingStep(result.AccountsCheck != nil, "start capd with account support enabled")},
+		{Name: "account credentials", OK: credentialReady, Evidence: credentialEvidence, NextStep: missingStep(credentialReady, "fix SecretStore access or re-import failing accounts")},
+		{Name: "account runtime", OK: runtimeReady, Evidence: runtimeEvidence, NextStep: missingStep(runtimeReady, "project account runtimes with accounts/project or rerun accounts/check")},
 		{Name: "multi-account readiness", OK: !readiness || checked >= 2, Evidence: countEvidence(checked, 2), NextStep: missingStep(!readiness || checked >= 2, "import at least two accounts with: capd accounts import --auth /path/a --auth /path/b")},
 		{Name: "quota freshness", OK: !readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), Evidence: quotaFreshEvidence(quotaFresh, len(accounts)), NextStep: missingStep(!readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), "refresh quota with: capd accounts check --readiness")},
 		{Name: "auto route data", OK: autoRoute != nil, Evidence: routeEvidenceTextPtr(autoRoute), NextStep: missingStep(autoRoute != nil, "import accounts, then preview with: capd agents route --account auto --json")},
@@ -323,6 +327,40 @@ func checkedEvidence(checked int, secretBackend, secretStates string) string {
 		secretStates = "unknown"
 	}
 	return countEvidence(checked, 1) + ", secret " + secretBackend + ", secretState " + secretStates
+}
+
+func accountCredentialEvidence(checked int, accounts []protocol.AccountCheckEvidence) (bool, string) {
+	readable := 0
+	backendOK := 0
+	for _, row := range accounts {
+		if row.SecretBackendOK {
+			backendOK++
+		}
+		if row.CredentialReadable {
+			readable++
+		}
+	}
+	return checked > 0 && len(accounts) == checked && readable == checked && backendOK == checked,
+		"readable " + strconv.Itoa(readable) + "/" + strconv.Itoa(checked) + ", backend " + strconv.Itoa(backendOK) + "/" + strconv.Itoa(checked)
+}
+
+func accountRuntimeEvidence(checked int, accounts []protocol.AccountCheckEvidence) (bool, string) {
+	runtime := 0
+	auth := 0
+	marker := 0
+	for _, row := range accounts {
+		if row.RuntimeReady {
+			runtime++
+		}
+		if row.AuthJSONPrivate {
+			auth++
+		}
+		if row.ProjectionMarkerOK {
+			marker++
+		}
+	}
+	return checked > 0 && len(accounts) == checked && runtime == checked,
+		"runtime " + strconv.Itoa(runtime) + "/" + strconv.Itoa(checked) + ", auth " + strconv.Itoa(auth) + "/" + strconv.Itoa(checked) + ", marker " + strconv.Itoa(marker) + "/" + strconv.Itoa(checked)
 }
 
 func accountSecretStatesEvidence(accounts []protocol.AccountCheckEvidence) string {

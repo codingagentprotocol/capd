@@ -147,7 +147,7 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 		t.Fatalf("csp = %q", got)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"CAPD Probe", "accounts/check", "accounts/quota", "agents/usage", "agents/route", "/healthz?format=json", "/probe/data", "Authorization:`Bearer ${TOKEN}`", "fetchProbeData", "httpProbe", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "protocolVersion", "secretBackend", "secretState", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "checks", "validationRows", "showTests", "daemon health", "multi-account readiness", "quota freshness", "auto route fresh", "native secret backend", "readiness gate", "rpcError", "e.data", "capd accounts check --readiness", "capd agents route --account auto", "CAPD_SECRET_BACKEND=native capd start", "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", "readinessSummaryText", "http summary", "summary.ready", "summary.checkedAccounts", "summary.secretBackendOk", "RPC_TIMEOUT_MS = 12000", "LONG_RPC_TIMEOUT_MS = 120000", "rpcTimeoutFor", `method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)`, `timeout after ${timeoutMS}ms`, "clearTimeout(pending.timer)", `call("accounts/check", { provider:"codex" })`} {
+	for _, want := range []string{"CAPD Probe", "accounts/check", "accounts/quota", "agents/usage", "agents/route", "/healthz?format=json", "/probe/data", "Authorization:`Bearer ${TOKEN}`", "fetchProbeData", "httpProbe", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "protocolVersion", "secretBackend", "secretState", "credentialReadable", "runtimeReady", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "checks", "validationRows", "showTests", "daemon health", "account credentials", "account runtime", "fix SecretStore access or re-import failing accounts", "project account runtimes with accounts/project", "multi-account readiness", "quota freshness", "auto route fresh", "native secret backend", "readiness gate", "rpcError", "e.data", "capd accounts check --readiness", "capd agents route --account auto", "CAPD_SECRET_BACKEND=native capd start", "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", "readinessSummaryText", "http summary", "summary.ready", "summary.checkedAccounts", "summary.secretBackendOk", "RPC_TIMEOUT_MS = 12000", "LONG_RPC_TIMEOUT_MS = 120000", "rpcTimeoutFor", `method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)`, `timeout after ${timeoutMS}ms`, "clearTimeout(pending.timer)", `call("accounts/check", { provider:"codex" })`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("probe HTML missing %q", want)
 		}
@@ -207,6 +207,12 @@ func TestProbeDataReturnsSafeAccountRouteEvidence(t *testing.T) {
 	if got.AccountsCheck == nil || got.AccountsCheck.CheckedAccounts != 1 {
 		t.Fatalf("accountsCheck = %+v", got.AccountsCheck)
 	}
+	if check := probeCheckByName(got.Checks, "account credentials"); !check.OK || !strings.Contains(check.Evidence, "readable 1/1") || !strings.Contains(check.Evidence, "backend 1/1") {
+		t.Fatalf("credential check = %+v", check)
+	}
+	if check := probeCheckByName(got.Checks, "account runtime"); !check.OK || !strings.Contains(check.Evidence, "runtime 1/1") || !strings.Contains(check.Evidence, "auth 1/1") || !strings.Contains(check.Evidence, "marker 1/1") {
+		t.Fatalf("runtime check = %+v", check)
+	}
 	if got.RouteDecision == nil || got.RouteDecision.AccountID != "codex-test" {
 		t.Fatalf("routeDecision = %+v", got.RouteDecision)
 	}
@@ -259,6 +265,12 @@ func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
 	if len(got.AccountsCheck.Accounts) != 1 || !got.AccountsCheck.Accounts[0].QuotaFresh || !got.AccountsCheck.Accounts[0].RuntimeReady {
 		t.Fatalf("partial account evidence = %+v", got.AccountsCheck.Accounts)
 	}
+	if check := probeCheckByName(got.Checks, "account credentials"); !check.OK || !strings.Contains(check.Evidence, "readable 1/1") {
+		t.Fatalf("credential check = %+v", check)
+	}
+	if check := probeCheckByName(got.Checks, "account runtime"); !check.OK || !strings.Contains(check.Evidence, "runtime 1/1") {
+		t.Fatalf("runtime check = %+v", check)
+	}
 	if got.Summary.Ready || !got.Summary.Readiness || got.Summary.CheckedAccounts != 1 || got.Summary.MissingAccounts != 1 || got.Summary.FreshQuotaAccounts != 1 || got.Summary.RequiredSecretBackend != "file" || got.Summary.SecretBackend != "file" || !got.Summary.SecretBackendOK {
 		t.Fatalf("partial summary = %+v", got.Summary)
 	}
@@ -271,6 +283,56 @@ func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "multi-account readiness") {
 		t.Fatalf("body missing readiness checks: %s", rec.Body.String())
 	}
+}
+
+func TestProbeDataReportsCredentialAndRuntimeFailures(t *testing.T) {
+	s, _, _, accounts := newCodexAccountIntegrationServer(t)
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = secret.BackendNative + ":codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/probe/data", nil)
+	req.Header.Set("Authorization", "Bearer it-token")
+	rec := httptest.NewRecorder()
+	s.handleProbeData(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var got probeDataResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.OK {
+		t.Fatalf("probe data unexpectedly ok: %+v", got)
+	}
+	if got.AccountsCheck == nil || len(got.AccountsCheck.Accounts) != 1 || got.AccountsCheck.Accounts[0].SecretState != protocol.AccountSecretStateBackendMismatch {
+		t.Fatalf("accountsCheck = %+v", got.AccountsCheck)
+	}
+	if check := probeCheckByName(got.Checks, "account credentials"); check.OK || !strings.Contains(check.Evidence, "readable 0/1") || !strings.Contains(check.Evidence, "backend 0/1") || !strings.Contains(check.NextStep, "SecretStore") {
+		t.Fatalf("credential check = %+v", check)
+	}
+	if check := probeCheckByName(got.Checks, "account runtime"); check.OK || !strings.Contains(check.Evidence, "runtime 0/1") {
+		t.Fatalf("runtime check = %+v", check)
+	}
+	body := rec.Body.String()
+	for _, leaked := range []string{"it-token", "test-token", "native:codex-test", "secretRef", "rawAuthJson", s.opts.RuntimeRoot} {
+		if strings.Contains(body, leaked) {
+			t.Fatalf("probe data leaked %q: %s", leaked, body)
+		}
+	}
+}
+
+func probeCheckByName(checks []probeDataCheck, name string) probeDataCheck {
+	for _, check := range checks {
+		if check.Name == name {
+			return check
+		}
+	}
+	return probeDataCheck{}
 }
 
 func TestConsoleStaticContract(t *testing.T) {
