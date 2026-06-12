@@ -309,15 +309,15 @@ func accountsCheckErrorNextSteps(message string, partial protocol.AccountsCheckR
 	if accountsCheckHasSecretState(partial, protocol.AccountSecretStateAccessDenied) || strings.Contains(message, "macOS keychain status -128") {
 		steps = append(steps, "approve macOS Keychain access, or avoid native prompts by restarting with: capd start --secret-backend file and re-importing accounts with: capd accounts --secret-backend file codex import --auth /path/to/auth.json")
 	}
-	if accountsCheckHasSecretState(partial, protocol.AccountSecretStateTimeout) {
-		steps = append(steps, "unlock or approve OS SecretStore access, then rerun: capd accounts check --json --readiness --timeout 2m")
-	}
 	requiredBackend := summary.RequiredSecretBackend
 	if requiredBackend == "" && strings.Contains(message, `want "native"`) {
 		requiredBackend = secret.BackendNative
 	}
 	if requiredBackend == "" && strings.Contains(message, `want "file"`) {
 		requiredBackend = secret.BackendFile
+	}
+	if accountsCheckHasSecretState(partial, protocol.AccountSecretStateTimeout) {
+		steps = append(steps, "unlock or approve OS SecretStore access, then rerun: "+accountsCheckReadinessCommand(requiredBackend))
 	}
 	if requiredBackend != "" && !summary.SecretBackendOK {
 		steps = append(steps, "restart capd with: capd start --secret-backend "+requiredBackend)
@@ -333,9 +333,17 @@ func accountsCheckErrorNextSteps(message string, partial protocol.AccountsCheckR
 		}
 	}
 	if strings.Contains(message, "fresh cached quota") || strings.Contains(message, "quota is not fresh") || (!summary.AutoRouteFresh && summary.CheckedAccounts > 0) || summary.StaleQuotaAccounts > 0 || summary.MissingQuotaAccounts > 0 {
-		steps = append(steps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness")
+		steps = append(steps, "refresh and verify daemon-side readiness with: "+accountsCheckReadinessCommand(requiredBackend))
 	}
 	return compactStrings(steps)
+}
+
+func accountsCheckReadinessCommand(requireSecretBackend string) string {
+	cmd := "capd accounts check --json --readiness"
+	if requireSecretBackend != "" {
+		cmd += " --require-secret-backend " + requireSecretBackend
+	}
+	return cmd + " --timeout 2m"
 }
 
 func accountsCheckHasSecretState(result protocol.AccountsCheckResult, state string) bool {

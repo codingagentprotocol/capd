@@ -79,6 +79,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"verify-codex-readiness-sim:",
 		"running deterministic simulated Codex multi-account quota/routing/readiness gates",
 		"sh -n scripts/live_codex_selftest.sh",
+		"AccountsCheckErrorNextStepsPreserveRequiredSecretBackend",
 		"QuotaFromUsageRedactsSensitiveRawJSON",
 		"QuotaFromUsageNormalizesOutOfRangePercentsConservatively",
 		"QuotaSnapshotFreshRejectsInvalidPrimaryPercent",

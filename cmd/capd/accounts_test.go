@@ -840,6 +840,28 @@ func TestAccountsCheckErrorNextStepsExplainSecretAccessDenied(t *testing.T) {
 	}
 }
 
+func TestAccountsCheckErrorNextStepsPreserveRequiredSecretBackend(t *testing.T) {
+	timeoutSteps := accountsCheckErrorNextSteps("load account credentials: timeout", protocol.AccountsCheckResult{
+		Summary:  protocol.AccountsCheckSummary{RequiredSecretBackend: secret.BackendNative, SecretBackendOK: true},
+		Accounts: []protocol.AccountCheckEvidence{{ID: "codex-test", SecretState: protocol.AccountSecretStateTimeout}},
+	})
+	if !containsString(timeoutSteps, "unlock or approve OS SecretStore access, then rerun: capd accounts check --json --readiness --require-secret-backend native --timeout 2m") {
+		t.Fatalf("timeout steps = %+v", timeoutSteps)
+	}
+
+	quotaSteps := accountsCheckErrorNextSteps("quota is not fresh", protocol.AccountsCheckResult{
+		Summary: protocol.AccountsCheckSummary{
+			RequiredSecretBackend: secret.BackendNative,
+			SecretBackendOK:       true,
+			CheckedAccounts:       2,
+			StaleQuotaAccounts:    1,
+		},
+	})
+	if !containsString(quotaSteps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend native --timeout 2m") {
+		t.Fatalf("quota steps = %+v", quotaSteps)
+	}
+}
+
 func TestAccountsImportCallsDaemonRPCWithRepeatedAuthFlags(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
