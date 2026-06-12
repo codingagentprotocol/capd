@@ -289,6 +289,7 @@ async function refreshReadinessDiagnostic() {
     const accountEvidence = accountCheckSummary(accounts);
     if (accountEvidence) parts.push(`accounts ${accountEvidence}`);
     if (autoRoute) parts.push(`auto ${autoRoute.accountId || (route && route.accountId) || "unknown"} ${routeEvidenceSummary(autoRoute)}`);
+    if (route) parts.push(`route ${routeDecisionSummary(route)}`);
     readinessEl.className = issues.length ? "warn" : "ok";
     readinessEl.textContent = issues.length ? `${parts.join(" · ")} · ${issues.join(" · ")}` : `${parts.join(" · ")} · ready`;
   } catch (e) {
@@ -390,15 +391,19 @@ async function previewRoute() {
   if (accountId === "auto" && document.getElementById("requireFreshQuota").checked) params.requireFreshQuota = true;
   try {
     const routed = await call("agents/route", params);
-    const agent = routed.agent || {};
-    const parts = [`agent ${agent.id || "unknown"}`];
-    if (routed.accountId) parts.push(`account ${routed.accountId}`);
-    if (routed.accountRoute) parts.push(routeEvidenceSummary(routed.accountRoute));
-    if (routed.reason) parts.push(routed.reason);
-    routePreviewEl.textContent = parts.join(" · ");
+    routePreviewEl.textContent = routeDecisionSummary(routed);
   } catch (e) {
     routePreviewEl.textContent = "路由不可用: " + (e.message || JSON.stringify(e));
   }
+}
+
+function routeDecisionSummary(routed) {
+  const agent = routed.agent || {};
+  const parts = [`agent ${agent.id || "unknown"}`];
+  if (routed.accountId) parts.push(`account ${routed.accountId}`);
+  if (routed.accountRoute) parts.push(routeEvidenceSummary(routed.accountRoute));
+  if (routed.reason) parts.push(routed.reason);
+  return parts.join(" · ");
 }
 
 function routeEvidenceSummary(route) {
