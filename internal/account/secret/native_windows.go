@@ -15,6 +15,7 @@ const nativeService = "capd.account.secrets"
 const (
 	credTypeGeneric         = 1
 	credPersistLocalMachine = 2
+	maxCredentialBlobSize   = 5 * 512
 	errorNotFound           = syscall.Errno(1168)
 )
 
@@ -27,6 +28,11 @@ var (
 )
 
 type nativeStore struct{}
+
+type credentialChunkManifest struct {
+	Format string `json:"format"`
+	Chunks int    `json:"chunks"`
+}
 
 func openNative(_ string) (Store, error) {
 	return nativeStore{}, nil
@@ -46,7 +52,7 @@ func (st nativeStore) Put(ctx context.Context, id string, bundle Bundle) (Ref, e
 	if err != nil {
 		return Ref{}, err
 	}
-	if err := credentialWrite(targetName(ref.ID), data); err != nil {
+	if err := credentialWriteBundle(targetName(ref.ID), data); err != nil {
 		return Ref{}, err
 	}
 	return ref, nil
@@ -59,7 +65,7 @@ func (st nativeStore) Get(ctx context.Context, ref Ref) (Bundle, error) {
 	if ref.Backend != "" && ref.Backend != st.Backend() {
 		return Bundle{}, fmt.Errorf("secret backend %q is not %q", ref.Backend, st.Backend())
 	}
-	data, err := credentialRead(targetName(cleanID(ref.ID)))
+	data, err := credentialReadBundle(targetName(cleanID(ref.ID)))
 	if err != nil {
 		return Bundle{}, err
 	}
@@ -77,11 +83,105 @@ func (st nativeStore) Delete(ctx context.Context, ref Ref) error {
 	if ref.Backend != "" && ref.Backend != st.Backend() {
 		return fmt.Errorf("secret backend %q is not %q", ref.Backend, st.Backend())
 	}
-	err := credentialDelete(targetName(cleanID(ref.ID)))
-	if err == errorNotFound {
-		return nil
+	return credentialDeleteBundle(targetName(cleanID(ref.ID)))
+}
+
+func credentialWriteBundle(target string, data []byte) error {
+	if err := credentialDeleteBundle(target); err != nil {
+		return err
 	}
-	return err
+	if len(data) <= maxCredentialBlobSize {
+		return credentialWrite(target, data)
+	}
+	chunks := splitCredentialBlob(data)
+	for i, chunk := range chunks {
+		if err := credentialWrite(chunkTargetName(target, i), chunk); err != nil {
+			_ = credentialDeleteChunks(target, len(chunks))
+			_ = credentialDelete(target)
+			return err
+		}
+	}
+	manifest, err := json.Marshal(credentialChunkManifest{Format: "capd-windows-secret-chunks-v1", Chunks: len(chunks)})
+	if err != nil {
+		_ = credentialDeleteChunks(target, len(chunks))
+		_ = credentialDelete(target)
+		return err
+	}
+	if err := credentialWrite(target, manifest); err != nil {
+		_ = credentialDeleteChunks(target, len(chunks))
+		_ = credentialDelete(target)
+		return err
+	}
+	return nil
+}
+
+func credentialReadBundle(target string) ([]byte, error) {
+	data, err := credentialRead(target)
+	if err != nil {
+		return nil, err
+	}
+	manifest, ok := parseCredentialChunkManifest(data)
+	if !ok {
+		return data, nil
+	}
+	var out []byte
+	for i := 0; i < manifest.Chunks; i++ {
+		chunk, err := credentialRead(chunkTargetName(target, i))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, chunk...)
+	}
+	return out, nil
+}
+
+func credentialDeleteBundle(target string) error {
+	data, err := credentialRead(target)
+	if err != nil && err != errorNotFound {
+		return err
+	}
+	if manifest, ok := parseCredentialChunkManifest(data); ok {
+		if err := credentialDeleteChunks(target, manifest.Chunks); err != nil {
+			return err
+		}
+	}
+	if err := credentialDelete(target); err != nil && err != errorNotFound {
+		return err
+	}
+	return nil
+}
+
+func credentialDeleteChunks(target string, chunks int) error {
+	for i := 0; i < chunks; i++ {
+		if err := credentialDelete(chunkTargetName(target, i)); err != nil && err != errorNotFound {
+			return err
+		}
+	}
+	return nil
+}
+
+func splitCredentialBlob(data []byte) [][]byte {
+	chunks := make([][]byte, 0, (len(data)+maxCredentialBlobSize-1)/maxCredentialBlobSize)
+	for len(data) > 0 {
+		n := maxCredentialBlobSize
+		if len(data) < n {
+			n = len(data)
+		}
+		chunks = append(chunks, data[:n])
+		data = data[n:]
+	}
+	return chunks
+}
+
+func parseCredentialChunkManifest(data []byte) (credentialChunkManifest, bool) {
+	var manifest credentialChunkManifest
+	if len(data) == 0 || json.Unmarshal(data, &manifest) != nil {
+		return credentialChunkManifest{}, false
+	}
+	if manifest.Format != "capd-windows-secret-chunks-v1" || manifest.Chunks <= 0 {
+		return credentialChunkManifest{}, false
+	}
+	return manifest, true
 }
 
 type credential struct {
@@ -167,4 +267,8 @@ func credentialDelete(target string) error {
 
 func targetName(id string) string {
 	return nativeService + "/" + id
+}
+
+func chunkTargetName(target string, index int) string {
+	return fmt.Sprintf("%s/chunk/%04d", target, index)
 }

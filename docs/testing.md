@@ -43,6 +43,10 @@ Secret Service session. The Linux native tests also lock the safety contract
 that token bundles go through stdin and that failing `secret-tool store`
 commands omit command output, so a helper that echoes stdin to stderr cannot
 leak access or refresh tokens into capd errors.
+Windows native storage uses Credential Manager. Small bundles are stored as a
+single credential for backward compatibility; larger Codex auth bundles are
+split into bounded chunk credentials with a small manifest credential, avoiding
+the Windows credential blob size limit while keeping reads transparent.
 
 To verify Codex account smoke is actually using the native backend:
 
