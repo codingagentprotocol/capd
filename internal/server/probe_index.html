@@ -126,24 +126,38 @@ async function refresh(readiness = false) {
       requireAllFreshQuota:true,
       requireSecretBackend:$("native").checked ? "native" : ""
     } : { provider:"codex" };
-    const result = await call("accounts/check", checkParams);
+    let result;
+    let readinessError = "";
+    try {
+      result = await call("accounts/check", checkParams);
+    } catch (e) {
+      if (!readiness) throw e;
+      readinessError = e.message || String(e);
+      result = await call("accounts/check", { provider:"codex" });
+    }
     let route = result.autoRoute || null;
+    let routeError = "";
     try {
       const routed = await call("agents/route", { accountId:"auto", requireFreshQuota:readiness });
       route = routed.accountRoute || route;
-    } catch (_) {}
+    } catch (e) {
+      routeError = e.message || String(e);
+    }
     const accounts = result.accounts || [];
     const fresh = accounts.filter(a => a.quotaFresh).length;
     setMetric("accounts", String(result.checkedAccounts || 0), (result.checkedAccounts || 0) >= 2 ? "ok" : "warn");
     setMetric("quota", `${fresh}/${accounts.length}`, accounts.length && fresh === accounts.length ? "ok" : "warn");
     setMetric("route", routeText(route), route && route.fresh ? "ok" : "warn");
-    showSummary([
+    const summary = [
       `secret backend: ${result.secretBackend || "unknown"}`,
       `quota refreshed: ${!!result.quotaRefreshed}`,
       `auto route: ${routeText(route)}`,
       ...accountEvidence(accounts)
-    ]);
-    showJSON({ accountsCheck: result, autoRoute: route });
+    ];
+    if (readinessError) summary.push(`readiness error: ${readinessError}`);
+    if (routeError) summary.push(`route error: ${routeError}`);
+    showSummary(summary);
+    showJSON({ accountsCheck: result, autoRoute: route, readinessError, routeError });
   } catch (e) {
     setMetric("daemon", "attention", "bad");
     showSummary([e.message || String(e)]);
