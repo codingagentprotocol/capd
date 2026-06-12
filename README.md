@@ -223,8 +223,10 @@ pure functions (build the command, translate its stream).
 
 ## The protocol
 
-JSON-RPC 2.0 over `ws://127.0.0.1:7777/ws?token=<~/.capd/token>`. First call
-must be `initialize` (version negotiation).
+JSON-RPC 2.0 over `ws://127.0.0.1:7777/ws`. Browser clients authenticate with
+`Sec-WebSocket-Protocol: capd.auth.<base64url-token>`; non-browser clients can
+use `Authorization: Bearer`, and `?token=` remains supported for older local
+clients. First call must be `initialize` (version negotiation).
 
 | Group | Methods |
 |-------|---------|

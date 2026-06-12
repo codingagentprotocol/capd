@@ -114,6 +114,11 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 			t.Fatalf("probe HTML contains forbidden %q", forbidden)
 		}
 	}
+	for _, want := range []string{"webSocketAuthProtocol", "new WebSocket(wsURL(), [webSocketAuthProtocol(TOKEN)])"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("probe HTML missing subprotocol auth %q", want)
+		}
+	}
 }
 
 func TestConsoleStaticContract(t *testing.T) {
@@ -257,8 +262,9 @@ func TestConsoleStaticContract(t *testing.T) {
 		"ws.onclose",
 		"ws.onerror",
 		`searchParams.delete("token")`,
-		`searchParams.set("token", TOKEN)`,
 		"capdWebSocketURL",
+		"webSocketAuthProtocol",
+		`new WebSocket(capdWebSocketURL(), [webSocketAuthProtocol(TOKEN)])`,
 		"safeCAPDHost",
 		"params.get(\"capd\")",
 		`host === "localhost"`,
@@ -284,6 +290,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"RawAuthJSON",
 		"localStorage.setItem",
 		"sessionStorage.setItem",
+		`searchParams.set("token", TOKEN)`,
 		"?token=${TOKEN}",
 	}
 	for _, needle := range forbidden {
@@ -300,6 +307,48 @@ func TestConsoleExampleMatchesEmbedded(t *testing.T) {
 	}
 	if string(data) != consoleHTML {
 		t.Fatal("examples/web/index.html differs from embedded console_index.html")
+	}
+}
+
+func TestInitializeHandshakeWithSubprotocolToken(t *testing.T) {
+	_, ts := newTestServer(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	wsURL := strings.Replace(ts.URL, "http://", "ws://", 1)
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		Subprotocols: []string{webSocketAuthSubprotocol("test-token")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseNow()
+	if got := conn.Subprotocol(); got != webSocketAuthSubprotocol("test-token") {
+		t.Fatalf("subprotocol = %q", got)
+	}
+
+	id := json.RawMessage(`1`)
+	params, _ := json.Marshal(protocol.InitializeParams{
+		ProtocolVersion: protocol.Version,
+		Client:          protocol.ClientInfo{Name: "test"},
+	})
+	req, _ := json.Marshal(protocol.Request{
+		JSONRPC: protocol.JSONRPCVersion, ID: &id,
+		Method: protocol.MethodInitialize, Params: params,
+	})
+	if err := conn.Write(ctx, websocket.MessageText, req); err != nil {
+		t.Fatal(err)
+	}
+	_, data, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp protocol.Response
+	if err := json.Unmarshal(data, &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Error != nil {
+		t.Fatalf("initialize error: %+v", resp.Error)
 	}
 }
 

@@ -27,7 +27,10 @@ The daemon also serves the local web console at `/console/` and a compact data
 probe at `/probe/`; both connect back to `/ws` with the daemon token, so opening
 either page does not bypass CAP authentication. Page responses are `no-store`
 and include CSP, referrer, permissions, and frame-deny headers because the token
-may be supplied once in the URL. The console exposes account import,
+may be supplied once in the page URL. The console and probe remove that token
+from history, then authenticate the WebSocket with `Sec-WebSocket-Protocol:
+capd.auth.<base64url-token>` instead of putting the token in the WebSocket URL.
+The console exposes account import,
 current-account selection,
 runtime projection, selected or all-account quota refresh, safe account checks,
 and readiness gates over the same CAP RPC methods used by CLI clients.
@@ -198,8 +201,11 @@ Precedence: flags > environment > defaults.
 
 ## Protocol reference
 
-Transport: `ws://HOST:PORT/ws?token=TOKEN` (or `Authorization: Bearer`),
-JSON-RPC 2.0. All session activity arrives as `event` notifications.
+Transport: `ws://HOST:PORT/ws`, JSON-RPC 2.0. Browser clients should
+authenticate with `Sec-WebSocket-Protocol: capd.auth.<base64url-token>`
+(base64url without padding). Non-browser clients may use `Authorization: Bearer
+TOKEN`; `?token=TOKEN` remains supported for backward compatibility with older
+local clients. All session activity arrives as `event` notifications.
 
 ### `initialize` — must be first
 

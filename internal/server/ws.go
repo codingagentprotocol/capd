@@ -47,7 +47,8 @@ func (c *wsClient) notify(method string, params any) bool {
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	if !s.authorized(r) {
+	ok, authSubprotocol := s.authorized(r)
+	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -57,6 +58,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		// explicitly configured (CAPD_ORIGINS / --origins), never
 		// defaulted open.
 		OriginPatterns: append([]string{"localhost:*", "127.0.0.1:*", "[[]::1]:*"}, s.opts.Origins...),
+		Subprotocols:   []string{authSubprotocol},
 	})
 	if err != nil {
 		s.log.Warn("ws accept failed", "err", err)
