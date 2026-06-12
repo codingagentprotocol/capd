@@ -51,6 +51,15 @@ func TestDoctorJSONReportsMissingReadinessWithoutSecrets(t *testing.T) {
 			t.Fatalf("doctor JSON missing %q: %s", want, body)
 		}
 	}
+	for _, want := range []string{
+		"after starting the daemon, import through CAP with: capd accounts import",
+		"local fallback: capd accounts codex import",
+		"start the daemon, import a second Codex account, then run: make live-codex-readiness",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("doctor JSON missing next step %q: %s", want, body)
+		}
+	}
 }
 
 func TestDoctorTextReturnsErrorWhenNotReady(t *testing.T) {
@@ -123,6 +132,37 @@ func TestDoctorRequiresSecretBackend(t *testing.T) {
 	}
 	if strings.Contains(out.String(), home) {
 		t.Fatalf("doctor JSON leaked home path: %s", out.String())
+	}
+}
+
+func TestDoctorRecommendsDaemonImportWhenDaemonHealthy(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/healthz" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		w.Write([]byte("ok\n"))
+	}))
+	defer ts.Close()
+	host, port := splitTestURL(t, ts.URL)
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+
+	report, err := buildDoctorReport(t.Context(), doctorOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"import a Codex account through CAP with: capd accounts import",
+		"import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-readiness",
+	} {
+		if !containsString(report.NextSteps, want) {
+			t.Fatalf("missing next step %q: %+v", want, report.NextSteps)
+		}
+	}
+	if containsString(report.NextSteps, "import a Codex account with: capd accounts codex import") {
+		t.Fatalf("old local-only next step should not be used when daemon is healthy: %+v", report.NextSteps)
 	}
 }
 

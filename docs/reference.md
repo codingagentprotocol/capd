@@ -53,6 +53,10 @@ time, and the same human-readable reason used by routing previews. The
 `codex.accounts` JSON array lists safe per-account quota evidence (id, email,
 current marker, plan, quota state, freshness, primary usage, checked time) and
 never includes SecretStore refs, token material, runtime paths, or raw auth JSON.
+When accounts are missing and the daemon is healthy, doctor next steps point to
+`capd accounts import` so the fix exercises the same CAP/WebSocket import path
+as web clients; the local `capd accounts codex import` remains a fallback when
+the daemon is not running.
 When quota or auto-route freshness is missing, doctor next steps point to
 `capd accounts check --readiness` so the same daemon-side refresh-and-verify
 gate used by web clients can confirm the fix.

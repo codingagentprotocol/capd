@@ -178,11 +178,11 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	report.Codex.ImportedAccounts = len(list)
 	if len(list) == 0 {
 		report.Issues = append(report.Issues, "no imported Codex accounts")
-		report.NextSteps = append(report.NextSteps, "import a Codex account with: capd accounts codex import")
+		report.NextSteps = append(report.NextSteps, doctorImportNextStep(report.Daemon.OK))
 	}
 	if len(list) < 2 {
 		report.Issues = append(report.Issues, "multi-account readiness requires at least two imported Codex accounts")
-		report.NextSteps = append(report.NextSteps, "import a second Codex account, then run: make live-codex-readiness")
+		report.NextSteps = append(report.NextSteps, doctorSecondImportNextStep(report.Daemon.OK))
 	}
 
 	for _, acc := range list {
@@ -243,6 +243,20 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	report.Issues = compactStrings(report.Issues)
 	report.OK = len(report.Issues) == 0
 	return report, nil
+}
+
+func doctorImportNextStep(daemonOK bool) string {
+	if daemonOK {
+		return "import a Codex account through CAP with: capd accounts import"
+	}
+	return "after starting the daemon, import through CAP with: capd accounts import (local fallback: capd accounts codex import)"
+}
+
+func doctorSecondImportNextStep(daemonOK bool) string {
+	if daemonOK {
+		return "import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-readiness"
+	}
+	return "start the daemon, import a second Codex account, then run: make live-codex-readiness"
 }
 
 func printDoctorReport(cmd *cobra.Command, report doctorReport) {

@@ -112,6 +112,10 @@ two Codex accounts are imported and runs the quota/readiness chain. Override
 the final live prompt with `LIVE_PROMPT="..." make live-codex-readiness`.
 Override the backend with `LIVE_SECRET_BACKEND=file` only when intentionally
 testing the file SecretStore path; the default live backend is `native`.
+When doctor reports missing accounts and the daemon is running, prefer
+`capd accounts import --auth ...` so the import uses the same CAP/WebSocket path
+as the Web Console. `capd accounts codex import` remains available for direct
+local imports when the daemon is not running.
 
 `capd doctor --json --fail --require-secret-backend native` is the recommended
 preflight before the live chain. It does not refresh quota or read token
