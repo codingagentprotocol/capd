@@ -145,14 +145,22 @@ func newAccountsCmd() *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s score %.2f quota %s\n", result.AutoRoute.AccountID, result.AutoRoute.Score, result.AutoRoute.QuotaState)
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "CURRENT\tID\tEMAIL\tSECRET\tCREDENTIAL\tRUNTIME\tAUTH_JSON\tMARKER\tQUOTA")
+			fmt.Fprintln(w, "CURRENT\tID\tEMAIL\tSECRET\tCREDENTIAL\tRUNTIME\tAUTH_JSON\tMARKER\tQUOTA\tFRESH\tPRIMARY\tCHECKED_AT")
 			for _, row := range result.Accounts {
 				mark := ""
 				if row.Current {
 					mark = "*"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%t\t%t\t%t\t%t\t%t\t%s\n",
-					mark, row.ID, row.Email, row.SecretBackendOK, row.CredentialReadable, row.RuntimeReady, row.AuthJSONPrivate, row.ProjectionMarkerOK, row.QuotaState)
+				primary := ""
+				if row.PrimaryUsedPercent != nil {
+					primary = formatPercent(*row.PrimaryUsedPercent)
+				}
+				checkedAt := ""
+				if row.QuotaCheckedAt > 0 {
+					checkedAt = time.Unix(row.QuotaCheckedAt, 0).Format(time.RFC3339)
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%t\t%t\t%t\t%t\t%t\t%s\t%t\t%s\t%s\n",
+					mark, row.ID, row.Email, row.SecretBackendOK, row.CredentialReadable, row.RuntimeReady, row.AuthJSONPrivate, row.ProjectionMarkerOK, row.QuotaState, row.QuotaFresh, primary, checkedAt)
 			}
 			return w.Flush()
 		},
