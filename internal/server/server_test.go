@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -300,6 +301,50 @@ func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "multi-account readiness") {
 		t.Fatalf("body missing readiness checks: %s", rec.Body.String())
+	}
+}
+
+func TestProbeDataReadinessDefaultsToNativeAndAvoidsQuotaOnBackendMismatch(t *testing.T) {
+	s, _, _, _ := newCodexAccountIntegrationServer(t)
+	var quotaCalls atomic.Int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		quotaCalls.Add(1)
+		http.Error(w, "should not be called", http.StatusInternalServerError)
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+
+	req := httptest.NewRequest(http.MethodGet, "/probe/data?readiness=1", nil)
+	req.Header.Set("Authorization", "Bearer it-token")
+	rec := httptest.NewRecorder()
+	s.handleProbeData(rec, req)
+	if rec.Code != http.StatusFailedDependency {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if quotaCalls.Load() != 0 {
+		t.Fatalf("quota calls = %d", quotaCalls.Load())
+	}
+	var got probeDataResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.OK {
+		t.Fatalf("readiness unexpectedly ok: %+v", got)
+	}
+	if got.Summary.RequiredSecretBackend != secret.BackendNative || got.Summary.SecretBackend != secret.BackendFile || got.Summary.SecretBackendOK {
+		t.Fatalf("summary = %+v", got.Summary)
+	}
+	if check := probeCheckByName(got.Checks, "SecretStore backend"); check.OK || !strings.Contains(check.Evidence, "secret file, want native") || !strings.Contains(check.NextStep, "capd start --secret-backend native") {
+		t.Fatalf("SecretStore backend check = %+v", check)
+	}
+	if len(got.Errors) == 0 || got.Errors[0].Source != "accounts/check" || !strings.Contains(got.Errors[0].Message, `secret backend = "file", want "native"`) {
+		t.Fatalf("errors = %+v", got.Errors)
+	}
+	body := rec.Body.String()
+	for _, leaked := range []string{"it-token", "test-token", "secretRef", "file:codex-test", "CODEX_HOME", s.opts.RuntimeRoot} {
+		if strings.Contains(body, leaked) {
+			t.Fatalf("probe data leaked %q: %s", leaked, body)
+		}
 	}
 }
 
