@@ -94,6 +94,44 @@ func TestRuntimeProjectorTightensExistingCodexHomePermissions(t *testing.T) {
 	assertMode(t, filepath.Join(codexHome, "auth.json"), 0o600)
 }
 
+func TestVerifyRuntimeProfileReturnsSafeEvidence(t *testing.T) {
+	dir := t.TempDir()
+	secrets := secret.NewFileStore(filepath.Join(dir, "secrets"))
+	ref, err := secrets.Put(context.Background(), "codex-acct", secret.Bundle{
+		Provider:    Provider,
+		AuthMode:    "oauth",
+		AccessToken: "access-secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := RuntimeProjector{
+		Root:    filepath.Join(dir, "runtimes"),
+		Secrets: secrets,
+	}.Project(context.Background(), account.Account{ID: "codex-acct", Provider: Provider, SecretRef: ref.String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	evidence, err := VerifyRuntimeProfile(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !evidence.RuntimeEnvOK || !evidence.AuthJSONPrivate || !evidence.ProjectionMarkerOK {
+		t.Fatalf("evidence = %+v", evidence)
+	}
+
+	badProfile := profile
+	badProfile.Env = nil
+	_, err = VerifyRuntimeProfile(badProfile)
+	if err == nil || !strings.Contains(err.Error(), "runtime env missing CODEX_HOME") {
+		t.Fatalf("err = %v", err)
+	}
+	if strings.Contains(err.Error(), profile.CodexHome) || strings.Contains(err.Error(), "access-secret") {
+		t.Fatalf("verification error leaked sensitive details: %v", err)
+	}
+}
+
 func TestRemoveRuntimeProjectionDeletesOnlyMatchingCapdProjection(t *testing.T) {
 	dir := t.TempDir()
 	secrets := secret.NewFileStore(filepath.Join(dir, "secrets"))

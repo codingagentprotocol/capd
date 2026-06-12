@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"text/tabwriter"
 	"time"
@@ -481,61 +480,29 @@ func newCodexAccountsCmd() *cobra.Command {
 }
 
 func verifyProjectedAuth(codexHome string) error {
-	info, err := os.Stat(filepath.Join(codexHome, "auth.json"))
+	evidence, err := codexauth.VerifyRuntimeProfile(codexauth.RuntimeProfile{
+		AccountID: filepath.Base(codexHome),
+		CodexHome: codexHome,
+		Env:       []string{"CODEX_HOME=" + codexHome},
+	})
 	if err != nil {
 		return err
 	}
-	if info.Mode().Perm() != 0o600 {
-		return fmt.Errorf("auth.json mode = %o, want 600", info.Mode().Perm())
+	if !evidence.AuthJSONPrivate {
+		return fmt.Errorf("auth.json is not private")
 	}
 	return nil
 }
 
 func verifyProjectedRuntime(profile codexauth.RuntimeProfile) (codexSmokeProjection, error) {
-	if profile.CodexHome == "" {
-		return codexSmokeProjection{}, fmt.Errorf("CODEX_HOME projection path is empty")
-	}
-	wantEnv := "CODEX_HOME=" + profile.CodexHome
-	envOK := false
-	for _, entry := range profile.Env {
-		if entry == wantEnv {
-			envOK = true
-			break
-		}
-	}
-	if !envOK {
-		return codexSmokeProjection{}, fmt.Errorf("runtime env missing %s", wantEnv)
-	}
-	if err := verifyProjectedAuth(profile.CodexHome); err != nil {
-		return codexSmokeProjection{}, err
-	}
-	markerPath := filepath.Join(profile.CodexHome, ".capd_projection.json")
-	info, err := os.Stat(markerPath)
+	evidence, err := codexauth.VerifyRuntimeProfile(profile)
 	if err != nil {
 		return codexSmokeProjection{}, err
-	}
-	if info.Mode().Perm() != 0o600 {
-		return codexSmokeProjection{}, fmt.Errorf(".capd_projection.json mode = %o, want 600", info.Mode().Perm())
-	}
-	data, err := os.ReadFile(markerPath)
-	if err != nil {
-		return codexSmokeProjection{}, err
-	}
-	var marker struct {
-		ManagedBy string `json:"managedBy"`
-		Provider  string `json:"provider"`
-		Account   string `json:"account"`
-	}
-	if err := json.Unmarshal(data, &marker); err != nil {
-		return codexSmokeProjection{}, err
-	}
-	if marker.ManagedBy != "capd" || marker.Provider != codexauth.Provider || marker.Account != profile.AccountID {
-		return codexSmokeProjection{}, fmt.Errorf("projection marker mismatch")
 	}
 	return codexSmokeProjection{
-		RuntimeEnvOK:       true,
-		AuthJSONPrivate:    true,
-		ProjectionMarkerOK: true,
+		RuntimeEnvOK:       evidence.RuntimeEnvOK,
+		AuthJSONPrivate:    evidence.AuthJSONPrivate,
+		ProjectionMarkerOK: evidence.ProjectionMarkerOK,
 	}, nil
 }
 

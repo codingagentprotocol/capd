@@ -23,6 +23,12 @@ type RuntimeProfile struct {
 	Env       []string
 }
 
+type RuntimeProjectionEvidence struct {
+	RuntimeEnvOK       bool
+	AuthJSONPrivate    bool
+	ProjectionMarkerOK bool
+}
+
 func (rp RuntimeProjector) Project(ctx context.Context, acc account.Account) (RuntimeProfile, error) {
 	if rp.Root == "" {
 		return RuntimeProfile{}, fmt.Errorf("runtime root is required")
@@ -75,6 +81,50 @@ func (rp RuntimeProjector) Project(ctx context.Context, acc account.Account) (Ru
 		AccountID: acc.ID,
 		CodexHome: dir,
 		Env:       []string{"CODEX_HOME=" + dir},
+	}, nil
+}
+
+func VerifyRuntimeProfile(profile RuntimeProfile) (RuntimeProjectionEvidence, error) {
+	if profile.CodexHome == "" {
+		return RuntimeProjectionEvidence{}, fmt.Errorf("CODEX_HOME projection path is empty")
+	}
+	wantEnv := "CODEX_HOME=" + profile.CodexHome
+	envOK := false
+	for _, entry := range profile.Env {
+		if entry == wantEnv {
+			envOK = true
+			break
+		}
+	}
+	if !envOK {
+		return RuntimeProjectionEvidence{}, fmt.Errorf("runtime env missing CODEX_HOME")
+	}
+	authInfo, err := os.Stat(filepath.Join(profile.CodexHome, "auth.json"))
+	if err != nil {
+		return RuntimeProjectionEvidence{}, err
+	}
+	if authInfo.Mode().Perm() != 0o600 {
+		return RuntimeProjectionEvidence{}, fmt.Errorf("auth.json mode = %o, want 600", authInfo.Mode().Perm())
+	}
+	markerPath := filepath.Join(profile.CodexHome, ".capd_projection.json")
+	markerInfo, err := os.Stat(markerPath)
+	if err != nil {
+		return RuntimeProjectionEvidence{}, err
+	}
+	if markerInfo.Mode().Perm() != 0o600 {
+		return RuntimeProjectionEvidence{}, fmt.Errorf(".capd_projection.json mode = %o, want 600", markerInfo.Mode().Perm())
+	}
+	marker, err := readProjectionMarker(markerPath)
+	if err != nil {
+		return RuntimeProjectionEvidence{}, err
+	}
+	if marker.ManagedBy != "capd" || marker.Provider != Provider || marker.Account != profile.AccountID {
+		return RuntimeProjectionEvidence{}, fmt.Errorf("projection marker mismatch")
+	}
+	return RuntimeProjectionEvidence{
+		RuntimeEnvOK:       true,
+		AuthJSONPrivate:    true,
+		ProjectionMarkerOK: true,
 	}, nil
 }
 
