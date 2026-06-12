@@ -214,6 +214,45 @@ func TestMigrateCodexAccountSecretsDryRunAndDeleteSource(t *testing.T) {
 	}
 }
 
+func TestMigrateCodexAccountSecretsVerifiesTargetReadableBeforeMetadataUpdate(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, source := seedCodexAccount(t)
+	defer accounts.Close()
+	target := &unreadableSecretStore{memorySecretStore: newMemorySecretStore(secret.BackendNative)}
+
+	result, err := migrateCodexAccountSecrets(context.Background(), accounts, source, target, codexSecretMigrationOptions{
+		AccountID:     "codex-test",
+		DeleteSource:  true,
+		SourceBackend: secret.BackendFile,
+		TargetBackend: secret.BackendNative,
+	})
+	if err == nil || err.Error() != "target-unreadable" {
+		t.Fatalf("err = %v result=%+v", err, result)
+	}
+	if result.OK || len(result.Migrated) != 1 || result.Migrated[0].Status != "failed" || result.Migrated[0].Reason != "target-unreadable" {
+		t.Fatalf("result = %+v", result)
+	}
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acc.SecretRef != "file:codex-test" {
+		t.Fatalf("metadata updated despite unreadable target: %q", acc.SecretRef)
+	}
+	if _, err := source.Get(context.Background(), secret.Ref{Backend: secret.BackendFile, ID: "codex-test"}); err != nil {
+		t.Fatalf("source should remain after unreadable target: %v", err)
+	}
+	if _, ok := target.bundles["codex-test"]; ok {
+		t.Fatal("unreadable target secret was not cleaned up")
+	}
+	data, _ := json.Marshal(result)
+	for _, leaked := range []string{"access-secret", "refresh-secret", "rawAuthJson", "secretRef"} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("migration failure leaked %q: %s", leaked, data)
+		}
+	}
+}
+
 func TestMigrateCodexAccountSecretsSkipsSourceMismatch(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)
@@ -2380,6 +2419,14 @@ func (st *memorySecretStore) Delete(_ context.Context, ref secret.Ref) error {
 	}
 	delete(st.bundles, ref.ID)
 	return nil
+}
+
+type unreadableSecretStore struct {
+	*memorySecretStore
+}
+
+func (st *unreadableSecretStore) Get(context.Context, secret.Ref) (secret.Bundle, error) {
+	return secret.Bundle{}, os.ErrPermission
 }
 
 func freeTCPPort(t *testing.T) int {

@@ -1144,6 +1144,12 @@ func migrateCodexAccountSecret(ctx context.Context, accounts *account.Store, sou
 		row.Reason = "target-unwritable"
 		return row, errors.New(row.Reason)
 	}
+	if _, err := targetStore.Get(ctx, newRef); err != nil {
+		_ = targetStore.Delete(ctx, newRef)
+		row.Status = "failed"
+		row.Reason = "target-unreadable"
+		return row, errors.New(row.Reason)
+	}
 	row.To = newRef.String()
 	updated, _ := codexauth.AccountWithBundleMetadata(acc, bundle)
 	updated.SecretRef = newRef.String()

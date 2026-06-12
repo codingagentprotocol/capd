@@ -92,6 +92,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"ProbeDataReadinessCanOverrideRequiredSecretBackend",
 		"HealthRequireSecretBackendFailsOnMismatch",
 		"SecretStoreCheckJSONRoundTrip",
+		"MigrateCodexAccountSecretsVerifiesTargetReadableBeforeMetadataUpdate",
 	} {
 		if !strings.Contains(makefile, want) {
 			t.Fatalf("Makefile simulated readiness target missing %q", want)
