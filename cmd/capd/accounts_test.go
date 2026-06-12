@@ -369,7 +369,7 @@ func TestCodexAccountsSmokeJSONWithoutLeakingSecrets(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 	acc := result.Accounts[0]
-	if acc.ID != "codex-test" || !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK || !acc.SecretBackendOK || !acc.SecretReadable || acc.PrimaryUsed != "0.0%" || acc.PrimaryUsedPercent == nil || *acc.PrimaryUsedPercent != 0 {
+	if acc.ID != "codex-test" || !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK || !acc.SecretBackendOK || !acc.SecretReadable || acc.PrimaryUsed != "0.0%" || acc.PrimaryUsedPercent == nil || *acc.PrimaryUsedPercent != 0 || acc.QuotaState != protocol.AccountQuotaStateFresh || !acc.QuotaFresh || acc.QuotaCheckedAt == 0 {
 		t.Fatalf("account = %+v", acc)
 	}
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" {
@@ -430,7 +430,7 @@ func TestCodexAccountsSmokeJSONIncludesAutoRouteEvidence(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 	for _, acc := range result.Accounts {
-		if !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK || !acc.SecretBackendOK || !acc.SecretReadable {
+		if !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK || !acc.SecretBackendOK || !acc.SecretReadable || acc.QuotaState != protocol.AccountQuotaStateFresh || !acc.QuotaFresh {
 			t.Fatalf("projection evidence missing: %+v", acc)
 		}
 	}
@@ -478,6 +478,9 @@ func TestCodexAccountsSmokeJSONMarksAutoRouteMissingQuota(t *testing.T) {
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateMissing || result.AutoRoute.Fresh || result.AutoRoute.Primary != nil {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
+	if result.Accounts[0].QuotaState != protocol.AccountQuotaStateMissing || result.Accounts[0].QuotaFresh || result.Accounts[0].PrimaryUsed != "cached-missing" || result.Accounts[0].PrimaryUsedPercent != nil {
+		t.Fatalf("account quota = %+v", result.Accounts[0])
+	}
 }
 
 func TestCodexAccountsSmokeJSONMarksAutoRouteStaleQuota(t *testing.T) {
@@ -504,6 +507,9 @@ func TestCodexAccountsSmokeJSONMarksAutoRouteStaleQuota(t *testing.T) {
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateStale || result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 2 || result.AutoRoute.CheckedAt != staleAt {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
+	if result.Accounts[0].QuotaState != protocol.AccountQuotaStateStale || result.Accounts[0].QuotaFresh || result.Accounts[0].QuotaCheckedAt != staleAt || result.Accounts[0].PrimaryUsedPercent == nil || *result.Accounts[0].PrimaryUsedPercent != 2 {
+		t.Fatalf("account quota = %+v", result.Accounts[0])
+	}
 }
 
 func TestCodexAccountsSmokeRequireFreshQuotaPassesWithFreshCache(t *testing.T) {
@@ -528,6 +534,70 @@ func TestCodexAccountsSmokeRequireFreshQuotaPassesWithFreshCache(t *testing.T) {
 	}
 	if result.AutoRoute == nil || result.AutoRoute.QuotaState != protocol.AccountQuotaStateFresh || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 9 {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
+	}
+}
+
+func TestCodexAccountsSmokeRequireAllFreshQuota(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, secrets := seedCodexAccount(t)
+	defer accounts.Close()
+	ref, err := secrets.Put(context.Background(), "codex-low", secret.Bundle{
+		Provider:     codexauth.Provider,
+		AuthMode:     "chatgpt",
+		AccessToken:  "low-access-secret",
+		RefreshToken: "low-refresh-secret",
+		RawAuthJSON:  []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"low-access-secret","refresh_token":"low-refresh-secret"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-low",
+		Provider:  codexauth.Provider,
+		AuthMode:  "chatgpt",
+		Email:     "low@example.com",
+		AccountID: "acct_low",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 9}); err != nil {
+		t.Fatal(err)
+	}
+	staleAt := time.Now().Add(-account.QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", Plan: "pro", PrimaryUsedPercent: 3, CheckedAt: staleAt}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--require-all-fresh-quota"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "codex-low: quota is stale") {
+		t.Fatalf("err = %v", err)
+	}
+
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", Plan: "pro", PrimaryUsedPercent: 3}); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json", "--require-all-fresh-quota"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var result codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	for _, acc := range result.Accounts {
+		if acc.QuotaState != protocol.AccountQuotaStateFresh || !acc.QuotaFresh {
+			t.Fatalf("account quota = %+v", acc)
+		}
 	}
 }
 

@@ -55,7 +55,7 @@ capd accounts codex smoke --quota
 For multi-account routing readiness:
 
 ```bash
-capd accounts codex smoke --quota --require-multiple --require-fresh-quota
+capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
 capd agents usage codex --account auto
 ```
 
@@ -66,10 +66,13 @@ selection, and optionally ChatGPT backend quota refresh. It prints only account
 metadata, projection paths, quota percentages, projection booleans, and the
 selected `autoRoute.accountId`, `autoRoute.quotaState` (`fresh`, `stale`, or
 `missing`), plus `secretBackend`; per-account rows include
-`secretBackendOk` and `secretReadable` booleans. Token material is never
-printed. Use `--require-fresh-quota` to fail unless the auto-route decision is
-backed by a fresh cached quota snapshot. Use `--require-secret-backend native`
-to fail unless smoke is reading credentials from the OS secret backend.
+`secretBackendOk`, `secretReadable`, `quotaState`, `quotaFresh`, and
+`quotaCheckedAt` fields. Token material is never printed. Use
+`--require-fresh-quota` to fail unless the auto-route decision is backed by a
+fresh cached quota snapshot; use `--require-all-fresh-quota` to fail unless
+every imported account has fresh cached quota. Use
+`--require-secret-backend native` to fail unless smoke is reading credentials
+from the OS secret backend.
 Projection, quota refresh, and smoke all fail closed if an account `secret_ref`
 points at a different backend than the active SecretStore. Use `--json` to
 capture machine-readable smoke evidence in long tasks or CI logs.

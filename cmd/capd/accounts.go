@@ -306,6 +306,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			baseURL, _ := cmd.Flags().GetString("base-url")
 			requireMultiple, _ := cmd.Flags().GetBool("require-multiple")
 			requireFreshQuota, _ := cmd.Flags().GetBool("require-fresh-quota")
+			requireAllFreshQuota, _ := cmd.Flags().GetBool("require-all-fresh-quota")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			jsonOut, _ := cmd.Flags().GetBool("json")
 			accounts, secrets, err := accountDepsFromCmd(cmd)
@@ -372,7 +373,6 @@ func newCodexAccountsCmd() *cobra.Command {
 					SecretBackendOK:    true,
 					SecretReadable:     true,
 				}
-				used := "cached-missing"
 				if refreshQuota {
 					quotaResult, err := codexquota.Client{BaseURL: baseURL}.Usage(cmd.Context(), acc.ID, bundle)
 					if err != nil {
@@ -381,13 +381,16 @@ func newCodexAccountsCmd() *cobra.Command {
 					if err := accounts.SaveQuota(quotaResult.Quota); err != nil {
 						return fmt.Errorf("%s: save quota: %w", acc.ID, err)
 					}
-					row.PrimaryUsedPercent = &quotaResult.Quota.PrimaryUsedPercent
-					used = formatPercent(quotaResult.Quota.PrimaryUsedPercent)
+					setCodexSmokeQuotaEvidence(&row, quotaResult.Quota)
 				} else if q, err := accounts.LoadQuota(acc.ID); err == nil {
-					row.PrimaryUsedPercent = &q.PrimaryUsedPercent
-					used = formatPercent(q.PrimaryUsedPercent)
+					setCodexSmokeQuotaEvidence(&row, q)
+				} else {
+					row.PrimaryUsed = "cached-missing"
+					row.QuotaState = protocol.AccountQuotaStateMissing
 				}
-				row.PrimaryUsed = used
+				if requireAllFreshQuota && !row.QuotaFresh {
+					return fmt.Errorf("%s: quota is %s; run with --quota or refresh every account first", acc.ID, row.QuotaState)
+				}
 				result.Accounts = append(result.Accounts, row)
 			}
 			if route, err := codexSmokeAutoRouteEvidence(accounts); err != nil {
@@ -422,6 +425,7 @@ func newCodexAccountsCmd() *cobra.Command {
 	smokeCmd.Flags().String("base-url", "", "override ChatGPT base URL for testing")
 	smokeCmd.Flags().Bool("require-multiple", false, "fail unless at least two Codex accounts are imported")
 	smokeCmd.Flags().Bool("require-fresh-quota", false, "fail unless auto-route selection is backed by fresh cached quota")
+	smokeCmd.Flags().Bool("require-all-fresh-quota", false, "fail unless every imported account has fresh cached quota")
 	smokeCmd.Flags().String("require-secret-backend", "", "fail unless the active secret backend matches this value")
 	smokeCmd.Flags().Bool("json", false, "print machine-readable smoke evidence without token material")
 
@@ -520,6 +524,9 @@ type codexSmokeAccount struct {
 	SecretReadable     bool     `json:"secretReadable"`
 	PrimaryUsed        string   `json:"primaryUsed"`
 	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
+	QuotaState         string   `json:"quotaState"`
+	QuotaFresh         bool     `json:"quotaFresh"`
+	QuotaCheckedAt     int64    `json:"quotaCheckedAt,omitempty"`
 }
 
 type codexQuotaSummary struct {
@@ -571,6 +578,18 @@ type accountListRow struct {
 	AccountID   string `json:"accountId,omitempty"`
 	Plan        string `json:"plan,omitempty"`
 	PrimaryUsed string `json:"primaryUsed,omitempty"`
+}
+
+func setCodexSmokeQuotaEvidence(row *codexSmokeAccount, q account.QuotaSnapshot) {
+	row.PrimaryUsedPercent = &q.PrimaryUsedPercent
+	row.PrimaryUsed = formatPercent(q.PrimaryUsedPercent)
+	row.QuotaCheckedAt = q.CheckedAt
+	if account.QuotaSnapshotFresh(q, time.Now()) {
+		row.QuotaState = protocol.AccountQuotaStateFresh
+		row.QuotaFresh = true
+		return
+	}
+	row.QuotaState = protocol.AccountQuotaStateStale
 }
 
 func codexSmokeAutoRouteEvidence(accounts *account.Store) (*codexSmokeAutoRoute, error) {
