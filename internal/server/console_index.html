@@ -293,7 +293,7 @@ async function importCodexAccount() {
 function accountsImportNextStep(importedAccounts) {
   if (!importedAccounts) return "";
   if (importedAccounts < 2) return "继续导入第二个 Codex 账号";
-  return "运行就绪门禁或 capd accounts check --readiness";
+  return "运行就绪门禁或 capd accounts check --json --readiness";
 }
 
 async function checkAccounts(readinessGate = false) {
@@ -508,10 +508,10 @@ function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, ro
   return [
     { name: "daemon health", ok: true, evidence: "health ok", nextStep: "" },
     { name: "Codex multi-account import", ok: checked >= 2, evidence: `checked ${checked}, need 2`, nextStep: checked >= 2 ? "" : "导入至少两个账号: capd accounts import --auth /path/a --auth /path/b" },
-    { name: "Codex quota freshness", ok: accounts.length > 0 && freshCount === accounts.length, evidence: `fresh ${freshCount}/${accounts.length}`, nextStep: accounts.length > 0 && freshCount === accounts.length ? "" : "运行就绪门禁或 capd accounts check --readiness" },
-    { name: "Codex auto route freshness", ok: !!(autoRoute && autoRoute.fresh), evidence: autoRoute ? routeEvidenceSummary(autoRoute) : "auto route missing", nextStep: autoRoute && autoRoute.fresh ? "" : "刷新 quota 后预览自动路由" },
+    { name: "Codex quota freshness", ok: accounts.length > 0 && freshCount === accounts.length, evidence: `fresh ${freshCount}/${accounts.length}`, nextStep: accounts.length > 0 && freshCount === accounts.length ? "" : "运行就绪门禁或 capd accounts check --json --readiness" },
+    { name: "Codex auto route freshness", ok: !!(autoRoute && autoRoute.fresh), evidence: autoRoute ? routeEvidenceSummary(autoRoute) : "auto route missing", nextStep: autoRoute && autoRoute.fresh ? "" : "刷新 quota 后运行 capd agents route --account auto --require-fresh-quota --json" },
     { name: "readiness gate", ok: !readinessError, evidence: readinessError || "no blocking readiness error", nextStep: readinessError ? "按 partial evidence 修复账号、quota 或 SecretStore 后重跑就绪门禁" : "" },
-    { name: "route decision", ok: !!route, evidence: route ? routeDecisionSummary(route) : routeError || "route missing", nextStep: route ? "" : "运行 capd agents route --account auto" },
+    { name: "route decision", ok: !!route, evidence: route ? routeDecisionSummary(route) : routeError || "route missing", nextStep: route ? "" : "运行 capd agents route --account auto --require-fresh-quota --json" },
     { name: "route candidates", ok: !!routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)), evidence: routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)) || "no routeCandidates evidence", nextStep: routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)) ? "" : "刷新诊断或运行 capd agents route --account auto --json" },
     { name: "SecretStore backend", ok: secretOK, evidence: requiredBackend ? `secret ${secretBackend}, want ${requiredBackend}` : `secret ${secretBackend}`, nextStep: requiredBackend ? secretNextStep : "" }
   ];
