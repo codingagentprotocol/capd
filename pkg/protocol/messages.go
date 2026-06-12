@@ -167,6 +167,7 @@ type AccountQuotaSnapshot struct {
 	SecondaryResetAt      string  `json:"secondaryResetAt,omitempty"`
 	CodeReviewUsedPercent float64 `json:"codeReviewUsedPercent"`
 	CheckedAt             int64   `json:"checkedAt"`
+	QuotaState            string  `json:"quotaState,omitempty"`
 }
 
 // Permission modes, mapped by each adapter onto the agent's native flags.

@@ -186,9 +186,11 @@ resetsAt}`, `planType`, `credits`, plus per-model buckets in
 Omit `provider` to list imported accounts across all providers; in that case
 `currentAccountId` is omitted because current account is provider-scoped.
 
-Returns imported account metadata and cached quota snapshots only. It never
-returns `secret_ref`, access tokens, refresh tokens, ID tokens, API keys, or
-raw quota JSON.
+Returns imported account metadata and cached quota snapshots only. Quota
+snapshots include server-classified `quotaState` (`fresh`, `stale`, or
+`missing`) so clients do not have to duplicate freshness rules. It never returns
+`secret_ref`, access tokens, refresh tokens, ID tokens, API keys, or raw quota
+JSON.
 
 ### `accounts/quota`
 

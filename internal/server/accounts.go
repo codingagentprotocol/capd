@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
@@ -182,5 +183,16 @@ func quotaSummary(q account.QuotaSnapshot) *protocol.AccountQuotaSnapshot {
 		SecondaryResetAt:      q.SecondaryResetAt,
 		CodeReviewUsedPercent: q.CodeReviewUsedPercent,
 		CheckedAt:             q.CheckedAt,
+		QuotaState:            accountQuotaState(q),
 	}
+}
+
+func accountQuotaState(q account.QuotaSnapshot) string {
+	if account.QuotaSnapshotFresh(q, time.Now()) {
+		return protocol.AccountQuotaStateFresh
+	}
+	if q.CheckedAt > 0 {
+		return protocol.AccountQuotaStateStale
+	}
+	return protocol.AccountQuotaStateMissing
 }

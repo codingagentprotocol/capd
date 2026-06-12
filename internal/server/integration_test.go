@@ -823,7 +823,7 @@ func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 	if acc.ID != "codex-test" || acc.Email != "codex@example.com" || acc.Quota == nil {
 		t.Fatalf("account = %+v", acc)
 	}
-	if acc.Quota.PrimaryUsedPercent != 25 || acc.Quota.PrimaryResetAt == "" {
+	if acc.Quota.PrimaryUsedPercent != 25 || acc.Quota.PrimaryResetAt == "" || acc.Quota.QuotaState != protocol.AccountQuotaStateFresh {
 		t.Fatalf("quota = %+v", acc.Quota)
 	}
 	data, _ := json.Marshal(result)
@@ -893,6 +893,9 @@ func TestAccountsListJSONIncludesZeroQuota(t *testing.T) {
 	}
 	if !strings.Contains(text, `"checkedAt":1781170000`) {
 		t.Fatalf("checkedAt missing from JSON: %s", text)
+	}
+	if !strings.Contains(text, `"quotaState":"stale"`) {
+		t.Fatalf("quotaState missing from JSON: %s", text)
 	}
 	if strings.Contains(text, "test-token") || strings.Contains(text, "secret") || strings.Contains(text, "must-not-return") {
 		t.Fatalf("accounts/list leaked sensitive data: %s", text)

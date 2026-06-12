@@ -260,6 +260,7 @@ function quotaLabel(a) {
 }
 
 function quotaState(q) {
+  if (q && q.quotaState) return q.quotaState;
   if (!q || !q.checkedAt) return "missing";
   return quotaFresh(q) ? "fresh" : "stale";
 }

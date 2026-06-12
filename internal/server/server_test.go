@@ -114,6 +114,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		`provider.textContent = a.provider`,
 		"QUOTA_FRESH_MS",
 		"quotaState(a.quota)",
+		"q.quotaState",
 		`return "missing"`,
 		"quotaFresh(q)",
 		`? "fresh" : "stale"`,
