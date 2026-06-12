@@ -234,7 +234,7 @@ async function checkAccounts(readinessGate = false) {
       if (document.getElementById("requireNativeSecret").checked) params.requireSecretBackend = "native";
     }
     const result = await call("accounts/check", params);
-    const route = result.autoRoute ? ` · auto ${result.autoRoute.accountId || ""} ${result.autoRoute.quotaState}` : "";
+    const route = result.autoRoute ? ` · auto ${result.autoRoute.accountId || ""} ${routeEvidenceSummary(result.autoRoute)}` : "";
     if (readinessGate) line("ev-sys", `· readiness quota refreshed ${result.quotaRefreshed ? "yes" : "no"}`);
     line("ev-sys", `· 账号检查完成 ${result.checkedAccounts} 个${route}`);
     const evidence = accountCheckSummary(result.accounts || []);

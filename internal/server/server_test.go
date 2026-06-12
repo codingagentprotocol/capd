@@ -105,6 +105,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"previewRoute",
 		"routePreview",
 		"routeEvidenceSummary",
+		"routeEvidenceSummary(result.autoRoute)",
 		"route.primaryUsedPercent",
 		"route.checkedAt",
 		"codexAccounts",
