@@ -2204,8 +2204,43 @@ func TestCodexAccountsSmokeRequireMultipleReturnsPartialAccountEvidence(t *testi
 	if len(result.RouteCandidates) != 1 || result.RouteCandidates[0].AccountID != "codex-test" || result.RouteCandidates[0].Reason != "auto account codex-test without fresh cached quota; current account tie-break" {
 		t.Fatalf("partial route candidates = %+v", result.RouteCandidates)
 	}
-	if len(result.NextSteps) != 1 || !strings.Contains(result.NextSteps[0], "import a second Codex account") {
+	if !containsString(result.NextSteps, "import a second Codex account with: capd accounts codex import --auth /path/to/auth.json") {
 		t.Fatalf("next steps = %+v", result.NextSteps)
+	}
+	if !containsString(result.NextSteps, "refresh quota and rerun smoke with: capd accounts codex smoke --json --quota --require-fresh-quota --require-secret-backend file --timeout 2m") {
+		t.Fatalf("next steps = %+v", result.NextSteps)
+	}
+}
+
+func TestCodexAccountsSmokeFailureNextStepsIncludeBackendMismatchEvidence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = secret.BackendNative + ":codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json", "--require-multiple", "--require-secret-backend", "file"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "expected multiple Codex accounts") {
+		t.Fatalf("err = %v", err)
+	}
+	var result codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatalf("json err = %v output=%s", err, out.String())
+	}
+	want := "rerun smoke with the required SecretStore backend: capd accounts --secret-backend native codex smoke --json --require-secret-backend native --timeout 2m, or re-import the account with the active backend: capd accounts codex import --auth /path/to/auth.json"
+	if !containsString(result.NextSteps, want) {
+		t.Fatalf("next steps missing backend repair %q: %+v", want, result.NextSteps)
 	}
 }
 

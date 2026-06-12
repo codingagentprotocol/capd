@@ -259,7 +259,9 @@ When smoke fails before SecretStore reads, such as `--require-multiple` with
 only one imported account or a requested SecretStore backend mismatch, JSON
 output still includes safe cached account, quota, auto-route, and
 `routeCandidates` evidence so live readiness logs show the real missing gate
-without prompting for OS credentials.
+without prompting for OS credentials. Its `nextSteps` also includes safe
+parallel repairs when cached evidence proves them, such as refreshing stale
+auto-route quota or rerunning with the account's SecretStore backend.
 Projection, quota refresh, and smoke all fail closed if an account `secret_ref`
 points at a different backend than the active SecretStore. Use `--json` to
 capture machine-readable smoke evidence in long tasks or CI logs.

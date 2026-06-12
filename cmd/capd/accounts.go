@@ -1010,18 +1010,62 @@ func codexSmokeFail(cmd *cobra.Command, jsonOut bool, result codexSmokeResult, i
 	if nextStep != "" {
 		result.NextSteps = append(result.NextSteps, nextStep)
 	}
+	result.NextSteps = codexSmokeAugmentNextSteps(result)
 	if jsonOut {
 		cmd.SilenceUsage = true
 		cmd.SilenceErrors = true
 		out, _ := json.MarshalIndent(result, "", "  ")
 		fmt.Fprintln(cmd.OutOrStdout(), string(out))
-	} else if nextStep != "" {
-		fmt.Fprintf(cmd.ErrOrStderr(), "next: %s\n", nextStep)
+	} else {
+		for _, next := range result.NextSteps {
+			fmt.Fprintf(cmd.ErrOrStderr(), "next: %s\n", next)
+		}
 	}
 	if issue == "" {
 		issue = "Codex account smoke check failed"
 	}
 	return fmt.Errorf("%s", issue)
+}
+
+func codexSmokeAugmentNextSteps(result codexSmokeResult) []string {
+	steps := append([]string(nil), result.NextSteps...)
+	add := func(step string) {
+		if step == "" || stringSliceContains(steps, step) {
+			return
+		}
+		steps = append(steps, step)
+	}
+	if result.AutoRoute != nil && !result.AutoRoute.Fresh {
+		add(codexSmokeQuotaNextStep(codexSmokeRouteBackendHint(result), false))
+	}
+	for _, row := range result.Accounts {
+		if row.SecretState == protocol.AccountSecretStateBackendMismatch {
+			add(codexSmokeAccountBackendMismatchNextStep(codexSmokeRouteBackendHint(result), result.SecretBackend))
+			break
+		}
+	}
+	return steps
+}
+
+func codexSmokeRouteBackendHint(result codexSmokeResult) string {
+	if result.AutoRoute != nil && result.AutoRoute.SecretBackend != "" {
+		return result.AutoRoute.SecretBackend
+	}
+	for _, candidate := range result.RouteCandidates {
+		if candidate.SecretBackend != "" {
+			return candidate.SecretBackend
+		}
+	}
+	return result.SecretBackend
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func codexSmokeSecretFailureRow(acc account.Account, backendOK bool, state string) codexSmokeAccount {
