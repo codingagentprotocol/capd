@@ -168,7 +168,7 @@ capd health --json --require-secret-backend native # confirm daemon /healthz plu
 capd accounts import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # daemon-side CAP import
 capd accounts check --json   # daemon-side accounts/check smoke evidence with compact summary
 capd accounts check --json --readiness # daemon-side multi-account readiness gate
-capd agents route --account auto --require-fresh-quota
+capd agents route --account auto --require-fresh-quota --json
 ```
 
 For deterministic local regression, run `make verify`; for native SecretStore

@@ -138,10 +138,10 @@ When `--account auto --require-fresh-quota` fails because the selected Codex
 account lacks fresh cached quota, `capd run` prints any safe daemon-provided
 `accountRoute` and `routeCandidates` evidence, then prints recovery commands
 that point back to the shared readiness path:
-`capd accounts check --readiness` to refresh and verify daemon-side quota
+`capd accounts check --json --readiness` to refresh and verify daemon-side quota
 evidence, or
-`capd agents route --account auto --require-fresh-quota` to preview the route
-gate before sending another prompt.
+`capd agents route --account auto --require-fresh-quota --json` to preview the
+route gate before sending another prompt.
 
 ### `capd watch <session-id>` — attach without sending (long tasks)
 

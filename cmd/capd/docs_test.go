@@ -81,10 +81,10 @@ func TestReferenceDocsCoverRunFreshQuotaRecovery(t *testing.T) {
 
 	for _, want := range []string{
 		"`--account auto --require-fresh-quota` fails",
-		"`capd accounts check --readiness`",
-		"`capd agents route --account auto --require-fresh-quota`",
+		"`capd accounts check --json --readiness`",
+		"`capd agents route --account auto --require-fresh-quota --json`",
 		"prints any safe daemon-provided\n`accountRoute` and `routeCandidates` evidence",
-		"preview the route\ngate before sending another prompt",
+		"preview the\nroute gate before sending another prompt",
 	} {
 		if !strings.Contains(reference, want) {
 			t.Fatalf("reference docs missing run fresh quota recovery contract %q", want)

@@ -251,7 +251,7 @@ func runTaskErrorWithNextStep(err error, o runOpts) error {
 		return nil
 	}
 	if o.requireFreshQuota && strings.Contains(strings.ToLower(err.Error()), "fresh") {
-		return fmt.Errorf("%w%s\nnext: refresh and verify Codex quota with: capd accounts check --readiness\nnext: or preview local account routing with: capd agents route --account auto --require-fresh-quota", err, runTaskRouteErrorEvidence(err))
+		return fmt.Errorf("%w%s\nnext: refresh and verify daemon-side readiness with: capd accounts check --json --readiness\nnext: preview routing with: capd agents route --account auto --require-fresh-quota --json", err, runTaskRouteErrorEvidence(err))
 	}
 	return err
 }

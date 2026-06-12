@@ -399,7 +399,7 @@ func TestRunTaskFreshQuotaFailureSuggestsReadiness(t *testing.T) {
 		t.Fatal("expected fresh quota error")
 	}
 	text := err.Error()
-	for _, want := range []string{"fresh cached quota", "route: quota stale fresh false primary 91.0% score 75.00 checked", "route candidates: codex-stale quota stale", "codex-missing quota missing", "capd accounts check --readiness", "capd agents route --account auto --require-fresh-quota"} {
+	for _, want := range []string{"fresh cached quota", "route: quota stale fresh false primary 91.0% score 75.00 checked", "route candidates: codex-stale quota stale", "codex-missing quota missing", "capd accounts check --json --readiness", "capd agents route --account auto --require-fresh-quota --json"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("error missing %q: %s", want, text)
 		}
