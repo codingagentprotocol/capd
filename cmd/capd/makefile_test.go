@@ -29,7 +29,7 @@ func TestLiveCodexReadinessUsesOneSecretBackend(t *testing.T) {
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts check --json --readiness --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m",
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd probe data --json --readiness --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m --fail",
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd agents usage codex --account auto",
-		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd agents route --account auto --require-fresh-quota",
+		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd agents route --account auto --require-fresh-quota --json",
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd run --agent codex --account auto --require-fresh-quota",
 	} {
 		if !strings.Contains(makefile, want) {
@@ -42,6 +42,7 @@ func TestLiveCodexReadinessUsesOneSecretBackend(t *testing.T) {
 		"\n\tgo run ./cmd/capd accounts check --json",
 		"\n\tgo run ./cmd/capd doctor --json --fail --require-secret-backend native",
 		"running daemon from: CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) capd start",
+		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd agents route --account auto --require-fresh-quota\n",
 	} {
 		if strings.Contains(makefile, forbidden) {
 			t.Fatalf("Makefile contains backend-drift-prone command %q", forbidden)
