@@ -19,6 +19,7 @@
   .acct .provider { color:#58a6ff; font-size:12px; margin-top:2px; }
   .acct .quota { color:#8b949e; font-size:12px; margin:4px 0; }
   .acct button { padding:3px 8px; }
+  #routePreview { color:#8b949e; font-size:12px; margin:-4px 0 10px; min-height:18px; }
   #main { display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:12px; align-items:stretch; }
   #sessions, #log { background:#010409; border:1px solid #30363d; border-radius:8px; padding:12px; height:520px; overflow-y:auto; }
   #log { white-space:pre-wrap; }
@@ -48,10 +49,12 @@
   <input id="cwd" list="cwds" placeholder="项目目录（留空=主目录）" style="flex:0 0 260px" />
   <datalist id="cwds"></datalist>
   <input id="prompt" placeholder="让 agent 干点什么…" />
+  <button id="previewRoute">预览路由</button>
   <button id="send">发送</button>
   <button id="cancel">中断</button>
 </div>
 <div id="accounts"></div>
+<div id="routePreview"></div>
 <div id="main">
   <div id="sessions">
     <div id="sessionHead"><span>Sessions</span><button id="refreshSessions">刷新</button></div>
@@ -75,6 +78,7 @@ if (TOKEN) {
 const log = document.getElementById("log");
 const sessionsEl = document.getElementById("sessions");
 const accountsEl = document.getElementById("accounts");
+const routePreviewEl = document.getElementById("routePreview");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
 
@@ -158,6 +162,7 @@ async function loadAccounts() {
     renderAccounts(allResult.accounts || [], codexResult.currentAccountId || "");
   } catch (e) {
     accountsEl.textContent = "";
+    routePreviewEl.textContent = "";
     line("ev-sys", "· accounts/list 不可用");
   }
 }
@@ -181,6 +186,7 @@ function renderAccounts(accounts, currentAccountId) {
 
     const card = document.createElement("div");
     card.className = "acct" + (isCodex && a.id === accountSel.value ? " active" : "");
+    card.dataset.accountId = a.id;
     const name = document.createElement("div");
     name.className = "name";
     name.textContent = a.email || a.id;
@@ -198,6 +204,35 @@ function renderAccounts(accounts, currentAccountId) {
       card.appendChild(refresh);
     }
     accountsEl.appendChild(card);
+  }
+  markActiveAccount();
+  previewRoute();
+}
+
+function markActiveAccount() {
+  const selected = document.getElementById("account").value;
+  for (const card of accountsEl.querySelectorAll(".acct")) card.classList.remove("active");
+  if (!selected || selected === "auto") return;
+  for (const card of accountsEl.querySelectorAll(".acct")) {
+    if (card.dataset.accountId === selected) card.classList.add("active");
+  }
+}
+
+async function previewRoute() {
+  routePreviewEl.textContent = "";
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const accountId = document.getElementById("account").value;
+  const params = {};
+  if (accountId) params.accountId = accountId;
+  try {
+    const routed = await call("agents/route", params);
+    const agent = routed.agent || {};
+    const parts = [`agent ${agent.id || "unknown"}`];
+    if (routed.accountId) parts.push(`account ${routed.accountId}`);
+    if (routed.reason) parts.push(routed.reason);
+    routePreviewEl.textContent = parts.join(" · ");
+  } catch (e) {
+    routePreviewEl.textContent = "路由不可用: " + (e.message || JSON.stringify(e));
   }
 }
 
@@ -344,6 +379,8 @@ document.getElementById("send").onclick = async () => {
 };
 document.getElementById("cancel").onclick = () => sessionId && call("task/cancel", { sessionId });
 document.getElementById("refreshSessions").onclick = loadSessions;
+document.getElementById("previewRoute").onclick = previewRoute;
+document.getElementById("account").onchange = () => { markActiveAccount(); previewRoute(); };
 document.getElementById("prompt").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("send").click(); });
 
 connect().catch(e => { statusEl.textContent = "连接失败: " + (e.message || JSON.stringify(e)); });

@@ -66,6 +66,9 @@ func TestConsoleServedWithSecurityHeaders(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "accounts/quota") {
 		t.Fatal("console HTML missing accounts/quota integration")
 	}
+	if !strings.Contains(rec.Body.String(), "agents/route") {
+		t.Fatal("console HTML missing agents/route integration")
+	}
 	if !strings.Contains(rec.Body.String(), "session/attach") {
 		t.Fatal("console HTML missing session attach integration")
 	}
@@ -80,6 +83,11 @@ func TestConsoleStaticContract(t *testing.T) {
 		`call("accounts/list", {})`,
 		`call("accounts/list", { provider: "codex" })`,
 		"accounts/quota",
+		"agents/route",
+		"previewRoute",
+		"routePreview",
+		"dataset.accountId",
+		`params.accountId = accountId`,
 		"session/list",
 		"session/attach",
 		"session/create",
