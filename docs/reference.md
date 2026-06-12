@@ -246,7 +246,11 @@ Transport: `ws://HOST:PORT/ws`, JSON-RPC 2.0. Browser clients should
 authenticate with `Sec-WebSocket-Protocol: capd.auth.<base64url-token>`
 (base64url without padding). Non-browser clients may use `Authorization: Bearer
 TOKEN`; `?token=TOKEN` remains supported for backward compatibility with older
-local clients. All session activity arrives as `event` notifications.
+local clients. The bundled Console and Probe pages accept that query token only
+as a bootstrap path: after reading it they remove `token` from the visible URL
+with `history.replaceState`, send WebSocket auth via the `capd.auth.*`
+subprotocol, and do not persist daemon tokens in localStorage or sessionStorage.
+All session activity arrives as `event` notifications.
 
 ### `initialize` — must be first
 

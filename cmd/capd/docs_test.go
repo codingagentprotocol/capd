@@ -89,6 +89,26 @@ func TestReferenceDocsCoverRunFreshQuotaRecovery(t *testing.T) {
 	}
 }
 
+func TestReferenceDocsCoverBrowserTokenCleanup(t *testing.T) {
+	data, err := os.ReadFile("../../docs/reference.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := string(data)
+
+	for _, want := range []string{
+		"`?token=TOKEN` remains supported",
+		"remove `token` from the visible URL",
+		"`history.replaceState`",
+		"`capd.auth.*`\nsubprotocol",
+		"do not persist daemon tokens in localStorage or sessionStorage",
+	} {
+		if !strings.Contains(reference, want) {
+			t.Fatalf("reference docs missing browser token cleanup contract %q", want)
+		}
+	}
+}
+
 func TestTestingDocsCoverLinuxSecretStoreStdinSafety(t *testing.T) {
 	data, err := os.ReadFile("../../docs/testing.md")
 	if err != nil {
