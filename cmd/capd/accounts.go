@@ -377,12 +377,13 @@ func newCodexAccountsCmd() *cobra.Command {
 			defer accounts.Close()
 			id := ""
 			if len(args) == 1 {
-				id = args[0]
+				id = strings.TrimSpace(args[0])
 			} else {
 				id, err = accounts.CurrentAccount(codexauth.Provider)
 				if err != nil {
 					return err
 				}
+				id = strings.TrimSpace(id)
 			}
 			if id == "" {
 				return fmt.Errorf("no Codex account selected")

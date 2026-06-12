@@ -360,7 +360,7 @@ func TestCodexAccountsQuotaAutoUsesLowestCachedQuotaAccount(t *testing.T) {
 
 	var out bytes.Buffer
 	cmd := newAccountsCmd()
-	cmd.SetArgs([]string{"codex", "quota", "auto", "--base-url", srv.URL})
+	cmd.SetArgs([]string{"codex", "quota", " auto ", "--base-url", srv.URL})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	if err := cmd.Execute(); err != nil {
@@ -427,7 +427,7 @@ func TestCodexAccountsQuotaAllRefreshesEveryAccountSafely(t *testing.T) {
 
 	var out bytes.Buffer
 	cmd := newAccountsCmd()
-	cmd.SetArgs([]string{"codex", "quota", "all", "--base-url", srv.URL})
+	cmd.SetArgs([]string{"codex", "quota", " all ", "--base-url", srv.URL})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	if err := cmd.Execute(); err != nil {
@@ -1309,7 +1309,7 @@ func TestResolveUsageAccountAuto(t *testing.T) {
 	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", PrimaryUsedPercent: 5}); err != nil {
 		t.Fatal(err)
 	}
-	acc, err := resolveUsageAccount(accounts, "auto")
+	acc, err := resolveUsageAccount(accounts, " auto ")
 	if err != nil {
 		t.Fatal(err)
 	}

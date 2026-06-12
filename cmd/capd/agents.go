@@ -404,6 +404,7 @@ func routeCLICapabilitySuffix(required protocol.AgentCapabilities) string {
 }
 
 func resolveUsageAccount(accounts *account.Store, accountID string) (account.Account, error) {
+	accountID = strings.TrimSpace(accountID)
 	if accountID == protocol.AccountAuto {
 		acc, err := account.SelectQuotaRouteAccount(accounts, codexauth.Provider)
 		if errors.Is(err, account.ErrUnknownAccount) {
