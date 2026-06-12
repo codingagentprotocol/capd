@@ -350,6 +350,48 @@ func TestSelectQuotaRouteAccountTiePrefersCurrent(t *testing.T) {
 	}
 }
 
+func TestSelectQuotaRouteAccountTieFallsBackToID(t *testing.T) {
+	st := newStore(t)
+	for _, id := range []string{"b", "a"} {
+		if err := st.UpsertAccount(Account{ID: id, Provider: "codex", AuthMode: "oauth"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := SelectQuotaRouteAccount(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "a" {
+		t.Fatalf("selected = %+v", got)
+	}
+
+	// Metadata refreshes update account.updated_at, but equal-score auto
+	// routing should not start bouncing between unknown accounts.
+	a, err := st.LoadAccount("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Email = "a@example.com"
+	if err := st.UpsertAccount(a); err != nil {
+		t.Fatal(err)
+	}
+	b, err := st.LoadAccount("b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Email = "b@example.com"
+	if err := st.UpsertAccount(b); err != nil {
+		t.Fatal(err)
+	}
+	got, err = SelectQuotaRouteAccount(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "a" {
+		t.Fatalf("selected after metadata updates = %+v", got)
+	}
+}
+
 func TestQuotaRouteEvidenceAndReason(t *testing.T) {
 	st := newStore(t)
 	for _, id := range []string{"fresh", "stale", "missing"} {

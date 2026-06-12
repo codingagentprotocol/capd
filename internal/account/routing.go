@@ -36,7 +36,7 @@ func SelectQuotaRouteAccount(st *Store, provider string) (Account, error) {
 	bestScore := quotaRouteScoreAt(st, best, current, now)
 	for _, acc := range accounts[1:] {
 		score := quotaRouteScoreAt(st, acc, current, now)
-		if score < bestScore || (score == bestScore && acc.ID == current) {
+		if score < bestScore || (score == bestScore && routeTieBeats(acc, best, current)) {
 			best = acc
 			bestScore = score
 		}
@@ -102,6 +102,16 @@ func quotaRouteScoreAt(st *Store, acc Account, current string, now time.Time) fl
 		score -= 0.01
 	}
 	return score
+}
+
+func routeTieBeats(candidate, incumbent Account, current string) bool {
+	if candidate.ID == current && incumbent.ID != current {
+		return true
+	}
+	if incumbent.ID == current && candidate.ID != current {
+		return false
+	}
+	return candidate.ID < incumbent.ID
 }
 
 func QuotaSnapshotFresh(q QuotaSnapshot, now time.Time) bool {
