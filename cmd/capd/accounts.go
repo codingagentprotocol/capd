@@ -102,7 +102,13 @@ func newAccountsCmd() *cobra.Command {
 	checkCmd := &cobra.Command{
 		Use:   "check",
 		Short: "Run daemon-side account smoke checks through CAP",
-		Long:  "Run the daemon-side accounts/check RPC and print safe account smoke evidence without token material or runtime paths.",
+		Long: `Run the daemon-side accounts/check RPC through the running capd
+daemon and print safe account smoke evidence without token material or runtime
+paths.
+
+Start capd first with "capd start". For a direct local Codex account and
+SecretStore smoke check that does not require the daemon, use
+"capd accounts codex smoke".`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			provider, _ := cmd.Flags().GetString("provider")
 			jsonOut, _ := cmd.Flags().GetBool("json")

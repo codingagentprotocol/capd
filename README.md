@@ -290,8 +290,8 @@ flowchart TB
 - See [docs/testing.md](docs/testing.md) for standard regression, native
   SecretStore, and live Codex account smoke commands.
 - `capd accounts check --json` exercises the running daemon's CAP
-  `accounts/check` RPC, while `capd accounts codex smoke` performs a direct
-  local CLI smoke check.
+  `accounts/check` RPC and therefore requires `capd start`; `capd accounts
+  codex smoke` performs a direct local CLI smoke check without the daemon.
 - The Web Console exposes the same daemon-side evidence with an `accounts/check`
   readiness gate for multi-account, fresh-quota, and optional native SecretStore
   checks; that gate can refresh quota for every imported Codex account before it

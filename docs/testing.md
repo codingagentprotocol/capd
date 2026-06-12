@@ -81,10 +81,11 @@ points at a different backend than the active SecretStore. Use `--json` to
 capture machine-readable smoke evidence in long tasks or CI logs.
 
 Use `capd accounts check --json` when you want the same safe evidence through
-the running daemon and CAP WebSocket path used by web clients. Unlike
-`capd accounts codex smoke --quota`, it does not refresh remote quota; it
-checks cached quota freshness, SecretStore readability, runtime projection, and
-auto-route evidence without returning runtime paths or token material.
+the running daemon and CAP WebSocket path used by web clients; start the daemon
+first with `capd start`. Unlike `capd accounts codex smoke --quota`, it does
+not refresh remote quota unless `--refresh-quota` is set; it checks cached quota
+freshness, SecretStore readability, runtime projection, and auto-route evidence
+without returning runtime paths or token material.
 Use `capd accounts check --refresh-quota` when you want a single daemon-side
 readiness gate to refresh every imported Codex account through `accounts/quota`
 before checking cached freshness, without printing raw backend usage JSON.

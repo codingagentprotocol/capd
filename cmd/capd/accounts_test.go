@@ -89,6 +89,28 @@ func TestCodexAccountsListShowsZeroQuotaWithoutLeakingSecrets(t *testing.T) {
 	}
 }
 
+func TestAccountsCheckHelpExplainsDaemonRequirement(t *testing.T) {
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--help"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, needle := range []string{
+		"running capd",
+		"daemon",
+		"capd start",
+		"capd accounts codex smoke",
+	} {
+		if !strings.Contains(text, needle) {
+			t.Fatalf("help missing %q: %s", needle, text)
+		}
+	}
+}
+
 func TestCodexAccountsImportMissingAuthDoesNotLeakPath(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	missingPath := filepath.Join(t.TempDir(), "missing-auth.json")
