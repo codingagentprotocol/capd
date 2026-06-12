@@ -99,6 +99,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"MigrateCodexAccountSecretsVerifiesTargetReadableBeforeMetadataUpdate",
 		"RunTaskFreshQuotaFailureSuggestsReadiness",
 		"ReferenceDocsCoverRunFreshQuotaRecovery",
+		"ReferenceDocsCoverBrowserTokenCleanup",
 		"go test ./internal/adapter/codex -run 'TestProbeUsesResolvedCodexBinary$$' -count=1",
 	} {
 		if !strings.Contains(makefile, want) {
