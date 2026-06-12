@@ -45,7 +45,7 @@ To verify Codex account smoke is actually using the native backend:
 
 ```bash
 capd accounts --secret-backend native codex import
-capd accounts --secret-backend native codex smoke --require-secret-backend native --json
+capd accounts --secret-backend native codex smoke --require-secret-backend native --json --timeout 2m
 ```
 
 ## Codex Account Smoke
@@ -73,9 +73,9 @@ capd accounts codex smoke --quota
 For multi-account routing readiness:
 
 ```bash
-CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all
-CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
-CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native
+CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all --timeout 2m
+CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native --timeout 2m
+CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native --timeout 2m
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native
 
 # In another terminal, keep the daemon running for CAP/WebSocket checks:
@@ -137,10 +137,11 @@ When doctor reports missing accounts and the daemon is running, prefer
 as the Web Console. `capd accounts codex import` remains available for direct
 local imports when the daemon is not running.
 
-`capd secretstore check --json --roundtrip --require-backend native` is the
+`capd secretstore check --json --roundtrip --require-backend native --timeout 2m` is the
 smallest direct native SecretStore gate. It opens the active backend, writes,
 reads, and deletes a diagnostic secret, and fails before account checks if the
-daemon/live shell is using the wrong backend. `capd doctor --json --fail
+daemon/live shell is using the wrong backend or an OS credential prompt stalls
+native access. `capd doctor --json --fail
 --verify-secretstore --require-secret-backend native`
 is the recommended preflight before the live chain. It does not refresh quota or
 read token material into the output; it reports daemon health, Codex CLI

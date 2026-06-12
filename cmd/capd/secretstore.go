@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -23,6 +24,7 @@ func newSecretStoreCmd() *cobra.Command {
 			roundTrip, _ := cmd.Flags().GetBool("roundtrip")
 			backend, _ := cmd.Flags().GetString("secret-backend")
 			requireBackend, _ := cmd.Flags().GetString("require-backend")
+			timeout, _ := cmd.Flags().GetDuration("timeout")
 			backend, err := secret.NormalizeBackend(backend)
 			if err != nil {
 				return err
@@ -31,7 +33,13 @@ func newSecretStoreCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			report, err := buildSecretStoreReport(cmd.Context(), secretStoreOptions{
+			checkCtx := cmd.Context()
+			var cancel context.CancelFunc
+			if timeout > 0 {
+				checkCtx, cancel = context.WithTimeout(checkCtx, timeout)
+				defer cancel()
+			}
+			report, err := buildSecretStoreReport(checkCtx, secretStoreOptions{
 				Backend:        backend,
 				RequireBackend: requireBackend,
 				RoundTrip:      roundTrip,
@@ -57,6 +65,7 @@ func newSecretStoreCmd() *cobra.Command {
 	checkCmd.Flags().Bool("roundtrip", false, "write, read, and delete a diagnostic secret in the selected backend")
 	checkCmd.Flags().String("secret-backend", "", "SecretStore backend to open (file or native; default CAPD_SECRET_BACKEND/file)")
 	checkCmd.Flags().String("require-backend", "", "fail unless the selected backend is this value (file or native)")
+	checkCmd.Flags().Duration("timeout", 2*time.Minute, "maximum time to wait for SecretStore backend checks")
 	cmd.AddCommand(checkCmd)
 	return cmd
 }

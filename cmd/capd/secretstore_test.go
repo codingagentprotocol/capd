@@ -55,6 +55,21 @@ func TestSecretStoreCheckFailsOnBackendMismatchAfterJSON(t *testing.T) {
 	}
 }
 
+func TestSecretStoreCheckHelpIncludesTimeout(t *testing.T) {
+	var out bytes.Buffer
+	cmd := newSecretStoreCmd()
+	cmd.SetArgs([]string{"check", "--help"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if !strings.Contains(text, "--timeout") || !strings.Contains(text, "2m") {
+		t.Fatalf("help missing timeout: %s", text)
+	}
+}
+
 func TestSecretStoreCheckRejectsUnknownBackend(t *testing.T) {
 	cmd := newSecretStoreCmd()
 	cmd.SetArgs([]string{"check", "--secret-backend", "mystery"})

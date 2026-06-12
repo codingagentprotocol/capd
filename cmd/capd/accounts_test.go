@@ -150,6 +150,26 @@ func TestAccountsCheckHelpExplainsDaemonRequirement(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsLocalCommandsExposeTimeouts(t *testing.T) {
+	for _, args := range [][]string{
+		{"codex", "quota", "--help"},
+		{"codex", "smoke", "--help"},
+	} {
+		var out bytes.Buffer
+		cmd := newAccountsCmd()
+		cmd.SetArgs(args)
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		text := out.String()
+		if !strings.Contains(text, "--timeout") || !strings.Contains(text, "2m") {
+			t.Fatalf("%v help missing timeout: %s", args, text)
+		}
+	}
+}
+
 func TestPrintAccountsCheckJSONErrorHandlesGenericError(t *testing.T) {
 	var out bytes.Buffer
 	cmd := newAccountsCmd()
@@ -1074,6 +1094,26 @@ func TestCodexAccountsQuotaRawFlagPrintsBackendUsage(t *testing.T) {
 	text := out.String()
 	if !strings.Contains(text, "debugToken") || !strings.Contains(text, "backend-debug-value") {
 		t.Fatalf("raw output missing backend JSON: %s", text)
+	}
+}
+
+func TestCodexAccountsQuotaHonorsTimeout(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "quota", "--base-url", srv.URL, "--timeout", "1ms"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "context deadline exceeded") {
+		t.Fatalf("err = %v out=%s", err, out.String())
 	}
 }
 

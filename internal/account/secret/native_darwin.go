@@ -43,7 +43,7 @@ func (st nativeStore) Put(ctx context.Context, id string, bundle Bundle) (Ref, e
 	if err := st.Delete(ctx, ref); err != nil {
 		return Ref{}, err
 	}
-	if err := keychainAdd(nativeService, ref.ID, data); err != nil {
+	if err := keychainAdd(ctx, nativeService, ref.ID, data); err != nil {
 		return Ref{}, err
 	}
 	return ref, nil
@@ -56,7 +56,7 @@ func (st nativeStore) Get(ctx context.Context, ref Ref) (Bundle, error) {
 	if ref.Backend != "" && ref.Backend != st.Backend() {
 		return Bundle{}, fmt.Errorf("secret backend %q is not %q", ref.Backend, st.Backend())
 	}
-	data, err := keychainFind(nativeService, cleanID(ref.ID))
+	data, err := keychainFind(ctx, nativeService, cleanID(ref.ID))
 	if err != nil {
 		return Bundle{}, err
 	}
@@ -74,14 +74,20 @@ func (st nativeStore) Delete(ctx context.Context, ref Ref) error {
 	if ref.Backend != "" && ref.Backend != st.Backend() {
 		return fmt.Errorf("secret backend %q is not %q", ref.Backend, st.Backend())
 	}
-	err := keychainDelete(nativeService, cleanID(ref.ID))
+	err := keychainDelete(ctx, nativeService, cleanID(ref.ID))
 	if isKeychainNotFound(err) {
 		return nil
 	}
 	return err
 }
 
-func keychainAdd(service, account string, password []byte) error {
+func keychainAdd(ctx context.Context, service, account string, password []byte) error {
+	return keychainWithContext(ctx, func() error {
+		return keychainAddSync(service, account, password)
+	})
+}
+
+func keychainAddSync(service, account string, password []byte) error {
 	svc := []byte(service)
 	acc := []byte(account)
 	var keychain C.SecKeychainRef
@@ -94,7 +100,25 @@ func keychainAdd(service, account string, password []byte) error {
 	))
 }
 
-func keychainFind(service, account string) ([]byte, error) {
+func keychainFind(ctx context.Context, service, account string) ([]byte, error) {
+	type result struct {
+		data []byte
+		err  error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		data, err := keychainFindSync(service, account)
+		ch <- result{data: data, err: err}
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case result := <-ch:
+		return result.data, result.err
+	}
+}
+
+func keychainFindSync(service, account string) ([]byte, error) {
 	svc := []byte(service)
 	acc := []byte(account)
 	var keychain C.SecKeychainRef
@@ -115,7 +139,13 @@ func keychainFind(service, account string) ([]byte, error) {
 	return C.GoBytes(data, C.int(length)), nil
 }
 
-func keychainDelete(service, account string) error {
+func keychainDelete(ctx context.Context, service, account string) error {
+	return keychainWithContext(ctx, func() error {
+		return keychainDeleteSync(service, account)
+	})
+}
+
+func keychainDeleteSync(service, account string) error {
 	svc := []byte(service)
 	acc := []byte(account)
 	var keychain C.SecKeychainRef
@@ -133,6 +163,19 @@ func keychainDelete(service, account string) error {
 	}
 	defer C.CFRelease(C.CFTypeRef(item))
 	return osStatus(C.SecKeychainItemDelete(item))
+}
+
+func keychainWithContext(ctx context.Context, fn func() error) error {
+	ch := make(chan error, 1)
+	go func() {
+		ch <- fn()
+	}()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-ch:
+		return err
+	}
 }
 
 func cBytes(data []byte) unsafe.Pointer {

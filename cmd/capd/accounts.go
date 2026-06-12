@@ -530,6 +530,13 @@ func newCodexAccountsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			baseURL, _ := cmd.Flags().GetString("base-url")
 			rawOut, _ := cmd.Flags().GetBool("raw")
+			timeout, _ := cmd.Flags().GetDuration("timeout")
+			callCtx := cmd.Context()
+			var cancel context.CancelFunc
+			if timeout > 0 {
+				callCtx, cancel = context.WithTimeout(callCtx, timeout)
+				defer cancel()
+			}
 			accounts, secrets, err := accountDepsFromCmd(cmd)
 			if err != nil {
 				return err
@@ -564,7 +571,7 @@ func newCodexAccountsCmd() *cobra.Command {
 				})
 				rows := make([]codexQuotaSummary, 0, len(list))
 				for _, acc := range list {
-					row, err := refreshCodexQuota(cmd.Context(), accounts, secrets, baseURL, acc)
+					row, err := refreshCodexQuota(callCtx, accounts, secrets, baseURL, acc)
 					if err != nil {
 						return fmt.Errorf("%s: %w", acc.ID, err)
 					}
@@ -578,7 +585,7 @@ func newCodexAccountsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			summary, usage, err := refreshCodexQuotaWithUsage(cmd.Context(), accounts, secrets, baseURL, acc)
+			summary, usage, err := refreshCodexQuotaWithUsage(callCtx, accounts, secrets, baseURL, acc)
 			if err != nil {
 				return err
 			}
@@ -593,6 +600,7 @@ func newCodexAccountsCmd() *cobra.Command {
 	}
 	quotaCmd.Flags().String("base-url", "", "override ChatGPT base URL for testing")
 	quotaCmd.Flags().Bool("raw", false, "print raw backend usage JSON for debugging")
+	quotaCmd.Flags().Duration("timeout", 2*time.Minute, "maximum time to wait for local quota refresh and SecretStore reads")
 
 	smokeCmd := &cobra.Command{
 		Use:   "smoke",
@@ -605,9 +613,16 @@ func newCodexAccountsCmd() *cobra.Command {
 			requireAllFreshQuota, _ := cmd.Flags().GetBool("require-all-fresh-quota")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			jsonOut, _ := cmd.Flags().GetBool("json")
+			timeout, _ := cmd.Flags().GetDuration("timeout")
 			requireSecretBackend, err := secret.NormalizeBackend(requireSecretBackend)
 			if err != nil {
 				return err
+			}
+			checkCtx := cmd.Context()
+			var cancel context.CancelFunc
+			if timeout > 0 {
+				checkCtx, cancel = context.WithTimeout(checkCtx, timeout)
+				defer cancel()
 			}
 			accounts, secrets, err := accountDepsFromCmd(cmd)
 			if err != nil {
@@ -649,14 +664,14 @@ func newCodexAccountsCmd() *cobra.Command {
 				if err := secret.EnsureRefBackend(secrets, ref); err != nil {
 					return fmt.Errorf("%s: %w", acc.ID, err)
 				}
-				bundle, err := secrets.Get(cmd.Context(), ref)
+				bundle, err := secrets.Get(checkCtx, ref)
 				if err != nil {
 					return fmt.Errorf("%s: load secret: %w", acc.ID, err)
 				}
 				profile, err := codexauth.RuntimeProjector{
 					Root:    filepath.Join(home, "runtimes"),
 					Secrets: secrets,
-				}.Project(cmd.Context(), acc)
+				}.Project(checkCtx, acc)
 				if err != nil {
 					return fmt.Errorf("%s: project runtime: %w", acc.ID, err)
 				}
@@ -681,7 +696,7 @@ func newCodexAccountsCmd() *cobra.Command {
 						bundle.AccountID = acc.AccountID
 					}
 					updatedAcc, changed := codexauth.AccountWithBundleMetadata(acc, bundle)
-					quotaResult, err := codexquota.Client{BaseURL: baseURL}.Usage(cmd.Context(), acc.ID, bundle)
+					quotaResult, err := codexquota.Client{BaseURL: baseURL}.Usage(checkCtx, acc.ID, bundle)
 					if err != nil {
 						return fmt.Errorf("%s: refresh quota: %w", acc.ID, err)
 					}
@@ -763,6 +778,7 @@ func newCodexAccountsCmd() *cobra.Command {
 	smokeCmd.Flags().Bool("require-fresh-quota", false, "fail unless auto-route selection is backed by fresh cached quota")
 	smokeCmd.Flags().Bool("require-all-fresh-quota", false, "fail unless every imported account has fresh cached quota")
 	smokeCmd.Flags().String("require-secret-backend", "", "fail unless the active secret backend matches this value")
+	smokeCmd.Flags().Duration("timeout", 2*time.Minute, "maximum time to wait for local smoke checks, SecretStore reads, projections, and quota refresh")
 	smokeCmd.Flags().Bool("json", false, "print machine-readable smoke evidence without token material")
 
 	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, removeCmd, quotaCmd, smokeCmd)
