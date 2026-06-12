@@ -1697,11 +1697,65 @@ func TestCodexAccountsSmokeJSONWithoutLeakingSecrets(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 	acc := result.Accounts[0]
-	if acc.ID != "codex-test" || !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK || !acc.SecretBackendOK || !acc.SecretReadable || acc.PrimaryUsed != "0.0%" || acc.PrimaryUsedPercent == nil || *acc.PrimaryUsedPercent != 0 || acc.QuotaState != protocol.AccountQuotaStateFresh || !acc.QuotaFresh || acc.QuotaCheckedAt == 0 {
+	if acc.ID != "codex-test" || !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK || !acc.SecretBackendOK || !acc.SecretReadable || acc.SecretState != protocol.AccountSecretStateReadable || acc.PrimaryUsed != "0.0%" || acc.PrimaryUsedPercent == nil || *acc.PrimaryUsedPercent != 0 || acc.QuotaState != protocol.AccountQuotaStateFresh || !acc.QuotaFresh || acc.QuotaCheckedAt == 0 {
 		t.Fatalf("account = %+v", acc)
 	}
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
+	}
+}
+
+func TestCodexAccountsSmokeJSONKeepsPartialSecretFailureEvidence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, secrets := seedCodexAccount(t)
+	defer accounts.Close()
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err := secret.ParseRef(acc.SecretRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := secrets.Delete(context.Background(), ref); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "load secret: missing") {
+		t.Fatalf("err = %v output=%s", err, out.String())
+	}
+	var result codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatalf("json err = %v output=%s", err, out.String())
+	}
+	if result.OK || result.CheckedAccounts != 1 || len(result.Accounts) != 1 || result.Accounts[0].SecretState != protocol.AccountSecretStateMissing || result.Accounts[0].SecretReadable {
+		t.Fatalf("partial result = %+v", result)
+	}
+	if !containsString(result.NextSteps, "import Codex auth with: capd accounts codex import") {
+		t.Fatalf("nextSteps = %+v", result.NextSteps)
+	}
+	for _, secret := range []string{"access-secret", "refresh-secret", "secretRef", "secret_ref", "rawAuthJson", "CODEX_HOME"} {
+		if strings.Contains(out.String(), secret) {
+			t.Fatalf("smoke partial failure leaked %q: %s", secret, out.String())
+		}
+	}
+}
+
+func TestCodexSmokeSecretRecoveryClassifiesKeychainAccessDenied(t *testing.T) {
+	if got := codexSmokeSecretErrorState(errors.New("load secret: macOS keychain status -128")); got != protocol.AccountSecretStateAccessDenied {
+		t.Fatalf("state = %q", got)
+	}
+	step := codexSmokeSecretNextStep(protocol.AccountSecretStateAccessDenied, secret.BackendNative)
+	for _, want := range []string{"approve macOS Keychain access", "capd start --secret-backend file", "capd accounts --secret-backend file codex import"} {
+		if !strings.Contains(step, want) {
+			t.Fatalf("step missing %q: %q", want, step)
+		}
 	}
 }
 
@@ -2201,12 +2255,37 @@ func TestCodexAccountsSmokeFailsWhenAccountSecretBackendDiffers(t *testing.T) {
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	err = cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), `secret backend = "native", active backend = "file"`) {
+	if err == nil || !strings.Contains(err.Error(), "secret backend mismatch") {
 		t.Fatalf("err = %v", err)
 	}
 	for _, leaked := range []string{"access-secret", "refresh-secret", "native:codex-test"} {
 		if strings.Contains(err.Error(), leaked) || strings.Contains(out.String(), leaked) {
 			t.Fatalf("smoke leaked %q: err=%v out=%s", leaked, err, out.String())
+		}
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "secret backend mismatch") {
+		t.Fatalf("json err = %v", err)
+	}
+	var result codexSmokeResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatalf("json output = %q: %v", out.String(), err)
+	}
+	if result.OK || len(result.Accounts) != 1 || result.Accounts[0].SecretState != protocol.AccountSecretStateBackendMismatch || result.Accounts[0].SecretBackendOK {
+		t.Fatalf("partial result = %+v", result)
+	}
+	if len(result.NextSteps) == 0 || !strings.Contains(result.NextSteps[0], "CAPD_SECRET_BACKEND=native") {
+		t.Fatalf("nextSteps = %+v", result.NextSteps)
+	}
+	for _, leaked := range []string{"access-secret", "refresh-secret", "native:codex-test", "secretRef", "CODEX_HOME"} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("smoke json leaked %q: %s", leaked, out.String())
 		}
 	}
 }

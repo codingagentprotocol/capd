@@ -785,14 +785,21 @@ the native OS backend and keeps the source secret as a rollback path. Add
 			for _, acc := range list {
 				ref, err := secret.ParseRef(acc.SecretRef)
 				if err != nil {
-					return fmt.Errorf("%s: parse secret ref: %w", acc.ID, err)
+					row := codexSmokeSecretFailureRow(acc, false, protocol.AccountSecretStateMalformedRef)
+					result.Accounts = append(result.Accounts, row)
+					return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("%s: parse secret ref: malformed", acc.ID), "remove and re-import malformed Codex account metadata")
 				}
 				if err := secret.EnsureRefBackend(secrets, ref); err != nil {
-					return fmt.Errorf("%s: %w", acc.ID, err)
+					row := codexSmokeSecretFailureRow(acc, false, protocol.AccountSecretStateBackendMismatch)
+					result.Accounts = append(result.Accounts, row)
+					return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("%s: secret backend mismatch", acc.ID), "rerun with CAPD_SECRET_BACKEND="+secretRefBackendLabel(ref)+" or re-import the account with the active SecretStore backend")
 				}
 				bundle, err := secrets.Get(checkCtx, ref)
 				if err != nil {
-					return fmt.Errorf("%s: load secret: %w", acc.ID, err)
+					state := codexSmokeSecretErrorState(err)
+					row := codexSmokeSecretFailureRow(acc, true, state)
+					result.Accounts = append(result.Accounts, row)
+					return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("%s: load secret: %s", acc.ID, state), codexSmokeSecretNextStep(state, result.SecretBackend))
 				}
 				profile, err := codexauth.RuntimeProjector{
 					Root:    filepath.Join(home, "runtimes"),
@@ -816,6 +823,7 @@ the native OS backend and keeps the source secret as a rollback path. Add
 					ProjectionMarkerOK: projection.ProjectionMarkerOK,
 					SecretBackendOK:    true,
 					SecretReadable:     true,
+					SecretState:        protocol.AccountSecretStateReadable,
 				}
 				if refreshQuota {
 					if bundle.AccountID == "" {
@@ -1003,6 +1011,54 @@ func codexSmokeFail(cmd *cobra.Command, jsonOut bool, result codexSmokeResult, i
 	return fmt.Errorf("%s", issue)
 }
 
+func codexSmokeSecretFailureRow(acc account.Account, backendOK bool, state string) codexSmokeAccount {
+	return codexSmokeAccount{
+		ID:              acc.ID,
+		Email:           acc.Email,
+		AuthMode:        acc.AuthMode,
+		SecretBackendOK: backendOK,
+		SecretReadable:  false,
+		SecretState:     state,
+		PrimaryUsed:     "cached-missing",
+		QuotaState:      protocol.AccountQuotaStateMissing,
+	}
+}
+
+func codexSmokeSecretErrorState(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		return protocol.AccountSecretStateTimeout
+	case os.IsNotExist(err):
+		return protocol.AccountSecretStateMissing
+	case strings.Contains(err.Error(), "macOS keychain status -25300"):
+		return protocol.AccountSecretStateMissing
+	case strings.Contains(err.Error(), "macOS keychain status -128"):
+		return protocol.AccountSecretStateAccessDenied
+	default:
+		return protocol.AccountSecretStateUnreadable
+	}
+}
+
+func codexSmokeSecretNextStep(state, backend string) string {
+	switch state {
+	case protocol.AccountSecretStateAccessDenied:
+		return "approve macOS Keychain access, or avoid native prompts by restarting with: capd start --secret-backend file and re-importing accounts with: capd accounts --secret-backend file codex import --auth /path/to/auth.json"
+	case protocol.AccountSecretStateTimeout:
+		return "unlock or approve OS SecretStore access, then rerun: capd accounts codex smoke --json --timeout 2m"
+	case protocol.AccountSecretStateMissing:
+		return codexLocalImportNextStep(backend, false)
+	default:
+		return "re-import the failing Codex account with: capd accounts codex import --auth /path/to/auth.json"
+	}
+}
+
+func secretRefBackendLabel(ref secret.Ref) string {
+	if ref.Backend == "" {
+		return secret.BackendFile
+	}
+	return ref.Backend
+}
+
 type codexSmokeAutoRoute struct {
 	AccountID  string   `json:"accountId"`
 	Reason     string   `json:"reason"`
@@ -1024,6 +1080,7 @@ type codexSmokeAccount struct {
 	ProjectionMarkerOK bool     `json:"projectionMarkerOk"`
 	SecretBackendOK    bool     `json:"secretBackendOk"`
 	SecretReadable     bool     `json:"secretReadable"`
+	SecretState        string   `json:"secretState,omitempty"`
 	PrimaryUsed        string   `json:"primaryUsed"`
 	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
 	QuotaState         string   `json:"quotaState"`

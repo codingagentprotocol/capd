@@ -233,6 +233,9 @@ auto routing, so clients can verify why one account was selected. The
 candidate summary when the Web diagnostics path has partial evidence. The
 `accounts/check.summary` object is the shared machine-readable readiness view
 for CLI, Web, Probe, and automation clients.
+Local `capd accounts codex smoke --json` uses the same safe `secretState`
+vocabulary, so SecretStore read failures still return partial account evidence
+without token material.
 
 Every flag, protocol field, and event is documented in
 [docs/reference.md](docs/reference.md).
