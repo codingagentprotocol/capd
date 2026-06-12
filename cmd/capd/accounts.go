@@ -276,9 +276,10 @@ SecretStore smoke check that does not require the daemon, use
 }
 
 type accountsCheckJSONError struct {
-	OK    bool            `json:"ok"`
-	Error protocol.Error  `json:"error"`
-	Data  json.RawMessage `json:"data,omitempty"`
+	OK        bool            `json:"ok"`
+	Error     protocol.Error  `json:"error"`
+	NextSteps []string        `json:"nextSteps,omitempty"`
+	Data      json.RawMessage `json:"data,omitempty"`
 }
 
 func printAccountsCheckJSONError(cmd *cobra.Command, err error) {
@@ -307,6 +308,10 @@ func printAccountsCheckJSONError(cmd *cobra.Command, err error) {
 	if perr.Data != nil {
 		if data, marshalErr := json.Marshal(perr.Data); marshalErr == nil && string(data) != "null" {
 			payload.Data = data
+			var partial protocol.AccountsCheckResult
+			if err := json.Unmarshal(data, &partial); err == nil {
+				payload.NextSteps = accountsCheckErrorNextSteps(perr.Message, partial)
+			}
 		}
 	}
 	out, marshalErr := json.MarshalIndent(payload, "", "  ")
@@ -314,6 +319,35 @@ func printAccountsCheckJSONError(cmd *cobra.Command, err error) {
 		return
 	}
 	fmt.Fprintln(cmd.OutOrStdout(), string(out))
+}
+
+func accountsCheckErrorNextSteps(message string, partial protocol.AccountsCheckResult) []string {
+	steps := []string{}
+	summary := partial.Summary
+	requiredBackend := summary.RequiredSecretBackend
+	if requiredBackend == "" && strings.Contains(message, `want "native"`) {
+		requiredBackend = secret.BackendNative
+	}
+	if requiredBackend == "" && strings.Contains(message, `want "file"`) {
+		requiredBackend = secret.BackendFile
+	}
+	if requiredBackend != "" && !summary.SecretBackendOK {
+		steps = append(steps, "restart capd with: capd start --secret-backend "+requiredBackend)
+	}
+	if summary.MissingAccounts > 0 || strings.Contains(message, "expected multiple Codex accounts") {
+		backend := partial.SecretBackend
+		if requiredBackend != "" {
+			backend = requiredBackend
+		}
+		steps = append(steps, "import another Codex account through CAP with: capd accounts import --auth /path/to/auth.json")
+		if backend != "" {
+			steps = append(steps, "or import locally with: "+codexLocalImportNextStep(backend, true))
+		}
+	}
+	if strings.Contains(message, "fresh cached quota") || strings.Contains(message, "quota is not fresh") || (!summary.AutoRouteFresh && summary.CheckedAccounts > 0) || summary.StaleQuotaAccounts > 0 || summary.MissingQuotaAccounts > 0 {
+		steps = append(steps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness")
+	}
+	return compactStrings(steps)
 }
 
 func newCodexAccountsCmd() *cobra.Command {

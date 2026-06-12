@@ -734,6 +734,9 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if failure.OK || failure.Error.Code != protocol.CodeInvalidParams || !strings.Contains(failure.Error.Message, `want "native"`) || len(failure.Data) == 0 {
 		t.Fatalf("json failure = %+v", failure)
 	}
+	if !containsString(failure.NextSteps, "restart capd with: capd start --secret-backend native") {
+		t.Fatalf("json failure nextSteps = %+v", failure.NextSteps)
+	}
 	var partial protocol.AccountsCheckResult
 	if unmarshalErr := json.Unmarshal(failure.Data, &partial); unmarshalErr != nil {
 		t.Fatal(unmarshalErr)
@@ -744,6 +747,70 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	for _, leaked := range []string{token, "access-secret", "refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
 		if strings.Contains(out.String(), leaked) {
 			t.Fatalf("accounts check json gate leaked %q: %s", leaked, out.String())
+		}
+	}
+}
+
+func TestAccountsCheckJSONErrorSuggestsSecondAccountSafely(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	token := "tok-check-second"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	accounts, secrets := seedCodexAccount(t)
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 12}); err != nil {
+		t.Fatal(err)
+	}
+	port := freeTCPPort(t)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", strconv.Itoa(port))
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	s := server.New(server.Options{
+		Host: "127.0.0.1", Port: port, Token: token, Version: "it",
+		Accounts: accounts, Secrets: secrets, RuntimeRoot: filepath.Join(home, "runtimes"),
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	go func() { errCh <- s.Run(ctx) }()
+	waitForHealthz(t, port)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("server shutdown: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("server did not shut down")
+		}
+		accounts.Close()
+	})
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--json", "--require-multiple"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "expected multiple Codex accounts") {
+		t.Fatalf("err = %v", err)
+	}
+	var failure accountsCheckJSONError
+	if err := json.Unmarshal(out.Bytes(), &failure); err != nil {
+		t.Fatalf("json error output = %q: %v", out.String(), err)
+	}
+	for _, want := range []string{
+		"import another Codex account through CAP with: capd accounts import --auth /path/to/auth.json",
+		"or import locally with: import a second Codex account with: capd accounts codex import --auth /path/to/auth.json",
+	} {
+		if !containsString(failure.NextSteps, want) {
+			t.Fatalf("json failure nextSteps missing %q: %+v", want, failure.NextSteps)
+		}
+	}
+	for _, leaked := range []string{token, "access-secret", "refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts check json next steps leaked %q: %s", leaked, out.String())
 		}
 	}
 }
