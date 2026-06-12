@@ -136,6 +136,8 @@ func TestConsoleStaticContract(t *testing.T) {
 		"routePreview",
 		"routeDecisionSummary",
 		"route ${routeDecisionSummary(route)}",
+		"routeError",
+		"route error ${routeError}",
 		"readiness",
 		"refreshDiagnostic",
 		"刷新诊断",

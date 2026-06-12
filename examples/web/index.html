@@ -270,9 +270,12 @@ async function refreshReadinessDiagnostic() {
     if (document.getElementById("requireNativeSecret").checked) checkParams.requireSecretBackend = "native";
     const result = await call("accounts/check", checkParams);
     let route = null;
+    let routeError = "";
     try {
       route = await call("agents/route", { accountId: "auto" });
-    } catch (_) {}
+    } catch (e) {
+      routeError = e.message || JSON.stringify(e);
+    }
     const accounts = result.accounts || [];
     const freshCount = accounts.filter(a => a.quotaFresh).length;
     const issues = [];
@@ -290,6 +293,7 @@ async function refreshReadinessDiagnostic() {
     if (accountEvidence) parts.push(`accounts ${accountEvidence}`);
     if (autoRoute) parts.push(`auto ${autoRoute.accountId || (route && route.accountId) || "unknown"} ${routeEvidenceSummary(autoRoute)}`);
     if (route) parts.push(`route ${routeDecisionSummary(route)}`);
+    if (routeError) parts.push(`route error ${routeError}`);
     readinessEl.className = issues.length ? "warn" : "ok";
     readinessEl.textContent = issues.length ? `${parts.join(" · ")} · ${issues.join(" · ")}` : `${parts.join(" · ")} · ready`;
   } catch (e) {
