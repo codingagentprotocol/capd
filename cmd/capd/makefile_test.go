@@ -135,6 +135,8 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"SecretStoreCheckFailsOnBackendMismatchAfterJSON",
 		"MigrateCodexAccountSecretsVerifiesTargetReadableBeforeMetadataUpdate",
 		"RunTaskFreshQuotaFailureSuggestsReadiness",
+		"RunTaskFreshQuotaFailurePrefersRouteSecretBackend",
+		"ReferenceDocsCoverRouteCandidateEvidence",
 		"DocsCoverPromptFreeBrowserProbeRefresh",
 		"ReferenceDocsCoverRunFreshQuotaRecovery",
 		"ReferenceDocsCoverBrowserTokenCleanup",

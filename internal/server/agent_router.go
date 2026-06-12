@@ -9,6 +9,7 @@ import (
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/discovery"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
@@ -157,6 +158,9 @@ func (s *Server) routeFreshQuotaError(acc account.Account) *protocol.Error {
 	}
 	evidence := account.QuotaRouteEvidence(s.opts.Accounts, acc)
 	data := protocol.AgentRouteErrorData{AccountRoute: &evidence}
+	if ref, err := secret.ParseRef(acc.SecretRef); err == nil {
+		data.SecretBackend = ref.Backend
+	}
 	if candidates, err := account.QuotaRouteCandidates(s.opts.Accounts, codexauth.Provider); err == nil {
 		data.RouteCandidates = candidates
 	}

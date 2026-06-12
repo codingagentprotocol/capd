@@ -411,6 +411,99 @@ func TestRunTaskFreshQuotaFailureSuggestsReadiness(t *testing.T) {
 	}
 }
 
+func TestRunTaskFreshQuotaFailurePrefersRouteSecretBackend(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	token := "tok-run-fresh-native"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			t.Errorf("accept: %v", err)
+			return
+		}
+		defer conn.CloseNow()
+		for {
+			_, data, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			var req struct {
+				ID     int    `json:"id"`
+				Method string `json:"method"`
+			}
+			if err := json.Unmarshal(data, &req); err != nil {
+				t.Errorf("request json: %v", err)
+				return
+			}
+			switch req.Method {
+			case protocol.MethodInitialize:
+				writeWSJSON(t, r.Context(), conn, map[string]any{
+					"jsonrpc": "2.0",
+					"id":      req.ID,
+					"result":  protocol.InitializeResult{ProtocolVersion: protocol.Version},
+				})
+			case protocol.MethodSessionCreate:
+				writeWSJSON(t, r.Context(), conn, map[string]any{
+					"jsonrpc": "2.0",
+					"id":      req.ID,
+					"error": &protocol.Error{
+						Code:    protocol.CodeInvalidParams,
+						Message: "auto route does not have fresh cached quota",
+						Data: protocol.AgentRouteErrorData{
+							SecretBackend: secret.BackendNative,
+							AccountRoute: &protocol.AccountRouteEvidence{
+								AccountID:  "codex-stale",
+								QuotaState: protocol.AccountQuotaStateStale,
+								Score:      75,
+							},
+						},
+					},
+				})
+				return
+			default:
+				t.Errorf("unexpected method %q", req.Method)
+				return
+			}
+		}
+	}))
+	defer ts.Close()
+	host, port, err := net.SplitHostPort(strings.TrimPrefix(ts.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+	t.Setenv(secret.EnvBackend, secret.BackendFile)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := newRunCmd()
+	cmd.SetContext(ctx)
+	cmd.SetOut(&bytes.Buffer{})
+	err = runTask(cmd, runOpts{
+		agent:             "codex",
+		account:           protocol.AccountAuto,
+		requireFreshQuota: true,
+		prompt:            "hello",
+	})
+	if err == nil {
+		t.Fatal("expected fresh quota error")
+	}
+	text := err.Error()
+	want := "capd accounts check --json --readiness --require-secret-backend native --timeout 2m"
+	if !strings.Contains(text, want) {
+		t.Fatalf("error missing %q: %s", want, text)
+	}
+	if strings.Contains(text, "--require-secret-backend file") {
+		t.Fatalf("error used env backend instead of route backend: %s", text)
+	}
+	if strings.Contains(text, token) {
+		t.Fatalf("error leaked token: %s", text)
+	}
+}
+
 func writeWSJSON(t *testing.T, ctx context.Context, conn *websocket.Conn, v any) {
 	t.Helper()
 	data, err := json.Marshal(v)

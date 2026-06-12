@@ -121,6 +121,7 @@ type AgentRouteResult struct {
 type AgentRouteErrorData struct {
 	AccountRoute    *AccountRouteEvidence  `json:"accountRoute,omitempty"`
 	RouteCandidates []AccountRouteEvidence `json:"routeCandidates,omitempty"`
+	SecretBackend   string                 `json:"secretBackend,omitempty"`
 }
 
 type AccountRouteEvidence struct {

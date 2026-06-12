@@ -762,6 +762,9 @@ func TestAgentsRouteAutoAccountRequireFreshQuota(t *testing.T) {
 	if data.AccountRoute == nil || data.AccountRoute.AccountID != "codex-test" || data.AccountRoute.QuotaState != protocol.AccountQuotaStateMissing || data.AccountRoute.Fresh {
 		t.Fatalf("fresh quota error data accountRoute = %+v", data.AccountRoute)
 	}
+	if data.SecretBackend != secret.BackendFile {
+		t.Fatalf("fresh quota error data secretBackend = %q", data.SecretBackend)
+	}
 	if len(data.RouteCandidates) != 1 || data.RouteCandidates[0].AccountID != "codex-test" || data.RouteCandidates[0].QuotaState != protocol.AccountQuotaStateMissing {
 		t.Fatalf("fresh quota error data routeCandidates = %+v", data.RouteCandidates)
 	}

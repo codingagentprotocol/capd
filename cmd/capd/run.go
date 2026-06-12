@@ -12,6 +12,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/spf13/cobra"
 
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/config"
 	"github.com/codingagentprotocol/capd/internal/daemon"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
@@ -251,9 +252,36 @@ func runTaskErrorWithNextStep(err error, o runOpts) error {
 		return nil
 	}
 	if o.requireFreshQuota && strings.Contains(strings.ToLower(err.Error()), "fresh") {
-		return fmt.Errorf("%w%s\nnext: refresh and verify daemon-side readiness with: %s\nnext: preview routing with: capd agents route --account auto --require-fresh-quota --json", err, runTaskRouteErrorEvidence(err), accountsCheckReadinessCommandFromEnv())
+		return fmt.Errorf("%w%s\nnext: refresh and verify daemon-side readiness with: %s\nnext: preview routing with: capd agents route --account auto --require-fresh-quota --json", err, runTaskRouteErrorEvidence(err), runTaskReadinessCommand(err))
 	}
 	return err
+}
+
+func runTaskReadinessCommand(err error) string {
+	if backend := runTaskRouteSecretBackend(err); backend != "" {
+		return accountsCheckReadinessCommand(backend)
+	}
+	return accountsCheckReadinessCommandFromEnv()
+}
+
+func runTaskRouteSecretBackend(err error) string {
+	var perr *protocol.Error
+	if !errors.As(err, &perr) || perr.Data == nil {
+		return ""
+	}
+	data, marshalErr := json.Marshal(perr.Data)
+	if marshalErr != nil {
+		return ""
+	}
+	var routeData protocol.AgentRouteErrorData
+	if unmarshalErr := json.Unmarshal(data, &routeData); unmarshalErr != nil {
+		return ""
+	}
+	backend, err := secret.NormalizeBackend(routeData.SecretBackend)
+	if err != nil {
+		return ""
+	}
+	return backend
 }
 
 func runTaskRouteErrorEvidence(err error) string {

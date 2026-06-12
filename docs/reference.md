@@ -141,8 +141,9 @@ follow-ups.
 
 When `--account auto --require-fresh-quota` fails because the selected Codex
 account lacks fresh cached quota, `capd run` prints any safe daemon-provided
-`accountRoute` and `routeCandidates` evidence, then prints recovery commands
-that point back to the shared readiness path:
+`accountRoute`, `routeCandidates`, and `secretBackend` evidence, then prints recovery commands
+that point back to the shared readiness path and prefer that safe account
+SecretStore backend when present:
 `capd accounts check --json --readiness` to refresh and verify daemon-side quota
 evidence, or
 `capd agents route --account auto --require-fresh-quota --json` to preview the
@@ -294,9 +295,10 @@ scoring: fresh cached primary quota uses the actual usage percent, while missing
 quota or rows older than 30 minutes receive a conservative unknown score until
 `accounts/quota` or `agents/usage` refreshes them. Set `requireFreshQuota:true`
 with `accountId:"auto"` to fail instead of routing on missing or stale quota;
-that fresh-quota error includes safe `data.accountRoute` and
-`data.routeCandidates` evidence so clients can show the stale or missing quota
-state without exposing token material.
+that fresh-quota error includes safe `data.accountRoute`,
+`data.routeCandidates`, and `data.secretBackend` evidence so clients can show
+the stale or missing quota state and choose the matching readiness backend
+without exposing token material or SecretStore refs.
 When account routing is in play, `accountRoute` reports the selected
 `accountId`, score, `quotaState` (`fresh`, `stale`, or `missing`), freshness,
 optional primary usage percent, and optional checked timestamp without exposing

@@ -20,12 +20,16 @@ func TestReferenceDocsCoverRouteCandidateEvidence(t *testing.T) {
 		"current-account\ntie-break",
 		"`accountRoute` should match the first",
 		"route candidate\ncount",
+		"`accountRoute`, `routeCandidates`, and `secretBackend` evidence",
+		"prefer that safe account\nSecretStore backend when present",
+		"`data.routeCandidates`, and `data.secretBackend` evidence",
+		"without exposing token material or SecretStore refs",
 		`{"provider", "currentAccountId", "secretBackend", "checkedAccounts", "quotaRefreshed", "summary", "autoRoute", "routeCandidates", "accounts"}`,
 		"`routeCandidates` is included with the",
 		"same ordering, `reason`, and redaction contract",
 		"why `autoRoute` was selected without making a second route",
 		"partial evidence may still include cached\n`routeCandidates`",
-		"fresh-quota error includes safe `data.accountRoute` and\n`data.routeCandidates` evidence",
+		"fresh-quota error includes safe `data.accountRoute`,\n`data.routeCandidates`, and `data.secretBackend` evidence",
 		"failing text output includes the selected route and route-candidate quota evidence",
 	} {
 		if !strings.Contains(reference, want) {
@@ -170,7 +174,8 @@ func TestReferenceDocsCoverRunFreshQuotaRecovery(t *testing.T) {
 		"`--account auto --require-fresh-quota` fails",
 		"`capd accounts check --json --readiness`",
 		"`capd agents route --account auto --require-fresh-quota --json`",
-		"prints any safe daemon-provided\n`accountRoute` and `routeCandidates` evidence",
+		"prints any safe daemon-provided\n`accountRoute`, `routeCandidates`, and `secretBackend` evidence",
+		"prefer that safe account\nSecretStore backend when present",
 		"preview the\nroute gate before sending another prompt",
 	} {
 		if !strings.Contains(reference, want) {
