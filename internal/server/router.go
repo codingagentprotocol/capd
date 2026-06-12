@@ -148,11 +148,12 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 			}
 		} else if params.AccountID == protocol.AccountAuto {
 			routed, perr := s.routeAgent(ctx, protocol.AgentRouteParams{
-				AccountID:    protocol.AccountAuto,
-				Model:        params.Model,
-				Effort:       params.Effort,
-				Capabilities: routeRequirements(routeParamsForCreate(params)),
-				Prefer:       []string{agentID},
+				AccountID:         protocol.AccountAuto,
+				Model:             params.Model,
+				Effort:            params.Effort,
+				Capabilities:      routeRequirements(routeParamsForCreate(params)),
+				Prefer:            []string{agentID},
+				RequireFreshQuota: params.RequireFreshQuota,
 			})
 			if perr != nil {
 				return nil, perr

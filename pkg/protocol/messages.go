@@ -177,10 +177,11 @@ const (
 )
 
 type SessionCreateParams struct {
-	AgentID   string `json:"agentId"`             // use "auto" to let capd choose
-	AccountID string `json:"accountId,omitempty"` // optional provider account id, currently supported by codex
-	Cwd       string `json:"cwd,omitempty"`       // working directory for the agent
-	Resume    string `json:"resume,omitempty"`    // agent-native session id to resume
+	AgentID           string `json:"agentId"`                     // use "auto" to let capd choose
+	AccountID         string `json:"accountId,omitempty"`         // optional provider account id, currently supported by codex
+	RequireFreshQuota bool   `json:"requireFreshQuota,omitempty"` // with accountId:auto, fail unless auto routing has fresh quota
+	Cwd               string `json:"cwd,omitempty"`               // working directory for the agent
+	Resume            string `json:"resume,omitempty"`            // agent-native session id to resume
 	// PermissionMode is one of the Permission* constants. Interactive
 	// per-action approval (approval.needed events) is a future milestone.
 	PermissionMode string `json:"permissionMode,omitempty"`

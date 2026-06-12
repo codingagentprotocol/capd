@@ -49,6 +49,7 @@
   <input id="cwd" list="cwds" placeholder="项目目录（留空=主目录）" style="flex:0 0 260px" />
   <datalist id="cwds"></datalist>
   <input id="prompt" placeholder="让 agent 干点什么…" />
+  <label><input id="requireFreshQuota" type="checkbox" /> fresh quota</label>
   <button id="previewRoute">预览路由</button>
   <button id="refreshSelectedQuota">刷新所选 quota</button>
   <button id="send">发送</button>
@@ -225,6 +226,7 @@ async function previewRoute() {
   const accountId = document.getElementById("account").value;
   const params = {};
   if (accountId) params.accountId = accountId;
+  if (accountId === "auto" && document.getElementById("requireFreshQuota").checked) params.requireFreshQuota = true;
   try {
     const routed = await call("agents/route", params);
     const agent = routed.agent || {};
@@ -381,27 +383,33 @@ async function connect() {
 }
 
 document.getElementById("send").onclick = async () => {
-  const prompt = document.getElementById("prompt").value.trim();
-  if (!prompt) return;
-  document.getElementById("prompt").value = "";
-  if (!sessionId) {
-    const cwd = document.getElementById("cwd").value.trim();
-    const accountId = document.getElementById("account").value;
-    const create = { agentId: document.getElementById("agent").value, cwd };
-    if (accountId) create.accountId = accountId;
-    const res = await call("session/create", create);
-    sessionId = res.sessionId;
-    line("ev-sys", `· 新会话 ${sessionId} @ ${cwd || "~"}`);
-    await loadSessions();
+  try {
+    const prompt = document.getElementById("prompt").value.trim();
+    if (!prompt) return;
+    document.getElementById("prompt").value = "";
+    if (!sessionId) {
+      const cwd = document.getElementById("cwd").value.trim();
+      const accountId = document.getElementById("account").value;
+      const create = { agentId: document.getElementById("agent").value, cwd };
+      if (accountId) create.accountId = accountId;
+      if (accountId === "auto" && document.getElementById("requireFreshQuota").checked) create.requireFreshQuota = true;
+      const res = await call("session/create", create);
+      sessionId = res.sessionId;
+      line("ev-sys", `· 新会话 ${sessionId} @ ${cwd || "~"}`);
+      await loadSessions();
+    }
+    line("ev-sys", `» ${prompt}`);
+    await call("task/send", { sessionId, prompt });
+  } catch (e) {
+    line("ev-err", `✗ 发送失败: ${e.message || JSON.stringify(e)}`);
   }
-  line("ev-sys", `» ${prompt}`);
-  await call("task/send", { sessionId, prompt });
 };
 document.getElementById("cancel").onclick = () => sessionId && call("task/cancel", { sessionId });
 document.getElementById("refreshSessions").onclick = loadSessions;
 document.getElementById("previewRoute").onclick = previewRoute;
 document.getElementById("refreshSelectedQuota").onclick = refreshSelectedQuota;
 document.getElementById("account").onchange = () => { markActiveAccount(); previewRoute(); };
+document.getElementById("requireFreshQuota").onchange = previewRoute;
 document.getElementById("prompt").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("send").click(); });
 
 connect().catch(e => { statusEl.textContent = "连接失败: " + (e.message || JSON.stringify(e)); });

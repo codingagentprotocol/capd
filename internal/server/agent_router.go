@@ -30,10 +30,11 @@ func routeParamsForCreate(params protocol.SessionCreateParams) protocol.AgentRou
 		required.Effort = true
 	}
 	return protocol.AgentRouteParams{
-		Model:        params.Model,
-		Effort:       params.Effort,
-		AccountID:    params.AccountID,
-		Capabilities: required,
+		Model:             params.Model,
+		Effort:            params.Effort,
+		AccountID:         params.AccountID,
+		Capabilities:      required,
+		RequireFreshQuota: params.RequireFreshQuota,
 	}
 }
 

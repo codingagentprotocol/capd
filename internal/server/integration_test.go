@@ -716,6 +716,37 @@ func TestSessionCreateAutoAccountBindsLowestCachedQuota(t *testing.T) {
 	}
 }
 
+func TestSessionCreateAutoAccountRequireFreshQuota(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:           protocol.AgentAuto,
+		AccountID:         protocol.AccountAuto,
+		RequireFreshQuota: true,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "fresh cached quota") {
+		t.Fatalf("response = %+v", resp)
+	}
+
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 6}); err != nil {
+		t.Fatal(err)
+	}
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:           protocol.AgentAuto,
+		AccountID:         protocol.AccountAuto,
+		RequireFreshQuota: true,
+	}), &created)
+	accountID, err := accounts.SessionAccount(created.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accountID != "codex-test" {
+		t.Fatalf("session account = %q", accountID)
+	}
+}
+
 func TestSessionCreateCodexWithAutoAccount(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
 	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 5}); err != nil {
@@ -727,6 +758,37 @@ func TestSessionCreateCodexWithAutoAccount(t *testing.T) {
 	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
 		AgentID:   "codex",
 		AccountID: protocol.AccountAuto,
+	}), &created)
+	accountID, err := accounts.SessionAccount(created.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accountID != "codex-test" {
+		t.Fatalf("session account = %q", accountID)
+	}
+}
+
+func TestSessionCreateCodexWithAutoAccountRequireFreshQuota(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:           "codex",
+		AccountID:         protocol.AccountAuto,
+		RequireFreshQuota: true,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "fresh cached quota") {
+		t.Fatalf("response = %+v", resp)
+	}
+
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 6}); err != nil {
+		t.Fatal(err)
+	}
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:           "codex",
+		AccountID:         protocol.AccountAuto,
+		RequireFreshQuota: true,
 	}), &created)
 	accountID, err := accounts.SessionAccount(created.SessionID)
 	if err != nil {

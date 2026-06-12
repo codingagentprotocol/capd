@@ -207,6 +207,7 @@ The response never returns token material, `secret_ref`, or raw backend JSON.
 |-------|------|---------|---------|
 | `agentId` | string | required | agent to drive, or `auto` to route |
 | `accountId` | string | — | imported account id, or `auto` to choose by conservative Codex quota scoring; currently supported for Codex sessions |
+| `requireFreshQuota` | bool | `false` | with `accountId:"auto"`, fail unless the selected Codex account has fresh cached quota |
 | `cwd` | string | user home | project directory; must exist |
 | `permissionMode` | string | `""` (default) | `acceptEdits` · `full`; `full` is rejected at filesystem root |
 | `model` | string | agent default | agent-native model id |
