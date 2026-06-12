@@ -217,6 +217,16 @@ func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
 	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 12}); err != nil {
 		t.Fatal(err)
 	}
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": "pro",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": 12},
+			},
+		})
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
 	req := httptest.NewRequest(http.MethodGet, "/probe/data?readiness=1&requireSecretBackend=file", nil)
 	req.Header.Set("Authorization", "Bearer it-token")
 	rec := httptest.NewRecorder()
@@ -233,6 +243,9 @@ func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
 	}
 	if got.AccountsCheck == nil || got.AccountsCheck.CheckedAccounts != 1 {
 		t.Fatalf("partial accountsCheck = %+v", got.AccountsCheck)
+	}
+	if len(got.AccountsCheck.Accounts) != 1 || !got.AccountsCheck.Accounts[0].QuotaFresh || !got.AccountsCheck.Accounts[0].RuntimeReady {
+		t.Fatalf("partial account evidence = %+v", got.AccountsCheck.Accounts)
 	}
 	if len(got.Errors) == 0 || !strings.Contains(got.Errors[0].Message, "expected multiple Codex accounts") {
 		t.Fatalf("errors = %+v", got.Errors)

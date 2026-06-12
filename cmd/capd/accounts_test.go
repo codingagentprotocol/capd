@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -141,10 +142,25 @@ func TestAccountsCheckHelpExplainsDaemonRequirement(t *testing.T) {
 		"capd start",
 		"capd accounts codex smoke",
 		"--readiness",
+		"--timeout",
 	} {
 		if !strings.Contains(text, needle) {
 			t.Fatalf("help missing %q: %s", needle, text)
 		}
+	}
+}
+
+func TestPrintAccountsCheckJSONErrorHandlesGenericError(t *testing.T) {
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetOut(&out)
+	printAccountsCheckJSONError(cmd, fmt.Errorf("context deadline exceeded"))
+	var got accountsCheckJSONError
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.OK || got.Error.Code != protocol.CodeInternalError || !strings.Contains(got.Error.Message, "context deadline exceeded") {
+		t.Fatalf("error json = %+v", got)
 	}
 }
 

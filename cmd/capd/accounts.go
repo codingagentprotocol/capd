@@ -174,6 +174,7 @@ SecretStore smoke check that does not require the daemon, use
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			refreshQuota, _ := cmd.Flags().GetBool("refresh-quota")
 			readiness, _ := cmd.Flags().GetBool("readiness")
+			timeout, _ := cmd.Flags().GetDuration("timeout")
 			if readiness {
 				refreshQuota = true
 				requireMultiple = true
@@ -187,7 +188,13 @@ SecretStore smoke check that does not require the daemon, use
 			if err != nil {
 				return err
 			}
-			raw, err := daemonRPCCall(cmd.Context(), "capd-accounts-check", protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+			callCtx := cmd.Context()
+			var cancel context.CancelFunc
+			if timeout > 0 {
+				callCtx, cancel = context.WithTimeout(callCtx, timeout)
+				defer cancel()
+			}
+			raw, err := daemonRPCCall(callCtx, "capd-accounts-check", protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
 				Provider:             provider,
 				RefreshQuota:         refreshQuota,
 				RequireMultiple:      requireMultiple,
@@ -249,6 +256,7 @@ SecretStore smoke check that does not require the daemon, use
 	checkCmd.Flags().String("require-secret-backend", "", "fail unless daemon account check uses this SecretStore backend")
 	checkCmd.Flags().Bool("refresh-quota", false, "refresh every imported Codex account quota through the daemon before checking")
 	checkCmd.Flags().Bool("readiness", false, "run the daemon-side Codex readiness gate: refresh quota, require multiple accounts, fresh auto-route quota, all fresh quotas, and native SecretStore by default")
+	checkCmd.Flags().Duration("timeout", 2*time.Minute, "maximum time to wait for daemon-side accounts/check")
 	checkCmd.Flags().Bool("json", false, "print accounts/check result as JSON without token material")
 
 	cmd.AddCommand(listCmd, importCmd, checkCmd, newCodexAccountsCmd())
@@ -264,6 +272,17 @@ type accountsCheckJSONError struct {
 func printAccountsCheckJSONError(cmd *cobra.Command, err error) {
 	perr, ok := err.(*protocol.Error)
 	if !ok {
+		payload := accountsCheckJSONError{
+			OK: false,
+			Error: protocol.Error{
+				Code:    protocol.CodeInternalError,
+				Message: err.Error(),
+			},
+		}
+		out, marshalErr := json.MarshalIndent(payload, "", "  ")
+		if marshalErr == nil {
+			fmt.Fprintln(cmd.OutOrStdout(), string(out))
+		}
 		return
 	}
 	payload := accountsCheckJSONError{

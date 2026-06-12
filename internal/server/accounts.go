@@ -390,9 +390,6 @@ func validateAccountsCheckPreflight(secretBackend string, checkedAccounts int, p
 	if params.RequireSecretBackend != "" && secretBackend != params.RequireSecretBackend {
 		return protocol.NewError(protocol.CodeInvalidParams, "secret backend = %q, want %q", secretBackend, params.RequireSecretBackend)
 	}
-	if params.RequireMultiple && checkedAccounts < 2 {
-		return protocol.NewError(protocol.CodeInvalidParams, "expected multiple Codex accounts, found %d", checkedAccounts)
-	}
 	if params.RefreshQuota && checkedAccounts == 0 {
 		return protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
 	}

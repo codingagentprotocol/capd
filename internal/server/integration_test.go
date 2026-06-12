@@ -1580,7 +1580,7 @@ func TestAccountsCheckAllFreshFailureReportsEveryStaleAccountSafely(t *testing.T
 	}
 }
 
-func TestAccountsCheckReadinessPreflightAvoidsQuotaCalls(t *testing.T) {
+func TestAccountsCheckReadinessBackendMismatchAvoidsQuotaCalls(t *testing.T) {
 	s, ts, _, _ := newCodexAccountIntegrationServer(t)
 	var quotaCalls atomic.Int32
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1591,43 +1591,68 @@ func TestAccountsCheckReadinessPreflightAvoidsQuotaCalls(t *testing.T) {
 	s.opts.CodexQuotaBaseURL = backend.URL
 	c := initialized(t, ts)
 
-	for _, tc := range []struct {
-		name string
-		in   protocol.AccountsCheckParams
-		want string
-	}{
-		{
-			name: "secret backend mismatch",
-			in: protocol.AccountsCheckParams{
-				Provider:             codexauth.Provider,
-				RefreshQuota:         true,
-				RequireSecretBackend: secret.BackendNative,
+	resp := c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider:             codexauth.Provider,
+		RefreshQuota:         true,
+		RequireSecretBackend: secret.BackendNative,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, `secret backend = "file", want "native"`) {
+		t.Fatalf("response = %+v", resp)
+	}
+	partial := accountsCheckErrorData(t, resp.Error)
+	if partial.CheckedAccounts != 1 || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 0 {
+		t.Fatalf("partial evidence = %+v", partial)
+	}
+	if quotaCalls.Load() != 0 {
+		t.Fatalf("quota calls = %d", quotaCalls.Load())
+	}
+}
+
+func TestAccountsCheckReadinessSingleAccountFailureKeepsCheckedEvidence(t *testing.T) {
+	s, ts, _, _ := newCodexAccountIntegrationServer(t)
+	var quotaCalls atomic.Int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		quotaCalls.Add(1)
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": "pro",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": 11},
 			},
-			want: `secret backend = "file", want "native"`,
-		},
-		{
-			name: "multiple accounts required",
-			in: protocol.AccountsCheckParams{
-				Provider:        codexauth.Provider,
-				RefreshQuota:    true,
-				RequireMultiple: true,
-			},
-			want: "expected multiple Codex accounts",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			resp := c.call(protocol.MethodAccountsCheck, tc.in)
-			if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, tc.want) {
-				t.Fatalf("response = %+v", resp)
-			}
-			partial := accountsCheckErrorData(t, resp.Error)
-			if partial.CheckedAccounts != 1 || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 0 {
-				t.Fatalf("partial evidence = %+v", partial)
-			}
-			if quotaCalls.Load() != 0 {
-				t.Fatalf("quota calls = %d", quotaCalls.Load())
-			}
 		})
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider:             codexauth.Provider,
+		RefreshQuota:         true,
+		RequireMultiple:      true,
+		RequireFreshQuota:    true,
+		RequireAllFreshQuota: true,
+		RequireSecretBackend: secret.BackendFile,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "expected multiple Codex accounts, found 1") {
+		t.Fatalf("response = %+v", resp)
+	}
+	partial := accountsCheckErrorData(t, resp.Error)
+	if partial.CheckedAccounts != 1 || !partial.QuotaRefreshed || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 1 || partial.AutoRoute == nil || !partial.AutoRoute.Fresh {
+		t.Fatalf("partial evidence = %+v", partial)
+	}
+	if partial.Accounts[0].ID != "codex-test" || !partial.Accounts[0].RuntimeReady || !partial.Accounts[0].QuotaFresh || partial.Accounts[0].PrimaryUsedPercent == nil || *partial.Accounts[0].PrimaryUsedPercent != 11 {
+		t.Fatalf("account evidence = %+v", partial.Accounts[0])
+	}
+	if len(partial.RouteCandidates) != 1 || !partial.RouteCandidates[0].Fresh {
+		t.Fatalf("route candidates = %+v", partial.RouteCandidates)
+	}
+	if quotaCalls.Load() != 1 {
+		t.Fatalf("quota calls = %d", quotaCalls.Load())
+	}
+	data, _ := json.Marshal(partial)
+	for _, leaked := range []string{"test-token", "secretRef", "file:codex-test", "CODEX_HOME", s.opts.RuntimeRoot} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("single-account readiness evidence leaked %q: %s", leaked, data)
+		}
 	}
 }
 
