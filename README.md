@@ -106,7 +106,9 @@ The local web console is served by the daemon at
 data validation page, use `capd console --probe`. The command passes the daemon
 token to the browser without printing it to the terminal. The probe also calls
 `/probe/data` with `Authorization: Bearer ...` to fetch machine-readable,
-secret-redacted health, account, quota, and route diagnostics.
+secret-redacted health, account, quota, and route diagnostics. Ordinary probe
+refreshes follow the daemon's active SecretStore backend; choose native in the
+page or pass `--require-secret-backend native` only for explicit native checks.
 
 ## Quick start
 
