@@ -72,8 +72,9 @@ Codex CLI availability, SecretStore backend, multi-account import, quota
 freshness, and auto-route freshness.
 When accounts are missing and the daemon is healthy, doctor next steps point to
 `capd accounts import` so the fix exercises the same CAP/WebSocket import path
-as web clients; the local `capd accounts codex import` remains a fallback when
-the daemon is not running.
+as web clients; when a second account is needed, the next step points to
+`make live-codex-preflight` before the final live prompt. The local
+`capd accounts codex import` remains a fallback when the daemon is not running.
 When quota or auto-route freshness is missing, doctor next steps point to
 `capd accounts check --json --readiness` so the same daemon-side
 refresh-and-verify gate used by web clients can confirm the fix while returning

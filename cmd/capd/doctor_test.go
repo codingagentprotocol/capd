@@ -73,7 +73,7 @@ func TestDoctorJSONReportsMissingReadinessWithoutSecrets(t *testing.T) {
 	for _, want := range []string{
 		"after starting the daemon, import through CAP with: capd accounts import",
 		"local fallback: capd accounts codex import",
-		"start the daemon, import a second Codex account, then run: make live-codex-readiness",
+		"start the daemon, import a second Codex account, then run: make live-codex-preflight",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("doctor JSON missing next step %q: %s", want, body)
@@ -205,7 +205,7 @@ func TestDoctorRecommendsDaemonImportWhenDaemonHealthy(t *testing.T) {
 	}
 	for _, want := range []string{
 		"import a Codex account through CAP with: capd accounts import",
-		"import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-readiness",
+		"import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-preflight",
 	} {
 		if !containsString(report.NextSteps, want) {
 			t.Fatalf("missing next step %q: %+v", want, report.NextSteps)

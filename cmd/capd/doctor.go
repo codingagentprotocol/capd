@@ -424,9 +424,9 @@ func doctorImportNextStep(daemonOK bool) string {
 
 func doctorSecondImportNextStep(daemonOK bool) string {
 	if daemonOK {
-		return "import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-readiness"
+		return "import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-preflight"
 	}
-	return "start the daemon, import a second Codex account, then run: make live-codex-readiness"
+	return "start the daemon, import a second Codex account, then run: make live-codex-preflight"
 }
 
 func doctorAccountImportCheckNextStep(imported int, daemonOK bool) string {
