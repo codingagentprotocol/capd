@@ -512,6 +512,49 @@ func (s *Server) refreshOneAccountQuota(ctx context.Context, acc account.Account
 	return accountSummary(acc, result.Quota), nil
 }
 
+func (s *Server) saveUsageQuota(ctx context.Context, accountID string, usage map[string]any) *protocol.Error {
+	if s.opts.Accounts == nil {
+		return nil
+	}
+	quota := account.QuotaFromUsage(accountID, usage)
+	acc, err := s.opts.Accounts.LoadAccount(accountID)
+	if err != nil {
+		if err := s.opts.Accounts.SaveQuota(quota); err != nil {
+			return protocol.NewError(protocol.CodeInternalError, "save usage quota: %v", err)
+		}
+		return nil
+	}
+	updatedAcc := acc
+	changed := false
+	if s.opts.Secrets != nil && acc.SecretRef != "" {
+		ref, err := secret.ParseRef(acc.SecretRef)
+		if err != nil {
+			return protocol.NewError(protocol.CodeInternalError, "parse secret ref: %v", err)
+		}
+		if err := secret.EnsureRefBackend(s.opts.Secrets, ref); err != nil {
+			return protocol.NewError(protocol.CodeInternalError, "%v", err)
+		}
+		bundle, err := s.opts.Secrets.Get(ctx, ref)
+		if err != nil {
+			return protocol.NewError(protocol.CodeInternalError, "load account secret: %v", err)
+		}
+		updatedAcc, changed = codexauth.AccountWithBundleMetadata(acc, bundle)
+	}
+	if updatedAcc.Plan == "" && quota.Plan != "" {
+		updatedAcc.Plan = quota.Plan
+		changed = true
+	}
+	if changed {
+		if err := s.opts.Accounts.UpsertAccount(updatedAcc); err != nil {
+			return protocol.NewError(protocol.CodeInternalError, "update account metadata: %v", err)
+		}
+	}
+	if err := s.opts.Accounts.SaveQuota(quota); err != nil {
+		return protocol.NewError(protocol.CodeInternalError, "save usage quota: %v", err)
+	}
+	return nil
+}
+
 func (s *Server) removeAccount(ctx context.Context, params protocol.AccountsRemoveParams) (protocol.AccountsRemoveResult, *protocol.Error) {
 	if s.opts.Accounts == nil || s.opts.Secrets == nil || s.opts.RuntimeRoot == "" {
 		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")

@@ -576,6 +576,47 @@ func TestAgentsUsageWithCodexAccountProjectsRuntimeAndCachesQuota(t *testing.T) 
 	}
 }
 
+func TestAgentsUsageBackfillsAccountMetadata(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.Email = ""
+	acc.AccountID = ""
+	acc.Plan = ""
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.opts.Secrets.Put(context.Background(), "codex-test", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "test-token",
+		AccountID:   "acct_usage",
+		Email:       "usage@example.com",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"test-token","account_id":"acct_usage"}}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var result protocol.AgentsUsageResult
+	c.mustResult(c.call(protocol.MethodAgentsUsage, protocol.AgentsUsageParams{
+		AgentID:   "codex",
+		AccountID: "codex-test",
+	}), &result)
+	if result.AccountID != "codex-test" || result.Usage["planType"] != "pro" {
+		t.Fatalf("usage result = %+v", result)
+	}
+	got, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Email != "usage@example.com" || got.AccountID != "acct_usage" || got.Plan != "pro" {
+		t.Fatalf("stored account = %+v", got)
+	}
+}
+
 func TestAgentsUsageReportsQuotaCacheSaveFailure(t *testing.T) {
 	ts, fake, accounts := newCodexAccountIntegration(t)
 	fake.usageHook = func() {

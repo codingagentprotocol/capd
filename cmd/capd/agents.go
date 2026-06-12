@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/daemon"
 	"github.com/codingagentprotocol/capd/internal/discovery"
@@ -125,7 +127,7 @@ func newAgentsCmd() *cobra.Command {
 				}
 				usage, err = accountUp.UsageFor(cmd.Context(), adapter.SessionOpts{Env: profile.Env})
 				if err == nil {
-					if err := accounts.SaveQuota(account.QuotaFromUsage(acc.ID, usage)); err != nil {
+					if err := saveUsageQuota(cmd.Context(), accounts, secrets, acc, usage); err != nil {
 						return err
 					}
 				}
@@ -143,6 +145,36 @@ func newAgentsCmd() *cobra.Command {
 	usageCmd.Flags().String("account", "", "imported account id for account-specific usage (currently Codex)")
 	cmd.AddCommand(routeCmd, usageCmd)
 	return cmd
+}
+
+func saveUsageQuota(ctx context.Context, accounts *account.Store, secrets secret.Store, acc account.Account, usage map[string]any) error {
+	quota := account.QuotaFromUsage(acc.ID, usage)
+	updatedAcc := acc
+	changed := false
+	if secrets != nil && acc.SecretRef != "" {
+		ref, err := secret.ParseRef(acc.SecretRef)
+		if err != nil {
+			return fmt.Errorf("parse secret ref: %w", err)
+		}
+		if err := secret.EnsureRefBackend(secrets, ref); err != nil {
+			return err
+		}
+		bundle, err := secrets.Get(ctx, ref)
+		if err != nil {
+			return fmt.Errorf("load account secret: %w", err)
+		}
+		updatedAcc, changed = codexauth.AccountWithBundleMetadata(acc, bundle)
+	}
+	if updatedAcc.Plan == "" && quota.Plan != "" {
+		updatedAcc.Plan = quota.Plan
+		changed = true
+	}
+	if changed {
+		if err := accounts.UpsertAccount(updatedAcc); err != nil {
+			return fmt.Errorf("update account metadata: %w", err)
+		}
+	}
+	return accounts.SaveQuota(quota)
 }
 
 type routeCLIParams struct {

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
@@ -125,5 +127,54 @@ func TestRouteCLIRejectsUnknownCapability(t *testing.T) {
 	_, err := agentCapabilitiesFromNames([]string{"review", "telepathy"})
 	if err == nil || !strings.Contains(err.Error(), "unknown capability") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSaveUsageQuotaBackfillsAccountMetadata(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, secrets := seedCodexAccount(t)
+	defer accounts.Close()
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.Email = ""
+	acc.AccountID = ""
+	acc.Plan = ""
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := secrets.Put(context.Background(), "codex-test", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "chatgpt",
+		AccessToken: "access-secret",
+		AccountID:   "acct_usage",
+		Email:       "usage@example.com",
+		RawAuthJSON: []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"access-secret","account_id":"acct_usage"}}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	usage := map[string]any{
+		"planType": "enterprise",
+		"rateLimits": map[string]any{
+			"primary": map[string]any{"usedPercent": 31.0},
+		},
+	}
+	if err := saveUsageQuota(context.Background(), accounts, secrets, acc, usage); err != nil {
+		t.Fatal(err)
+	}
+	got, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Email != "usage@example.com" || got.AccountID != "acct_usage" || got.Plan != "enterprise" {
+		t.Fatalf("stored account = %+v", got)
+	}
+	q, err := accounts.LoadQuota("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Plan != "enterprise" || q.PrimaryUsedPercent != 31 {
+		t.Fatalf("quota = %+v", q)
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/discovery"
 	"github.com/codingagentprotocol/capd/internal/session"
@@ -100,9 +99,9 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if err != nil {
 			return nil, protocol.NewError(protocol.CodeAgentUnavailable, "usage: %v", err)
 		}
-		if effectiveAccountID != "" && s.opts.Accounts != nil {
-			if err := s.opts.Accounts.SaveQuota(account.QuotaFromUsage(effectiveAccountID, usage)); err != nil {
-				return nil, protocol.NewError(protocol.CodeInternalError, "save usage quota: %v", err)
+		if effectiveAccountID != "" {
+			if perr := s.saveUsageQuota(ctx, effectiveAccountID, usage); perr != nil {
+				return nil, perr
 			}
 		}
 		return protocol.AgentsUsageResult{AgentID: params.AgentID, AccountID: effectiveAccountID, Usage: usage}, nil
