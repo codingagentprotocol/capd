@@ -160,6 +160,10 @@ SecretStore check failed without exposing tokens or local runtime paths.
 temporary daemon with it when needed, and passes the same binary into
 `live-codex-preflight` and the optional final prompt. Manual preflight defaults
 to `go run ./cmd/capd`; pass `CAPD_BIN=./capd` to validate a specific build.
+If preflight fails, the selftest prints prompt-free diagnostics first: daemon
+health, safe Codex account metadata, account-aware route preview, and smoke
+JSON. Set `LIVE_DIAGNOSE_SECRETSTORE=1` only when you want the additional
+doctor/probe readiness diagnostics that may touch native SecretStore prompts.
 
 Without real Codex accounts, run the deterministic simulated gate:
 
