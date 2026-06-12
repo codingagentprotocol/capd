@@ -286,6 +286,8 @@ async function refreshReadinessDiagnostic() {
       `secret ${result.secretBackend || "unknown"}`,
       `quota fresh ${freshCount}/${accounts.length}`
     ];
+    const accountEvidence = accountCheckSummary(accounts);
+    if (accountEvidence) parts.push(`accounts ${accountEvidence}`);
     if (autoRoute) parts.push(`auto ${autoRoute.accountId || (route && route.accountId) || "unknown"} ${routeEvidenceSummary(autoRoute)}`);
     readinessEl.className = issues.length ? "warn" : "ok";
     readinessEl.textContent = issues.length ? `${parts.join(" · ")} · ${issues.join(" · ")}` : `${parts.join(" · ")} · ready`;

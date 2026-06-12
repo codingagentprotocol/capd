@@ -114,6 +114,8 @@ func TestConsoleStaticContract(t *testing.T) {
 		"诊断不可用",
 		"daemon ok",
 		"quota fresh",
+		"accountEvidence",
+		"accounts ${accountEvidence}",
 		"auto route 缺 fresh quota",
 		"routeEvidenceSummary",
 		"routeEvidenceSummary(result.autoRoute)",
