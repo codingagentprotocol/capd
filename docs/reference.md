@@ -33,7 +33,9 @@ runtime projection, selected or all-account quota refresh, safe account checks,
 and readiness gates over the same CAP RPC methods used by CLI clients.
 Use `capd console` to open the full console, or `capd console --probe` to open
 the lightweight validation probe without printing the daemon token to the
-terminal.
+terminal. The probe's Evidence JSON includes a `checks` array with
+`name`, `ok`, `evidence`, and optional `nextStep` fields so browser-side
+readiness evidence mirrors `capd doctor --json`.
 
 ### `capd health` — check the daemon
 

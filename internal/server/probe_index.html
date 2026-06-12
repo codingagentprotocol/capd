@@ -49,7 +49,7 @@
   <section class="panel">
     <h2>Validation Tests</h2>
     <table>
-      <thead><tr><th>Check</th><th>Status</th><th>Evidence</th></tr></thead>
+      <thead><tr><th>Check</th><th>Status</th><th>Evidence</th><th>Next step</th></tr></thead>
       <tbody id="tests"><tr><td>probe</td><td class="warn">waiting</td><td>not run yet</td></tr></tbody>
     </table>
   </section>
@@ -81,11 +81,13 @@ function showTests(rows) {
     const name = document.createElement("td");
     const status = document.createElement("td");
     const evidence = document.createElement("td");
+    const nextStep = document.createElement("td");
     name.textContent = row.name;
     status.textContent = row.ok ? "pass" : "fail";
     status.className = row.ok ? "ok" : "bad";
     evidence.textContent = row.evidence || "";
-    tr.append(name, status, evidence);
+    nextStep.textContent = row.nextStep || "";
+    tr.append(name, status, evidence, nextStep);
     tbody.appendChild(tr);
   }
 }
@@ -151,18 +153,18 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
   const secretBackend = result && result.secretBackend ? result.secretBackend : "unknown";
   const routeEvidence = routeText(route);
   const rows = [
-    { name:"daemon health", ok:!!healthOK, evidence:healthOK ? "/healthz ok" : "/healthz unavailable" },
-    { name:"accounts/check data", ok:!!result, evidence:result ? `${result.checkedAccounts || 0} account(s), secret ${secretBackend}` : "accounts/check failed" },
-    { name:"multi-account readiness", ok:(result && (result.checkedAccounts || 0) >= 2), evidence:`checked ${result ? result.checkedAccounts || 0 : 0}, need 2` },
-    { name:"quota freshness", ok:accounts.length > 0 && fresh === accounts.length, evidence:`fresh ${fresh}/${accounts.length}` },
-    { name:"auto route data", ok:!!route, evidence:routeEvidence },
-    { name:"auto route fresh", ok:!!(route && route.fresh), evidence:routeEvidence },
-    { name:"route decision", ok:!!routeDecision, evidence:routeDecisionText(routeDecision, route) },
-    { name:"native secret backend", ok:!readiness || !requireNative || secretBackend === "native", evidence:requireNative ? `secret ${secretBackend}` : "not required" },
+    { name:"daemon health", ok:!!healthOK, evidence:healthOK ? "/healthz ok" : "/healthz unavailable", nextStep:healthOK ? "" : "start capd with: capd start" },
+    { name:"accounts/check data", ok:!!result, evidence:result ? `${result.checkedAccounts || 0} account(s), secret ${secretBackend}` : "accounts/check failed", nextStep:result ? "" : "check daemon logs and retry accounts/check" },
+    { name:"multi-account readiness", ok:(result && (result.checkedAccounts || 0) >= 2), evidence:`checked ${result ? result.checkedAccounts || 0 : 0}, need 2`, nextStep:(result && (result.checkedAccounts || 0) >= 2) ? "" : "import at least two accounts with: capd accounts import --auth /path/a --auth /path/b" },
+    { name:"quota freshness", ok:accounts.length > 0 && fresh === accounts.length, evidence:`fresh ${fresh}/${accounts.length}`, nextStep:(accounts.length > 0 && fresh === accounts.length) ? "" : "refresh and verify with: capd accounts check --readiness" },
+    { name:"auto route data", ok:!!route, evidence:routeEvidence, nextStep:route ? "" : "import accounts, then refresh quota with: capd accounts check --readiness" },
+    { name:"auto route fresh", ok:!!(route && route.fresh), evidence:routeEvidence, nextStep:(route && route.fresh) ? "" : "refresh quota and route with: capd accounts check --readiness" },
+    { name:"route decision", ok:!!routeDecision, evidence:routeDecisionText(routeDecision, route), nextStep:routeDecision ? "" : "preview routing with: capd agents route --account auto" },
+    { name:"native secret backend", ok:!readiness || !requireNative || secretBackend === "native", evidence:requireNative ? `secret ${secretBackend}` : "not required", nextStep:(!readiness || !requireNative || secretBackend === "native") ? "" : "restart daemon with: CAPD_SECRET_BACKEND=native capd start" },
   ];
-  if (readiness) rows.push({ name:"readiness gate", ok:!readinessError && !routeError && rows.every(r => r.name === "readiness gate" || r.ok), evidence:readinessError || routeError || "all readiness checks passed" });
-  if (readinessError) rows.push({ name:"readiness error detail", ok:false, evidence:readinessError });
-  if (routeError) rows.push({ name:"route error detail", ok:false, evidence:routeError });
+  if (readiness) rows.push({ name:"readiness gate", ok:!readinessError && !routeError && rows.every(r => r.name === "readiness gate" || r.ok), evidence:readinessError || routeError || "all readiness checks passed", nextStep:(readinessError || routeError) ? "fix failed checks above, then rerun Readiness" : "" });
+  if (readinessError) rows.push({ name:"readiness error detail", ok:false, evidence:readinessError, nextStep:"fix readiness gate inputs, then rerun Readiness" });
+  if (routeError) rows.push({ name:"route error detail", ok:false, evidence:routeError, nextStep:"fix account routing inputs, then rerun Refresh" });
   return rows;
 }
 async function refresh(readiness = false) {
@@ -215,14 +217,16 @@ async function refresh(readiness = false) {
     ];
     if (readinessError) summary.push(`readiness error: ${readinessError}`);
     if (routeError) summary.push(`route error: ${routeError}`);
+    const checks = validationRows({ healthOK:true, result, route, routeDecision, readiness, requireNative:$("native").checked, readinessError, routeError });
     showSummary(summary);
-    showTests(validationRows({ healthOK:true, result, route, routeDecision, readiness, requireNative:$("native").checked, readinessError, routeError }));
-    showJSON({ accountsCheck: result, routeDecision, autoRoute: route, readinessError, routeError });
+    showTests(checks);
+    showJSON({ checks, accountsCheck: result, routeDecision, autoRoute: route, readinessError, routeError });
   } catch (e) {
     setMetric("daemon", "attention", "bad");
     showSummary([e.message || String(e)]);
-    showTests(validationRows({ healthOK:false, result:null, route:null, routeDecision:null, readiness, requireNative:$("native").checked, readinessError:e.message || String(e), routeError:"" }));
-    showJSON({ error: e.message || String(e) });
+    const checks = validationRows({ healthOK:false, result:null, route:null, routeDecision:null, readiness, requireNative:$("native").checked, readinessError:e.message || String(e), routeError:"" });
+    showTests(checks);
+    showJSON({ checks, error: e.message || String(e) });
   } finally {
     $("refresh").disabled = false;
     $("readiness").disabled = false;
