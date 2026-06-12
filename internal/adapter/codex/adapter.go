@@ -37,7 +37,7 @@ func (a *Adapter) Capabilities() protocol.AgentCapabilities {
 }
 
 func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
-	return adapter.ProbeCLI(ctx, ID, "Codex CLI", "codex", "--version")
+	return adapter.ProbeCLI(ctx, ID, "Codex CLI", binPath(), "--version")
 }
 
 // StartSession prefers app-server mode — codex's own desktop-app engine,

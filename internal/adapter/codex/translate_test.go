@@ -1,7 +1,10 @@
 package codex
 
 import (
+	"context"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/codingagentprotocol/capd/internal/adapter"
@@ -95,6 +98,30 @@ func TestBuildSpecResolvesCodexBinary(t *testing.T) {
 		if info, err := os.Stat(spec.Bin); err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
 			t.Fatalf("resolved binary %q is not executable", spec.Bin)
 		}
+	}
+}
+
+func TestProbeUsesResolvedCodexBinary(t *testing.T) {
+	fake := filepath.Join(t.TempDir(), "codex")
+	script := "#!/bin/sh\necho codex-cli fallback-test\n"
+	if runtime.GOOS == "windows" {
+		fake += ".bat"
+		script = "@echo codex-cli fallback-test\r\n"
+	}
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldResolve := resolveBin
+	resolveBin = func(string, ...string) string { return fake }
+	t.Cleanup(func() { resolveBin = oldResolve })
+	t.Setenv("PATH", "")
+
+	info, err := New().Probe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Available || info.Bin != fake || info.Version != "codex-cli fallback-test" {
+		t.Fatalf("probe info = %+v", info)
 	}
 }
 
