@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1341,6 +1342,53 @@ func TestAccountsCheckReadinessFailureIsDaemonSideAndSafe(t *testing.T) {
 		if strings.Contains(resp.Error.Message, leaked) {
 			t.Fatalf("accounts/check readiness error leaked %q: %s", leaked, resp.Error.Message)
 		}
+	}
+}
+
+func TestAccountsCheckReadinessPreflightAvoidsQuotaCalls(t *testing.T) {
+	s, ts, _, _ := newCodexAccountIntegrationServer(t)
+	var quotaCalls atomic.Int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		quotaCalls.Add(1)
+		http.Error(w, "should not be called", http.StatusInternalServerError)
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+	c := initialized(t, ts)
+
+	for _, tc := range []struct {
+		name string
+		in   protocol.AccountsCheckParams
+		want string
+	}{
+		{
+			name: "secret backend mismatch",
+			in: protocol.AccountsCheckParams{
+				Provider:             codexauth.Provider,
+				RefreshQuota:         true,
+				RequireSecretBackend: secret.BackendNative,
+			},
+			want: `secret backend = "file", want "native"`,
+		},
+		{
+			name: "multiple accounts required",
+			in: protocol.AccountsCheckParams{
+				Provider:        codexauth.Provider,
+				RefreshQuota:    true,
+				RequireMultiple: true,
+			},
+			want: "expected multiple Codex accounts",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := c.call(protocol.MethodAccountsCheck, tc.in)
+			if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, tc.want) {
+				t.Fatalf("response = %+v", resp)
+			}
+			if quotaCalls.Load() != 0 {
+				t.Fatalf("quota calls = %d", quotaCalls.Load())
+			}
+		})
 	}
 }
 

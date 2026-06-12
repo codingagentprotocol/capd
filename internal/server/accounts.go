@@ -283,11 +283,6 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 	if strings.TrimSpace(params.RequireSecretBackend) != "" {
 		params.RequireSecretBackend = strings.TrimSpace(params.RequireSecretBackend)
 	}
-	if params.RefreshQuota {
-		if _, perr := s.refreshAccountQuota(ctx, protocol.AccountsQuotaParams{Provider: provider, AccountID: protocol.AccountAll}); perr != nil {
-			return protocol.AccountsCheckResult{}, protocol.NewError(perr.Code, "refresh quota: %s", perr.Message)
-		}
-	}
 	current, err := s.opts.Accounts.CurrentAccount(provider)
 	if err != nil {
 		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
@@ -295,6 +290,14 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 	accounts, err := s.opts.Accounts.ListAccounts(provider)
 	if err != nil {
 		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "list accounts: %v", err)
+	}
+	if perr := validateAccountsCheckPreflight(s.opts.Secrets.Backend(), len(accounts), params); perr != nil {
+		return protocol.AccountsCheckResult{}, perr
+	}
+	if params.RefreshQuota {
+		if _, perr := s.refreshAccountQuota(ctx, protocol.AccountsQuotaParams{Provider: provider, AccountID: protocol.AccountAll}); perr != nil {
+			return protocol.AccountsCheckResult{}, protocol.NewError(perr.Code, "refresh quota: %s", perr.Message)
+		}
 	}
 	result := protocol.AccountsCheckResult{
 		Provider:         provider,
@@ -322,6 +325,19 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		return protocol.AccountsCheckResult{}, perr
 	}
 	return result, nil
+}
+
+func validateAccountsCheckPreflight(secretBackend string, checkedAccounts int, params protocol.AccountsCheckParams) *protocol.Error {
+	if params.RequireSecretBackend != "" && secretBackend != params.RequireSecretBackend {
+		return protocol.NewError(protocol.CodeInvalidParams, "secret backend = %q, want %q", secretBackend, params.RequireSecretBackend)
+	}
+	if params.RequireMultiple && checkedAccounts < 2 {
+		return protocol.NewError(protocol.CodeInvalidParams, "expected multiple Codex accounts, found %d", checkedAccounts)
+	}
+	if params.RefreshQuota && checkedAccounts == 0 {
+		return protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
+	}
+	return nil
 }
 
 func validateAccountsCheckResult(result protocol.AccountsCheckResult, params protocol.AccountsCheckParams) *protocol.Error {
