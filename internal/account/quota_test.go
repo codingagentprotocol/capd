@@ -1,6 +1,7 @@
 package account
 
 import (
+	"encoding/json"
 	"math"
 	"strings"
 	"testing"
@@ -47,6 +48,58 @@ func TestQuotaFromUsageDropsOversizedRawJSON(t *testing.T) {
 	}
 	if q.RawJSON != "" {
 		t.Fatalf("RawJSON length = %d, want dropped", len(q.RawJSON))
+	}
+}
+
+func TestQuotaFromUsageRedactsSensitiveRawJSON(t *testing.T) {
+	q := QuotaFromUsage("codex-a", map[string]any{
+		"planType": "pro",
+		"tokens": map[string]any{
+			"access_token":  "access-secret",
+			"refresh-token": "refresh-secret",
+		},
+		"debug": []any{
+			map[string]any{"authorization": "Bearer auth-secret"},
+			map[string]any{"apiKey": "api-key-secret"},
+			map[string]any{"ordinary": "kept"},
+		},
+		"rateLimits": map[string]any{
+			"primary": map[string]any{
+				"usedPercent": 42.5,
+			},
+		},
+	})
+	if q.RawJSON == "" {
+		t.Fatal("RawJSON was empty")
+	}
+	for _, leaked := range []string{"access-secret", "refresh-secret", "auth-secret", "api-key-secret"} {
+		if strings.Contains(q.RawJSON, leaked) {
+			t.Fatalf("RawJSON leaked %q: %s", leaked, q.RawJSON)
+		}
+	}
+	for _, want := range []string{"ordinary", "kept", "planType"} {
+		if !strings.Contains(q.RawJSON, want) {
+			t.Fatalf("RawJSON missing %q: %s", want, q.RawJSON)
+		}
+	}
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(q.RawJSON), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if raw["tokens"] != "<redacted>" {
+		t.Fatalf("tokens not redacted: %+v", raw["tokens"])
+	}
+	debug, ok := raw["debug"].([]any)
+	if !ok || len(debug) != 3 {
+		t.Fatalf("debug raw = %+v", raw["debug"])
+	}
+	auth, _ := debug[0].(map[string]any)
+	apiKey, _ := debug[1].(map[string]any)
+	if auth["authorization"] != "<redacted>" || apiKey["apiKey"] != "<redacted>" {
+		t.Fatalf("nested secrets not redacted: %+v", debug)
+	}
+	if q.Plan != "pro" || q.PrimaryUsedPercent != 42.5 {
+		t.Fatalf("quota fields changed while redacting RawJSON: %+v", q)
 	}
 }
 

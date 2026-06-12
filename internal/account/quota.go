@@ -3,6 +3,7 @@ package account
 import (
 	"encoding/json"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -12,7 +13,7 @@ const maxQuotaRawJSONBytes = 1 << 20
 // scheduler-facing cache stored in SQLite. Unknown shapes are preserved as
 // RawJSON; known Codex rate-limit shapes fill the common fields.
 func QuotaFromUsage(accountID string, usage map[string]any) QuotaSnapshot {
-	raw, _ := json.Marshal(usage)
+	raw, _ := json.Marshal(redactQuotaRawValue(usage))
 	q := QuotaSnapshot{
 		AccountID: accountID,
 		Plan:      stringFrom(usage, "planType", "plan_type", "plan"),
@@ -95,4 +96,37 @@ func conservativePercent(n float64) float64 {
 
 func quotaPercentUsable(n float64) bool {
 	return !math.IsNaN(n) && !math.IsInf(n, 0) && n >= 0 && n <= 100
+}
+
+func redactQuotaRawValue(v any) any {
+	switch value := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(value))
+		for key, item := range value {
+			if quotaRawKeySensitive(key) {
+				out[key] = "<redacted>"
+				continue
+			}
+			out[key] = redactQuotaRawValue(item)
+		}
+		return out
+	case []any:
+		out := make([]any, len(value))
+		for i, item := range value {
+			out[i] = redactQuotaRawValue(item)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func quotaRawKeySensitive(key string) bool {
+	key = strings.ToLower(strings.ReplaceAll(key, "-", "_"))
+	for _, marker := range []string{"token", "secret", "authorization", "api_key", "apikey"} {
+		if strings.Contains(key, marker) {
+			return true
+		}
+	}
+	return false
 }
