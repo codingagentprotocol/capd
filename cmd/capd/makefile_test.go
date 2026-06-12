@@ -16,6 +16,7 @@ func TestLiveCodexReadinessUsesOneSecretBackend(t *testing.T) {
 		"LIVE_SECRET_BACKEND ?= native",
 		"verify-codex-readiness-sim live-codex-preflight live-codex-readiness",
 		"live-codex-preflight:",
+		"running daemon from: capd start --secret-backend $(LIVE_SECRET_BACKEND)",
 		"live-codex-readiness: live-codex-preflight",
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd secretstore check --json --roundtrip --require-backend $(LIVE_SECRET_BACKEND) --timeout 2m",
 		"CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd doctor --json --fail --verify-secretstore --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m",
@@ -39,6 +40,7 @@ func TestLiveCodexReadinessUsesOneSecretBackend(t *testing.T) {
 		"\n\tgo run ./cmd/capd accounts codex quota all",
 		"\n\tgo run ./cmd/capd accounts check --json",
 		"\n\tgo run ./cmd/capd doctor --json --fail --require-secret-backend native",
+		"running daemon from: CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) capd start",
 	} {
 		if strings.Contains(makefile, forbidden) {
 			t.Fatalf("Makefile contains backend-drift-prone command %q", forbidden)

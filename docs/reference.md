@@ -203,7 +203,9 @@ directory. Newest first, up to 100.
 
 `install` · `uninstall` · `start` · `stop` · `restart` · `status` —
 user-level launchd/systemd/Windows SCM unit running `capd start`; starts on
-boot, restarts on crash, never root.
+boot, restarts on crash, never root. `capd service install --secret-backend
+native` persists the daemon backend as `capd start --secret-backend native`,
+which is the recommended persistent setup for live multi-account Codex checks.
 
 ## Environment variables
 

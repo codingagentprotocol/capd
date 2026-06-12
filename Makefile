@@ -38,7 +38,7 @@ verify-codex-readiness-sim:
 	go test ./cmd/capd -run 'Test(AccountsCheckReadinessShortcutSetsDaemonGateParams|DoctorReportsMultiAccountQuotaAndAutoRoute|DoctorChecksDaemonAccountsThroughCAP|CodexAccountsSmokeRequireAllFreshQuota|CodexAccountsSmokeTextIncludesAutoRouteEvidence|RouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache|CodexAccountsQuotaAllRefreshesEveryAccountSafely)$$' -count=1
 
 live-codex-preflight:
-	@echo "live-codex-preflight requires >=2 imported Codex accounts, CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND), and a running daemon from: CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) capd start"
+	@echo "live-codex-preflight requires >=2 imported Codex accounts, CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND), and a running daemon from: capd start --secret-backend $(LIVE_SECRET_BACKEND)"
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd secretstore check --json --roundtrip --require-backend $(LIVE_SECRET_BACKEND) --timeout 2m
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex smoke --json --require-multiple --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd health --json --require-secret-backend $(LIVE_SECRET_BACKEND)

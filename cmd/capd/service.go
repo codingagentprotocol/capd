@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
@@ -17,11 +18,19 @@ func newServiceCmd() *cobra.Command {
 	}
 	for _, action := range []string{"install", "uninstall", "start", "stop", "restart", "status"} {
 		action := action
-		cmd.AddCommand(&cobra.Command{
+		var secretBackend string
+		actionCmd := &cobra.Command{
 			Use:   action,
 			Short: action + " the capd service",
 			RunE: func(cmd *cobra.Command, _ []string) error {
-				svc, err := newService()
+				if action == "install" && cmd.Flags().Changed("secret-backend") {
+					backend, err := secret.NormalizeBackend(secretBackend)
+					if err != nil {
+						return err
+					}
+					secretBackend = backend
+				}
+				svc, err := newService(serviceOptions{SecretBackend: secretBackend})
 				if err != nil {
 					return err
 				}
@@ -49,7 +58,11 @@ func newServiceCmd() *cobra.Command {
 				}
 				return nil
 			},
-		})
+		}
+		if action == "install" {
+			actionCmd.Flags().StringVar(&secretBackend, "secret-backend", "", "SecretStore backend for the installed daemon (file or native; default CAPD_SECRET_BACKEND/file)")
+		}
+		cmd.AddCommand(actionCmd)
 	}
 	return cmd
 }
@@ -59,17 +72,30 @@ type noopProgram struct{}
 func (noopProgram) Start(service.Service) error { return nil }
 func (noopProgram) Stop(service.Service) error  { return nil }
 
-func newService() (service.Service, error) {
+type serviceOptions struct {
+	SecretBackend string
+}
+
+func newService(opts serviceOptions) (service.Service, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, err
+	}
+	cfg := serviceConfig(exe, opts)
+	return service.New(noopProgram{}, cfg)
+}
+
+func serviceConfig(exe string, opts serviceOptions) *service.Config {
+	args := []string{"start"}
+	if opts.SecretBackend != "" {
+		args = append(args, "--secret-backend", opts.SecretBackend)
 	}
 	cfg := &service.Config{
 		Name:        "ai.codingagentprotocol.capd",
 		DisplayName: "capd",
 		Description: "Coding Agent Protocol daemon — exposes local coding agent CLIs to web & desktop clients.",
 		Executable:  exe,
-		Arguments:   []string{"start"},
+		Arguments:   args,
 		Option: service.KeyValue{
 			// Run as the logged-in user: agent CLIs need the user's
 			// auth state and PATH, never root.
@@ -78,5 +104,5 @@ func newService() (service.Service, error) {
 			"KeepAlive":   true,
 		},
 	}
-	return service.New(noopProgram{}, cfg)
+	return cfg
 }

@@ -96,8 +96,8 @@ Run it in the foreground, or install it as a user-level service
 never runs as root):
 
 ```bash
-capd start                                  # foreground
-capd service install && capd service start  # persistent
+capd start --secret-backend native                                  # foreground
+capd service install --secret-backend native && capd service start  # persistent
 ```
 
 The local web console is served by the daemon at
