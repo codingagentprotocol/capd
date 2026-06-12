@@ -171,8 +171,6 @@ type doctorCheckReport struct {
 	NextStep string `json:"nextStep,omitempty"`
 }
 
-const doctorReadinessCommand = "capd accounts check --json --readiness"
-
 const (
 	doctorSecretStateReadable        = "readable"
 	doctorSecretStateBackendMismatch = "backend-mismatch"
@@ -338,13 +336,13 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	allSecretsReadable := len(list) > 0 && report.Codex.SecretReadableAccounts == len(list)
 	if len(list) > 0 && !allSecretsReadable {
 		report.Issues = append(report.Issues, "not every imported Codex account has readable SecretStore credentials")
-		report.NextSteps = append(report.NextSteps, doctorSecretReadinessNextStep(report.Daemon.OK, report.Codex.SecretStates))
+		report.NextSteps = append(report.NextSteps, doctorSecretReadinessNextStep(report.Daemon.OK, report.Codex.SecretStates, opts.RequireSecretBackend))
 	}
 	report.Checks = append(report.Checks, doctorCheckReport{
 		Name:     "Codex SecretStore credentials",
 		OK:       allSecretsReadable,
 		Evidence: doctorSecretReadinessEvidence(report.Codex.SecretReadableAccounts, len(list), report.Codex.SecretUnreadableAccounts, report.Codex.SecretStates),
-		NextStep: doctorCheckNextStep(!allSecretsReadable, doctorSecretReadinessNextStep(report.Daemon.OK, report.Codex.SecretStates)),
+		NextStep: doctorCheckNextStep(!allSecretsReadable, doctorSecretReadinessNextStep(report.Daemon.OK, report.Codex.SecretStates, opts.RequireSecretBackend)),
 	})
 	if len(list) > 0 && report.Codex.FreshQuotaAccounts < len(list) {
 		report.Issues = append(report.Issues, "not every imported Codex account has fresh quota evidence")
@@ -395,7 +393,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		if capErr != "" {
 			report.Codex.DaemonCheckError = capErr
 			report.Issues = append(report.Issues, "daemon-side accounts/check failed")
-			report.NextSteps = append(report.NextSteps, "inspect daemon-side account evidence with: "+doctorReadinessCommand)
+			report.NextSteps = append(report.NextSteps, "inspect daemon-side account evidence with: "+doctorAccountsCheckReadinessCommand(opts.RequireSecretBackend))
 		} else {
 			report.Codex.DaemonCheckOK = true
 			report.Codex.DaemonCheckedAccounts = capResult.CheckedAccounts
@@ -411,7 +409,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			Name:     "CAP accounts/check",
 			OK:       capErr == "",
 			Evidence: evidence,
-			NextStep: doctorCheckNextStep(capErr != "", "inspect daemon-side account evidence with: "+doctorReadinessCommand),
+			NextStep: doctorCheckNextStep(capErr != "", "inspect daemon-side account evidence with: "+doctorAccountsCheckReadinessCommand(opts.RequireSecretBackend)),
 		})
 	}
 	report.NextSteps = compactStrings(report.NextSteps)
@@ -611,10 +609,10 @@ func doctorSecretStateSummary(states map[string]int) string {
 	return strings.Join(parts, ", ")
 }
 
-func doctorSecretReadinessNextStep(daemonOK bool, states map[string]int) string {
+func doctorSecretReadinessNextStep(daemonOK bool, states map[string]int, requireSecretBackend string) string {
 	switch {
 	case states[doctorSecretStateTimeout] > 0:
-		return "unlock or approve OS SecretStore access, then rerun: capd doctor --json --fail --verify-secretstore --timeout 2m"
+		return "unlock or approve OS SecretStore access, then rerun: " + doctorCommand(requireSecretBackend)
 	case states[doctorSecretStateAccessDenied] > 0:
 		return "approve macOS Keychain access, or avoid native prompts by restarting with: capd start --secret-backend file and re-importing accounts with: capd accounts --secret-backend file codex import --auth /path/to/auth.json"
 	case states[doctorSecretStateBackendMismatch] > 0:
@@ -645,17 +643,35 @@ func doctorRouteCheckNextStep(imported int, daemonOK bool, requireSecretBackend 
 }
 
 func doctorReadinessNextStep(daemonOK bool, requireSecretBackend string) string {
+	readinessCommand := doctorAccountsCheckReadinessCommand(requireSecretBackend)
 	if !daemonOK {
-		return doctorStartDaemonNextStep(requireSecretBackend) + ", then run: " + doctorReadinessCommand
+		return doctorStartDaemonNextStep(requireSecretBackend) + ", then run: " + readinessCommand
 	}
-	return "refresh and verify daemon-side readiness with: " + doctorReadinessCommand
+	return "refresh and verify daemon-side readiness with: " + readinessCommand
 }
 
 func doctorRouteReadinessNextStep(daemonOK bool, requireSecretBackend string) string {
+	readinessCommand := doctorAccountsCheckReadinessCommand(requireSecretBackend)
 	if !daemonOK {
-		return doctorStartDaemonNextStep(requireSecretBackend) + ", then run: " + doctorReadinessCommand
+		return doctorStartDaemonNextStep(requireSecretBackend) + ", then run: " + readinessCommand
 	}
-	return "refresh quota and verify routing with: " + doctorReadinessCommand
+	return "refresh quota and verify routing with: " + readinessCommand
+}
+
+func doctorAccountsCheckReadinessCommand(requireSecretBackend string) string {
+	cmd := "capd accounts check --json --readiness"
+	if requireSecretBackend != "" {
+		cmd += " --require-secret-backend " + requireSecretBackend
+	}
+	return cmd + " --timeout 2m"
+}
+
+func doctorCommand(requireSecretBackend string) string {
+	cmd := "capd doctor --json --fail --verify-secretstore"
+	if requireSecretBackend != "" {
+		cmd += " --require-secret-backend " + requireSecretBackend
+	}
+	return cmd + " --timeout 2m"
 }
 
 func doctorStartDaemonNextStep(requireSecretBackend string) string {

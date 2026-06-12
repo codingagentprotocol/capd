@@ -135,13 +135,13 @@ func TestDoctorDaemonNextStepHonorsRequiredSecretBackend(t *testing.T) {
 	if strings.Contains(out.String(), "start the daemon with: capd start\"") {
 		t.Fatalf("doctor JSON kept generic daemon start step: %s", out.String())
 	}
-	if got := doctorReadinessNextStep(false, "native"); got != "start the daemon with: capd start --secret-backend native, then run: capd accounts check --json --readiness" {
+	if got := doctorReadinessNextStep(false, "native"); got != "start the daemon with: capd start --secret-backend native, then run: capd accounts check --json --readiness --require-secret-backend native --timeout 2m" {
 		t.Fatalf("readiness next step = %q", got)
 	}
-	if got := doctorRouteReadinessNextStep(false, "native"); got != "start the daemon with: capd start --secret-backend native, then run: capd accounts check --json --readiness" {
+	if got := doctorRouteReadinessNextStep(false, "native"); got != "start the daemon with: capd start --secret-backend native, then run: capd accounts check --json --readiness --require-secret-backend native --timeout 2m" {
 		t.Fatalf("route next step = %q", got)
 	}
-	if got := doctorReadinessNextStep(true, "native"); got != "refresh and verify daemon-side readiness with: capd accounts check --json --readiness" {
+	if got := doctorReadinessNextStep(true, "native"); got != "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend native --timeout 2m" {
 		t.Fatalf("daemon-ready readiness next step = %q", got)
 	}
 }
@@ -473,7 +473,7 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 		Name:     "CAP accounts/check",
 		OK:       false,
 		Evidence: report.Codex.DaemonCheckError,
-		NextStep: "inspect daemon-side account evidence with: capd accounts check --json --readiness",
+		NextStep: "inspect daemon-side account evidence with: capd accounts check --json --readiness --timeout 2m",
 	}) {
 		t.Fatalf("missing CAP accounts/check failure: %+v", report.Checks)
 	}
@@ -549,14 +549,14 @@ func TestDoctorReportsStaleAndMissingAccountQuota(t *testing.T) {
 	if !containsString(report.Issues, "not every imported Codex account has fresh quota evidence") {
 		t.Fatalf("missing quota freshness issue: %+v", report.Issues)
 	}
-	if !containsString(report.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness") {
+	if !containsString(report.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --timeout 2m") {
 		t.Fatalf("missing readiness next step: %+v", report.NextSteps)
 	}
 	if !containsDoctorCheck(report.Checks, doctorCheckReport{
 		Name:     "Codex quota freshness",
 		OK:       false,
 		Evidence: "fresh 1/3, stale 1, missing 1",
-		NextStep: "refresh and verify daemon-side readiness with: capd accounts check --json --readiness",
+		NextStep: "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --timeout 2m",
 	}) {
 		t.Fatalf("missing quota freshness check: %+v", report.Checks)
 	}
@@ -648,19 +648,19 @@ func TestDoctorReportsMalformedSecretRefsSafely(t *testing.T) {
 }
 
 func TestDoctorSecretReadinessNextStepUsesSecretState(t *testing.T) {
-	if got := doctorSecretReadinessNextStep(false, map[string]int{doctorSecretStateTimeout: 1}); !strings.Contains(got, "unlock or approve OS SecretStore access") || !strings.Contains(got, "--timeout 2m") {
+	if got := doctorSecretReadinessNextStep(false, map[string]int{doctorSecretStateTimeout: 1}, secret.BackendNative); !strings.Contains(got, "unlock or approve OS SecretStore access") || !strings.Contains(got, "--require-secret-backend native") || !strings.Contains(got, "--timeout 2m") {
 		t.Fatalf("timeout next step = %q", got)
 	}
 	if got := doctorSecretErrorState(errors.New("load account secret: macOS keychain status -128")); got != doctorSecretStateAccessDenied {
 		t.Fatalf("access denied state = %q", got)
 	}
-	if got := doctorSecretReadinessNextStep(true, map[string]int{doctorSecretStateAccessDenied: 1}); !strings.Contains(got, "macOS Keychain access") || !strings.Contains(got, "capd start --secret-backend file") {
+	if got := doctorSecretReadinessNextStep(true, map[string]int{doctorSecretStateAccessDenied: 1}, secret.BackendNative); !strings.Contains(got, "macOS Keychain access") || !strings.Contains(got, "capd start --secret-backend file") {
 		t.Fatalf("access denied next step = %q", got)
 	}
 	if got := doctorSecretReadinessEvidence(0, 2, 2, map[string]int{doctorSecretStateTimeout: 1, doctorSecretStateMissing: 1}); got != "readable 0/2, unreadable 2 (timeout 1, missing 1)" {
 		t.Fatalf("evidence = %q", got)
 	}
-	if got := doctorSecretReadinessNextStep(true, map[string]int{doctorSecretStateMissing: 1}); !strings.Contains(got, "re-import missing Codex credentials through CAP") {
+	if got := doctorSecretReadinessNextStep(true, map[string]int{doctorSecretStateMissing: 1}, secret.BackendNative); !strings.Contains(got, "re-import missing Codex credentials through CAP") {
 		t.Fatalf("missing next step = %q", got)
 	}
 }
