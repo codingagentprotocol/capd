@@ -136,8 +136,10 @@ shortcut parameters, and secret-leak guards with local test backends.
 `make live-codex-preflight` first verifies the selected SecretStore backend,
 checks that at least two Codex accounts are imported, refreshes every Codex
 quota, then runs `capd doctor --json --fail` against fresh local evidence before
-the daemon/Web readiness chain. `make live-codex-readiness` runs that preflight
-before the final live prompt. Override the prompt with
+the daemon/Web readiness chain. It also validates the tokenized Web probe URL
+with the same SecretStore backend requirement before fetching `/probe/data`.
+`make live-codex-readiness` runs that preflight before the final live prompt.
+Override the prompt with
 `LIVE_PROMPT="..." make live-codex-readiness`. Override the backend with
 `LIVE_SECRET_BACKEND=file` only when intentionally testing the file SecretStore
 path; the default live backend is `native`.
