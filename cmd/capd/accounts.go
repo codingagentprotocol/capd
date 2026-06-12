@@ -780,7 +780,7 @@ the native OS backend and keeps the source secret as a rollback path. Add
 				return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("expected multiple Codex accounts, found %d", len(list)), codexLocalImportNextStep(result.SecretBackend, true))
 			}
 			if requireSecretBackend != "" && requireSecretBackend != result.SecretBackend {
-				return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("secret backend = %q, want %q", result.SecretBackend, requireSecretBackend), "rerun with CAPD_SECRET_BACKEND="+requireSecretBackend)
+				return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("secret backend = %q, want %q", result.SecretBackend, requireSecretBackend), codexSmokeBackendMismatchNextStep(requireSecretBackend))
 			}
 			result.Accounts = result.Accounts[:0]
 			for _, acc := range list {
@@ -793,7 +793,7 @@ the native OS backend and keeps the source secret as a rollback path. Add
 				if err := secret.EnsureRefBackend(secrets, ref); err != nil {
 					row := codexSmokeSecretFailureRow(acc, false, protocol.AccountSecretStateBackendMismatch)
 					result.Accounts = append(result.Accounts, row)
-					return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("%s: secret backend mismatch", acc.ID), "rerun with CAPD_SECRET_BACKEND="+secretRefBackendLabel(ref)+" or re-import the account with the active SecretStore backend")
+					return codexSmokeFail(cmd, jsonOut, result, fmt.Sprintf("%s: secret backend mismatch", acc.ID), codexSmokeAccountBackendMismatchNextStep(secretRefBackendLabel(ref), result.SecretBackend))
 				}
 				bundle, err := secrets.Get(checkCtx, ref)
 				if err != nil {
@@ -1060,6 +1060,25 @@ func codexSmokeSecretNextStep(state, backend string) string {
 	default:
 		return "re-import the failing Codex account with: " + codexAccountsCommand(backend, "codex import --auth /path/to/auth.json")
 	}
+}
+
+func codexSmokeBackendMismatchNextStep(requiredBackend string) string {
+	args := "codex smoke --json"
+	if requiredBackend != "" {
+		args += " --require-secret-backend " + requiredBackend
+	}
+	args += " --timeout 2m"
+	return "rerun smoke with the required SecretStore backend: " + codexAccountsCommand(requiredBackend, args)
+}
+
+func codexSmokeAccountBackendMismatchNextStep(accountBackend, activeBackend string) string {
+	next := codexSmokeBackendMismatchNextStep(accountBackend)
+	if activeBackend != "" {
+		next += ", or re-import the account with the active backend: " + codexAccountsCommand(activeBackend, "codex import --auth /path/to/auth.json")
+	} else {
+		next += ", or re-import the account with the active SecretStore backend"
+	}
+	return next
 }
 
 func codexSmokeQuotaNextStep(backend string, requireAll bool) string {

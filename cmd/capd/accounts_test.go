@@ -2458,6 +2458,23 @@ func TestCodexAccountsSmokeRequireSecretBackendMismatch(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), `want "native"`) {
 		t.Fatalf("err = %v", err)
 	}
+	wantNext := "next: rerun smoke with the required SecretStore backend: capd accounts --secret-backend native codex smoke --json --require-secret-backend native --timeout 2m"
+	if !strings.Contains(out.String(), wantNext) {
+		t.Fatalf("output missing next step %q: %s", wantNext, out.String())
+	}
+}
+
+func TestCodexAccountsSmokeBackendMismatchNextSteps(t *testing.T) {
+	if got := codexSmokeBackendMismatchNextStep(secret.BackendNative); got != "rerun smoke with the required SecretStore backend: capd accounts --secret-backend native codex smoke --json --require-secret-backend native --timeout 2m" {
+		t.Fatalf("required backend next step = %q", got)
+	}
+	if got := codexSmokeBackendMismatchNextStep(secret.BackendFile); got != "rerun smoke with the required SecretStore backend: capd accounts codex smoke --json --require-secret-backend file --timeout 2m" {
+		t.Fatalf("file backend next step = %q", got)
+	}
+	want := "rerun smoke with the required SecretStore backend: capd accounts --secret-backend native codex smoke --json --require-secret-backend native --timeout 2m, or re-import the account with the active backend: capd accounts codex import --auth /path/to/auth.json"
+	if got := codexSmokeAccountBackendMismatchNextStep(secret.BackendNative, secret.BackendFile); got != want {
+		t.Fatalf("account backend next step = %q", got)
+	}
 }
 
 func TestCodexAccountsSmokeRejectsUnknownRequiredSecretBackend(t *testing.T) {
@@ -2523,7 +2540,8 @@ func TestCodexAccountsSmokeFailsWhenAccountSecretBackendDiffers(t *testing.T) {
 	if result.OK || len(result.Accounts) != 1 || result.Accounts[0].SecretState != protocol.AccountSecretStateBackendMismatch || result.Accounts[0].SecretBackendOK {
 		t.Fatalf("partial result = %+v", result)
 	}
-	if len(result.NextSteps) == 0 || !strings.Contains(result.NextSteps[0], "CAPD_SECRET_BACKEND=native") {
+	wantNext := "rerun smoke with the required SecretStore backend: capd accounts --secret-backend native codex smoke --json --require-secret-backend native --timeout 2m, or re-import the account with the active backend: capd accounts codex import --auth /path/to/auth.json"
+	if len(result.NextSteps) == 0 || result.NextSteps[0] != wantNext {
 		t.Fatalf("nextSteps = %+v", result.NextSteps)
 	}
 	for _, leaked := range []string{"access-secret", "refresh-secret", "native:codex-test", "secretRef", "CODEX_HOME"} {
