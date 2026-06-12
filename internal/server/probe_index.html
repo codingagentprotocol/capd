@@ -115,18 +115,28 @@ function showTests(rows) {
     tbody.appendChild(tr);
   }
 }
+const RPC_TIMEOUT_MS = 12000;
+const LONG_RPC_TIMEOUT_MS = 120000;
+
+function rpcTimeoutFor(method, params = {}) {
+  if (method === "accounts/quota" || method === "agents/usage") return LONG_RPC_TIMEOUT_MS;
+  if (method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)) return LONG_RPC_TIMEOUT_MS;
+  return RPC_TIMEOUT_MS;
+}
+
 async function call(method, params = {}) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) throw new Error("CAP WebSocket is not connected");
   const id = ++state.id;
   state.ws.send(JSON.stringify({ jsonrpc:"2.0", id, method, params }));
   return new Promise((resolve, reject) => {
-    state.pending[id] = { resolve, reject };
-    setTimeout(() => {
+    const timeoutMS = rpcTimeoutFor(method, params);
+    const timer = setTimeout(() => {
       if (state.pending[id]) {
         delete state.pending[id];
-        reject(new Error(`${method} timeout`));
+        reject(new Error(`${method} timeout after ${timeoutMS}ms`));
       }
-    }, 12000);
+    }, timeoutMS);
+    state.pending[id] = { resolve, reject, timer };
   });
 }
 async function connect() {
@@ -138,6 +148,7 @@ async function connect() {
     if (msg.id && state.pending[msg.id]) {
       const pending = state.pending[msg.id];
       delete state.pending[msg.id];
+      clearTimeout(pending.timer);
       msg.error ? pending.reject(rpcError(msg.error)) : pending.resolve(msg.result);
     }
   };

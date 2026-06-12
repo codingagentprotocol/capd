@@ -103,10 +103,19 @@ const readinessEl = document.getElementById("readiness");
 const readinessChecksEl = document.getElementById("readinessChecks");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
+const RPC_TIMEOUT_MS = 12000;
+const LONG_RPC_TIMEOUT_MS = 120000;
+
+function rpcTimeoutFor(method, params = {}) {
+  if (method === "accounts/quota" || method === "agents/usage") return LONG_RPC_TIMEOUT_MS;
+  if (method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)) return LONG_RPC_TIMEOUT_MS;
+  return RPC_TIMEOUT_MS;
+}
 
 function rejectAllPending(message) {
   const err = { message };
   for (const id of Object.keys(pending)) {
+    clearTimeout(pending[id].timer);
     pending[id].reject(err);
     delete pending[id];
   }
@@ -138,10 +147,17 @@ function call(method, p) {
       return;
     }
     const id = ++nextId;
-    pending[id] = { resolve, reject };
+    const timeoutMS = rpcTimeoutFor(method, p || {});
+    const timer = setTimeout(() => {
+      if (!pending[id]) return;
+      delete pending[id];
+      reject({ message: `${method} timeout after ${timeoutMS}ms` });
+    }, timeoutMS);
+    pending[id] = { resolve, reject, timer };
     try {
       ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params: p }));
     } catch (e) {
+      clearTimeout(timer);
       delete pending[id];
       reject(e);
     }
@@ -734,7 +750,11 @@ async function connect() {
     const msg = JSON.parse(m.data);
     if (msg.method === "event") { onEvent(msg.params); return; }
     const p = pending[msg.id];
-    if (p) { delete pending[msg.id]; msg.error ? p.reject(rpcError(msg.error)) : p.resolve(msg.result); }
+    if (p) {
+      delete pending[msg.id];
+      clearTimeout(p.timer);
+      msg.error ? p.reject(rpcError(msg.error)) : p.resolve(msg.result);
+    }
   };
   ws.onclose = () => {
     statusEl.textContent = "连接断开";
