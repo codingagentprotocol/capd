@@ -106,3 +106,55 @@ esac
 		t.Fatalf("store error missing omission note: %s", text)
 	}
 }
+
+func TestLinuxNativeDeleteIsIdempotentWhenSecretToolReportsMissing(t *testing.T) {
+	dir := t.TempDir()
+	toolPath := filepath.Join(dir, "secret-tool")
+	script := `#!/bin/sh
+set -eu
+case "$1" in
+  clear)
+    printf '%s\n' 'No such secret item' >&2
+    exit 1
+    ;;
+  *)
+    exit 9
+    ;;
+esac
+`
+	if err := os.WriteFile(toolPath, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	st := nativeStore{tool: toolPath}
+	if err := st.Delete(context.Background(), Ref{Backend: BackendNative, ID: "missing"}); err != nil {
+		t.Fatalf("delete missing = %v", err)
+	}
+}
+
+func TestLinuxNativeDeleteStillReportsNonMissingClearErrors(t *testing.T) {
+	dir := t.TempDir()
+	toolPath := filepath.Join(dir, "secret-tool")
+	script := `#!/bin/sh
+set -eu
+case "$1" in
+  clear)
+    printf '%s\n' 'secret service is locked' >&2
+    exit 2
+    ;;
+  *)
+    exit 9
+    ;;
+esac
+`
+	if err := os.WriteFile(toolPath, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	st := nativeStore{tool: toolPath}
+	err := st.Delete(context.Background(), Ref{Backend: BackendNative, ID: "locked"})
+	if err == nil {
+		t.Fatal("expected clear failure")
+	}
+	if text := err.Error(); !strings.Contains(text, "secret service is locked") || strings.Contains(text, "access-secret") {
+		t.Fatalf("clear error = %s", text)
+	}
+}

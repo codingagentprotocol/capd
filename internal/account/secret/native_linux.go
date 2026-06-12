@@ -73,7 +73,7 @@ func (st nativeStore) Delete(ctx context.Context, ref Ref) error {
 	if ref.Backend != "" && ref.Backend != st.Backend() {
 		return fmt.Errorf("secret backend %q is not %q", ref.Backend, st.Backend())
 	}
-	return st.run(ctx, nil, "clear", "service", nativeService, "account", cleanID(ref.ID))
+	return st.clear(ctx, "service", nativeService, "account", cleanID(ref.ID))
 }
 
 func (st nativeStore) run(ctx context.Context, stdin []byte, args ...string) error {
@@ -97,6 +97,22 @@ func (st nativeStore) output(ctx context.Context, args ...string) ([]byte, error
 		return nil, fmt.Errorf("%s %s: %w", defaultSecretTool, safeArgs(args), err)
 	}
 	return out, nil
+}
+
+func (st nativeStore) clear(ctx context.Context, args ...string) error {
+	cmd := exec.CommandContext(ctx, st.tool, append([]string{"clear"}, args...)...)
+	out, err := cmd.CombinedOutput()
+	if err == nil || isSecretToolNotFound(out) {
+		return nil
+	}
+	return fmt.Errorf("%s clear %s: %w%s", defaultSecretTool, safeArgs(args), err, safeCommandOutput(out))
+}
+
+func isSecretToolNotFound(out []byte) bool {
+	text := strings.ToLower(strings.TrimSpace(string(out)))
+	return strings.Contains(text, "no such secret") ||
+		strings.Contains(text, "no matching secret") ||
+		strings.Contains(text, "not found")
 }
 
 func nativeLabel(id string) string {
