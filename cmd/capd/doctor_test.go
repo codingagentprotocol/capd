@@ -389,7 +389,7 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	if report.Codex.CurrentAccountID != "codex-test" || report.Codex.AutoRouteAccountID != "codex-low" || !report.Codex.AutoRouteFresh {
 		t.Fatalf("codex route summary = %+v", report.Codex)
 	}
-	if report.Summary.AutoRouteAccountID != "codex-low" || !report.Summary.AutoRouteFresh || !report.Summary.DaemonHealthy || report.Summary.DaemonAccountsCheckOK {
+	if report.Summary.AutoRouteAccountID != "codex-low" || !report.Summary.AutoRouteFresh || report.Summary.RouteCandidates != 2 || !report.Summary.DaemonHealthy || report.Summary.DaemonAccountsCheckOK {
 		t.Fatalf("summary route/daemon = %+v", report.Summary)
 	}
 	if report.Codex.AutoRouteScore != 5 || report.Codex.AutoRoutePrimary == nil || *report.Codex.AutoRoutePrimary != 5 || report.Codex.AutoRouteCheckedAt == 0 {

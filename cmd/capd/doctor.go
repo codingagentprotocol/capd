@@ -100,6 +100,7 @@ type doctorSummaryReport struct {
 	MissingQuotaAccounts     int    `json:"missingQuotaAccounts"`
 	AutoRouteAccountID       string `json:"autoRouteAccountId,omitempty"`
 	AutoRouteFresh           bool   `json:"autoRouteFresh"`
+	RouteCandidates          int    `json:"routeCandidates"`
 	DaemonHealthy            bool   `json:"daemonHealthy"`
 	DaemonAccountsCheckOK    bool   `json:"daemonAccountsCheckOk"`
 	SecretBackend            string `json:"secretBackend,omitempty"`
@@ -434,6 +435,7 @@ func doctorSummary(report doctorReport, opts doctorOptions) doctorSummaryReport 
 		MissingQuotaAccounts:     report.Codex.MissingQuotaAccounts,
 		AutoRouteAccountID:       report.Codex.AutoRouteAccountID,
 		AutoRouteFresh:           report.Codex.AutoRouteFresh,
+		RouteCandidates:          len(report.Codex.RouteCandidates),
 		DaemonHealthy:            report.Daemon.OK,
 		DaemonAccountsCheckOK:    report.Codex.DaemonCheckOK,
 		SecretBackend:            report.Codex.SecretBackend,

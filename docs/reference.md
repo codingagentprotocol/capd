@@ -93,8 +93,9 @@ includes SecretStore refs, token material, runtime paths, or raw auth JSON.
 those categories by count for CI and Web clients.
 The top-level `summary` object gives CI and Web clients a compact readiness
 view: required/missing account counts, readable/unreadable SecretStore credential
-counts, fresh/stale/missing quota counts, auto-route freshness, daemon CAP
-status, SecretStore backend match, and optional SecretStore roundtrip status.
+counts, fresh/stale/missing quota counts, auto-route freshness, route candidate
+count, daemon CAP status, SecretStore backend match, and optional SecretStore
+roundtrip status.
 The top-level `checks` array is a stable readiness checklist with
 `name`, `ok`, `evidence`, and optional `nextStep` fields for daemon health,
 Codex CLI availability, SecretStore backend, per-account SecretStore credential
