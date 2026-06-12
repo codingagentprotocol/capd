@@ -1368,6 +1368,44 @@ func TestAccountsQuotaRefreshesBackendQuotaSafely(t *testing.T) {
 	}
 }
 
+func TestAccountsQuotaUsesAccountMetadataWhenSecretAccountIDMissing(t *testing.T) {
+	s, ts, _, _ := newCodexAccountIntegrationServer(t)
+	if _, err := s.opts.Secrets.Put(context.Background(), "codex-test", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "test-token",
+		Email:       "codex@example.com",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"test-token"}}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var sawAccount string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAccount = r.Header.Get("ChatGPT-Account-Id")
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType": "team",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": 17},
+			},
+		})
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+	c := initialized(t, ts)
+
+	var result protocol.AccountsQuotaResult
+	c.mustResult(c.call(protocol.MethodAccountsQuota, protocol.AccountsQuotaParams{
+		Provider:  codexauth.Provider,
+		AccountID: "codex-test",
+	}), &result)
+	if sawAccount != "acct_test" {
+		t.Fatalf("ChatGPT-Account-Id = %q", sawAccount)
+	}
+	if result.Account.Quota == nil || result.Account.Quota.PrimaryUsedPercent != 17 {
+		t.Fatalf("quota = %+v", result.Account.Quota)
+	}
+}
+
 func TestAccountsQuotaAutoRefreshesLowestCachedQuotaAccount(t *testing.T) {
 	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
 	ref, err := s.opts.Secrets.Put(context.Background(), "codex-low", secret.Bundle{

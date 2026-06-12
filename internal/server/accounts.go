@@ -381,6 +381,9 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 	if err != nil {
 		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInternalError, "load account secret: %v", err)
 	}
+	if bundle.AccountID == "" {
+		bundle.AccountID = acc.AccountID
+	}
 	result, err := codexquota.Client{BaseURL: s.opts.CodexQuotaBaseURL}.Usage(ctx, acc.ID, bundle)
 	if err != nil {
 		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeAgentUnavailable, "quota: %v", err)
