@@ -130,6 +130,18 @@ type scriptedSession struct {
 	closed   bool
 }
 
+type deleteFailSecretStore struct {
+	secret.Store
+	err error
+}
+
+func (st deleteFailSecretStore) Delete(context.Context, secret.Ref) error {
+	if st.err != nil {
+		return st.err
+	}
+	return errors.New("delete failed")
+}
+
 func (s *scriptedSession) Send(_ context.Context, msg adapter.Message) error {
 	prompt := msg.Prompt
 	s.events <- protocol.Event{Type: protocol.EventSessionStarted, Data: map[string]any{"nativeSessionId": "fake-native-1"}}
@@ -1956,6 +1968,45 @@ func TestAccountsRemoveRejectsUnsafeProjectionWithoutDeletingMetadata(t *testing
 	}
 	if strings.Contains(resp.Error.Message, "test-token") {
 		t.Fatalf("remove error leaked token: %v", resp.Error)
+	}
+}
+
+func TestAccountsRemoveCredentialDeleteFailureKeepsMetadataAndSecret(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := codexauth.RuntimeProjector{
+		Root:    s.opts.RuntimeRoot,
+		Secrets: s.opts.Secrets,
+	}.Project(context.Background(), acc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.opts.Secrets = deleteFailSecretStore{Store: s.opts.Secrets, err: errors.New("delete unavailable")}
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsRemove, protocol.AccountsRemoveParams{
+		Provider:  codexauth.Provider,
+		AccountID: "codex-test",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInternalError || !strings.Contains(resp.Error.Message, "remove account credentials") {
+		t.Fatalf("response = %+v", resp)
+	}
+	if _, err := accounts.LoadAccount("codex-test"); err != nil {
+		t.Fatalf("metadata should remain: %v", err)
+	}
+	if _, err := s.opts.Secrets.Get(context.Background(), secret.Ref{Backend: secret.BackendFile, ID: "codex-test"}); err != nil {
+		t.Fatalf("secret should remain: %v", err)
+	}
+	if _, err := os.Stat(profile.CodexHome); !os.IsNotExist(err) {
+		t.Fatalf("runtime should be removed before credential failure err=%v", err)
+	}
+	for _, leaked := range []string{"test-token", "secretRef", "file:codex-test", profile.CodexHome} {
+		if strings.Contains(resp.Error.Message, leaked) {
+			t.Fatalf("remove error leaked %q: %v", leaked, resp.Error)
+		}
 	}
 }
 
