@@ -292,6 +292,8 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 	autoRoute := result.AutoRoute
 	routeFresh := autoRoute != nil && autoRoute.Fresh
 	candidates := len(result.RouteCandidates)
+	routeBackend := probeRouteBackendHint(result, requireSecretBackend)
+	routeReadinessCommand := probeAccountsCheckReadinessCommand(routeBackend)
 	secretStates := accountSecretStatesEvidence(accounts)
 	credentialReady, credentialEvidence := accountCredentialEvidence(checked, accounts)
 	runtimeReady, runtimeEvidence := accountRuntimeEvidence(checked, accounts)
@@ -301,9 +303,9 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 		{Name: "account credentials", OK: credentialReady, Evidence: credentialEvidence, NextStep: missingStep(credentialReady, "fix SecretStore access or re-import failing accounts")},
 		{Name: "account runtime", OK: runtimeReady, Evidence: runtimeEvidence, NextStep: missingStep(runtimeReady, "project account runtimes with accounts/project or rerun accounts/check")},
 		{Name: "multi-account readiness", OK: !readiness || checked >= 2, Evidence: countEvidence(checked, 2), NextStep: missingStep(!readiness || checked >= 2, "import at least two accounts with: capd accounts import --auth /path/a --auth /path/b")},
-		{Name: "quota freshness", OK: !readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), Evidence: quotaFreshEvidence(quotaFresh, len(accounts)), NextStep: missingStep(!readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), "refresh and verify daemon-side readiness with: "+probeAccountsCheckReadinessCommand(requireSecretBackend))},
+		{Name: "quota freshness", OK: !readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), Evidence: quotaFreshEvidence(quotaFresh, len(accounts)), NextStep: missingStep(!readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), "refresh and verify daemon-side readiness with: "+routeReadinessCommand)},
 		{Name: "auto route data", OK: autoRoute != nil, Evidence: routeEvidenceTextPtr(autoRoute), NextStep: missingStep(autoRoute != nil, "import accounts, then preview with: capd agents route --account auto --json")},
-		{Name: "auto route fresh", OK: !readiness || routeFresh, Evidence: routeEvidenceTextPtr(autoRoute), NextStep: missingStep(!readiness || routeFresh, "refresh and verify daemon-side readiness with: "+probeAccountsCheckReadinessCommand(requireSecretBackend))},
+		{Name: "auto route fresh", OK: !readiness || routeFresh, Evidence: routeEvidenceTextPtr(autoRoute), NextStep: missingStep(!readiness || routeFresh, "refresh and verify daemon-side readiness with: "+routeReadinessCommand)},
 		{Name: "route decision", OK: result.RouteDecision != nil, Evidence: routeDecisionEvidence(result.RouteDecision), NextStep: missingStep(result.RouteDecision != nil, "preview routing with: capd agents route --account auto --require-fresh-quota --json")},
 		{Name: "route candidates", OK: candidates > 0, Evidence: countEvidence(candidates, 1), NextStep: missingStep(candidates > 0, "refresh diagnostics or run: capd agents route --account auto --json")},
 	}
@@ -316,6 +318,18 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 		})
 	}
 	return checks
+}
+
+func probeRouteBackendHint(result probeDataResult, fallback string) string {
+	if result.AutoRoute != nil && result.AutoRoute.SecretBackend != "" {
+		return result.AutoRoute.SecretBackend
+	}
+	for _, candidate := range result.RouteCandidates {
+		if candidate.SecretBackend != "" {
+			return candidate.SecretBackend
+		}
+	}
+	return fallback
 }
 
 func probeAccountsCheckReadinessCommand(requireSecretBackend string) string {

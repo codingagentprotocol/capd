@@ -416,7 +416,15 @@ func TestAccountSecretStatesEvidenceIncludesAccessDenied(t *testing.T) {
 }
 
 func TestProbeDataReadinessDefaultsToNativeAndAvoidsQuotaOnBackendMismatch(t *testing.T) {
-	s, _, _, _ := newCodexAccountIntegrationServer(t)
+	s, _, _, accounts := newCodexAccountIntegrationServer(t)
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = secret.BackendNative + ":codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
 	var quotaCalls atomic.Int32
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		quotaCalls.Add(1)
@@ -445,10 +453,10 @@ func TestProbeDataReadinessDefaultsToNativeAndAvoidsQuotaOnBackendMismatch(t *te
 	if got.Summary.RequiredSecretBackend != secret.BackendNative || got.Summary.SecretBackend != secret.BackendFile || got.Summary.SecretBackendOK {
 		t.Fatalf("summary = %+v", got.Summary)
 	}
-	if got.AutoRoute == nil || got.AutoRoute.AccountID != "codex-test" || got.AutoRoute.QuotaState != protocol.AccountQuotaStateMissing || got.AutoRoute.Fresh || got.AutoRoute.Reason != "auto account codex-test without fresh cached quota; current account tie-break" {
+	if got.AutoRoute == nil || got.AutoRoute.AccountID != "codex-test" || got.AutoRoute.SecretBackend != secret.BackendNative || got.AutoRoute.QuotaState != protocol.AccountQuotaStateMissing || got.AutoRoute.Fresh || got.AutoRoute.Reason != "auto account codex-test without fresh cached quota; current account tie-break" {
 		t.Fatalf("autoRoute partial route evidence = %+v", got.AutoRoute)
 	}
-	if len(got.RouteCandidates) != 1 || got.RouteCandidates[0].AccountID != "codex-test" || got.RouteCandidates[0].QuotaState != protocol.AccountQuotaStateMissing || got.RouteCandidates[0].Reason != "auto account codex-test without fresh cached quota; current account tie-break" {
+	if len(got.RouteCandidates) != 1 || got.RouteCandidates[0].AccountID != "codex-test" || got.RouteCandidates[0].SecretBackend != secret.BackendNative || got.RouteCandidates[0].QuotaState != protocol.AccountQuotaStateMissing || got.RouteCandidates[0].Reason != "auto account codex-test without fresh cached quota; current account tie-break" {
 		t.Fatalf("routeCandidates partial route evidence = %+v", got.RouteCandidates)
 	}
 	if got.Summary.AutoRouteAccountID != "codex-test" || got.Summary.AutoRouteFresh || got.Summary.RouteCandidates != 1 || got.Summary.RouteDecisionOK {
@@ -456,6 +464,15 @@ func TestProbeDataReadinessDefaultsToNativeAndAvoidsQuotaOnBackendMismatch(t *te
 	}
 	if check := probeCheckByName(got.Checks, "SecretStore backend"); check.OK || !strings.Contains(check.Evidence, "secret file, want native") || !strings.Contains(check.NextStep, "capd start --secret-backend native") {
 		t.Fatalf("SecretStore backend check = %+v", check)
+	}
+	wantRouteNext := "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend native --timeout 2m"
+	for _, name := range []string{"quota freshness", "auto route fresh"} {
+		if check := probeCheckByName(got.Checks, name); check.OK || check.NextStep != wantRouteNext {
+			t.Fatalf("%s check = %+v", name, check)
+		}
+	}
+	if !probeNextStepsContain(got.NextSteps, wantRouteNext) {
+		t.Fatalf("nextSteps missing route-backend readiness command %q: %+v", wantRouteNext, got.NextSteps)
 	}
 	if len(got.Errors) == 0 || got.Errors[0].Source != "accounts/check" || !strings.Contains(got.Errors[0].Message, `secret backend = "file", want "native"`) {
 		t.Fatalf("errors = %+v", got.Errors)
