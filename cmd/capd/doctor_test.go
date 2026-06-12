@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
@@ -221,6 +222,63 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	}
 	if !report.Codex.CLIAvailable && !containsString(report.Issues, "Codex CLI is not available") {
 		t.Fatalf("missing CLI issue: %+v", report.Issues)
+	}
+}
+
+func TestDoctorReportsStaleAndMissingAccountQuota(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/healthz" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		w.Write([]byte("ok\n"))
+	}))
+	defer ts.Close()
+	host, port := splitTestURL(t, ts.URL)
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	for _, acc := range []account.Account{
+		{ID: "codex-fresh", Provider: codexauth.Provider, AuthMode: "chatgpt", Email: "fresh@example.com", SecretRef: "file:codex-fresh"},
+		{ID: "codex-missing", Provider: codexauth.Provider, AuthMode: "chatgpt", Email: "missing@example.com", SecretRef: "file:codex-missing"},
+	} {
+		if err := accounts.UpsertAccount(acc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	staleAt := time.Now().Add(-account.QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 1, CheckedAt: staleAt}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-fresh", Plan: "pro", PrimaryUsedPercent: 20}); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := buildDoctorReport(t.Context(), doctorOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Codex.ImportedAccounts != 3 || report.Codex.FreshQuotaAccounts != 1 || report.Codex.StaleQuotaAccounts != 1 || report.Codex.MissingQuotaAccounts != 1 {
+		t.Fatalf("codex quota summary = %+v", report.Codex)
+	}
+	if report.Codex.AutoRouteAccountID != "codex-fresh" || !report.Codex.AutoRouteFresh || report.Codex.AutoRouteScore != 20 {
+		t.Fatalf("auto route = %+v", report.Codex)
+	}
+	byID := map[string]doctorCodexAccountReport{}
+	for _, row := range report.Codex.Accounts {
+		byID[row.ID] = row
+	}
+	if byID["codex-test"].QuotaState != protocol.AccountQuotaStateStale || byID["codex-test"].QuotaFresh || byID["codex-test"].QuotaCheckedAt != staleAt {
+		t.Fatalf("stale account evidence = %+v", byID["codex-test"])
+	}
+	if byID["codex-missing"].QuotaState != protocol.AccountQuotaStateMissing || byID["codex-missing"].QuotaFresh || byID["codex-missing"].PrimaryUsedPercent != nil {
+		t.Fatalf("missing account evidence = %+v", byID["codex-missing"])
+	}
+	if !containsString(report.Issues, "not every imported Codex account has fresh quota evidence") {
+		t.Fatalf("missing quota freshness issue: %+v", report.Issues)
 	}
 }
 
