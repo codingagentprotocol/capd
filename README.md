@@ -155,6 +155,7 @@ capd accounts codex quota    # refresh quota and print a safe summary
 capd accounts codex quota auto
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
+CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native # verify native SecretStore directly
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native # readiness gate
 CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
 capd console --probe         # simple web data probe; opens with daemon token without printing it
@@ -196,6 +197,10 @@ SecretStore diagnostics.
 the daemon version, protocol version, and active SecretStore backend without
 exposing token material, and fails early if the daemon was started with the
 wrong backend.
+`capd secretstore check --roundtrip --require-backend <file|native>` is the
+smallest direct SecretStore gate: it opens the selected backend, optionally
+writes/reads/deletes a diagnostic secret, prints no token material, and fails
+before account checks when native storage is unavailable or mismatched.
 `capd probe data --json --readiness --fail` calls the same authenticated
 `/probe/data` endpoint used by the lightweight web probe, so live preflight also
 verifies the Web diagnostics path with header auth and safe partial evidence.
