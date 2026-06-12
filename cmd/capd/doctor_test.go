@@ -3,8 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/codingagentprotocol/capd/internal/account"
+	"github.com/codingagentprotocol/capd/internal/account/codexauth"
 )
 
 func TestDoctorJSONReportsMissingReadinessWithoutSecrets(t *testing.T) {
@@ -65,4 +70,77 @@ func TestDoctorTextReturnsErrorWhenNotReady(t *testing.T) {
 			t.Fatalf("doctor text missing %q: %s", want, text)
 		}
 	}
+}
+
+func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/healthz" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		w.Write([]byte("ok\n"))
+	}))
+	defer ts.Close()
+	host, port := splitTestURL(t, ts.URL)
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-low",
+		Provider:  codexauth.Provider,
+		AuthMode:  "chatgpt",
+		Email:     "low@example.com",
+		AccountID: "acct_low",
+		SecretRef: "file:codex-low",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 80}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low", Plan: "pro", PrimaryUsedPercent: 5}); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := buildDoctorReport(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Daemon.OK {
+		t.Fatalf("daemon = %+v", report.Daemon)
+	}
+	if report.Codex.ImportedAccounts != 2 || report.Codex.FreshQuotaAccounts != 2 || report.Codex.StaleQuotaAccounts != 0 || report.Codex.MissingQuotaAccounts != 0 {
+		t.Fatalf("codex quota summary = %+v", report.Codex)
+	}
+	if report.Codex.CurrentAccountID != "codex-test" || report.Codex.AutoRouteAccountID != "codex-low" || !report.Codex.AutoRouteFresh {
+		t.Fatalf("codex route summary = %+v", report.Codex)
+	}
+	for _, forbidden := range []string{
+		"no imported Codex accounts",
+		"multi-account readiness requires at least two imported Codex accounts",
+		"not every imported Codex account has fresh quota evidence",
+		"auto account route is not backed by fresh quota",
+	} {
+		if containsString(report.Issues, forbidden) {
+			t.Fatalf("unexpected issue %q in %+v", forbidden, report.Issues)
+		}
+	}
+	if report.Codex.CLIAvailable && !report.OK {
+		t.Fatalf("doctor should be ok when CLI, daemon, accounts, quota, and route are ready: %+v", report.Issues)
+	}
+	if !report.Codex.CLIAvailable && !containsString(report.Issues, "Codex CLI is not available") {
+		t.Fatalf("missing CLI issue: %+v", report.Issues)
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
