@@ -159,7 +159,7 @@ No params. → `{"agents": [{"id", "name", "bin", "version", "available", "capab
 ### `agents/route`
 
 Ask capd to pick an installed agent. Params mirror route signals:
-`{"prompt", "attachments", "accountId", "model", "effort", "capabilities", "prefer"}`.
+`{"prompt", "attachments", "accountId", "model", "effort", "capabilities", "prefer", "requireFreshQuota"}`.
 
 → `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"quotaState": "fresh", "score": 12}, "reason": "matched capabilities: effort, review"}`
 
@@ -168,9 +168,10 @@ Codex only, because imported account runtimes are Codex-specific. Use
 `accountId:"auto"` to choose an imported Codex account by conservative quota
 scoring: fresh cached primary quota uses the actual usage percent, while missing
 quota or rows older than 30 minutes receive a conservative unknown score until
-`accounts/quota` or `agents/usage` refreshes them. When account routing is in
-play, `accountRoute` reports the score plus `quotaState` (`fresh`, `stale`, or
-`missing`) without exposing token material.
+`accounts/quota` or `agents/usage` refreshes them. Set `requireFreshQuota:true`
+with `accountId:"auto"` to fail instead of routing on missing or stale quota.
+When account routing is in play, `accountRoute` reports the score plus
+`quotaState` (`fresh`, `stale`, or `missing`) without exposing token material.
 
 ### `agents/usage`
 

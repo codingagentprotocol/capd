@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
@@ -51,12 +52,17 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 		required.Usage = true
 		required.Resume = true
 		if accountID == protocol.AccountAuto {
-			account, reason, perr := s.selectCodexAccountForRoute()
+			acc, reason, perr := s.selectCodexAccountForRoute()
 			if perr != nil {
 				return protocol.AgentRouteResult{}, perr
 			}
-			selectedAccountID = account.ID
-			selectedAccount = account
+			if params.RequireFreshQuota {
+				if q, err := s.opts.Accounts.LoadQuota(acc.ID); err != nil || !account.QuotaSnapshotFresh(q, time.Now()) {
+					return protocol.AgentRouteResult{}, protocol.NewError(protocol.CodeInvalidParams, "auto route does not have fresh cached quota; refresh quota first")
+				}
+			}
+			selectedAccountID = acc.ID
+			selectedAccount = acc
 			accountReason = reason
 		} else {
 			account, perr := s.loadCodexAccountForRoute(accountID)

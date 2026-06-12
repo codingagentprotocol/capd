@@ -92,13 +92,14 @@ const (
 )
 
 type AgentRouteParams struct {
-	Prompt       string            `json:"prompt,omitempty"`
-	Attachments  []Attachment      `json:"attachments,omitempty"`
-	AccountID    string            `json:"accountId,omitempty"`
-	Model        string            `json:"model,omitempty"`
-	Effort       string            `json:"effort,omitempty"`
-	Capabilities AgentCapabilities `json:"capabilities,omitempty"`
-	Prefer       []string          `json:"prefer,omitempty"`
+	Prompt            string            `json:"prompt,omitempty"`
+	Attachments       []Attachment      `json:"attachments,omitempty"`
+	AccountID         string            `json:"accountId,omitempty"`
+	Model             string            `json:"model,omitempty"`
+	Effort            string            `json:"effort,omitempty"`
+	Capabilities      AgentCapabilities `json:"capabilities,omitempty"`
+	Prefer            []string          `json:"prefer,omitempty"`
+	RequireFreshQuota bool              `json:"requireFreshQuota,omitempty"`
 }
 
 type AgentRouteResult struct {
