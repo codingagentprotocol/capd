@@ -7,6 +7,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -1583,6 +1584,75 @@ func TestAccountsQuotaAllRefreshesEveryCodexAccountSafely(t *testing.T) {
 		if strings.Contains(string(data), leaked) {
 			t.Fatalf("accounts/quota all leaked %q: %s", leaked, data)
 		}
+	}
+}
+
+func TestAccountsQuotaAllFailureIsSafeAndCachesSuccessfulAccounts(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	ref, err := s.opts.Secrets.Put(context.Background(), "codex-zlow", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "zlow-token",
+		AccountID:   "acct_zlow",
+		Email:       "low@example.com",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"zlow-token","account_id":"acct_zlow","secret":"backend-secret"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-zlow",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "low@example.com",
+		AccountID: "acct_zlow",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("Authorization") {
+		case "Bearer test-token":
+			json.NewEncoder(w).Encode(map[string]any{
+				"planType": "pro",
+				"rateLimits": map[string]any{
+					"primary": map[string]any{"usedPercent": 41},
+				},
+			})
+		case "Bearer zlow-token":
+			http.Error(w, `backend-secret zlow-token secretRef=file:codex-zlow`, http.StatusTooManyRequests)
+		default:
+			http.Error(w, "unexpected auth", http.StatusUnauthorized)
+		}
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsQuota, protocol.AccountsQuotaParams{
+		Provider:  codexauth.Provider,
+		AccountID: protocol.AccountAll,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeAgentUnavailable {
+		t.Fatalf("response = %+v", resp)
+	}
+	if !strings.Contains(resp.Error.Message, "codex-zlow") || !strings.Contains(resp.Error.Message, "HTTP 429") {
+		t.Fatalf("error message = %q", resp.Error.Message)
+	}
+	for _, leaked := range []string{"test-token", "zlow-token", "backend-secret", "secretRef", ref.String()} {
+		if strings.Contains(resp.Error.Message, leaked) {
+			t.Fatalf("accounts/quota all error leaked %q: %s", leaked, resp.Error.Message)
+		}
+	}
+	q, err := accounts.LoadQuota("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Plan != "pro" || q.PrimaryUsedPercent != 41 {
+		t.Fatalf("codex-test cached quota = %+v", q)
+	}
+	if _, err := accounts.LoadQuota("codex-zlow"); !errors.Is(err, account.ErrUnknownAccount) {
+		t.Fatalf("codex-zlow cached quota err = %v", err)
 	}
 }
 

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -355,6 +356,9 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 		if len(accounts) == 0 {
 			return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
 		}
+		sort.Slice(accounts, func(i, j int) bool {
+			return accounts[i].ID < accounts[j].ID
+		})
 		result := protocol.AccountsQuotaResult{
 			Accounts: make([]protocol.AccountSummary, 0, len(accounts)),
 		}
