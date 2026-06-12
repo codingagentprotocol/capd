@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 )
 
 func newHealthCmd() *cobra.Command {
+	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "health",
 		Short: "Check whether the local capd daemon is running",
@@ -23,10 +25,19 @@ func newHealthCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if jsonOut {
+				out, _ := json.MarshalIndent(map[string]any{
+					"ok":   true,
+					"addr": daemonAddr(cfg),
+				}, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+				return nil
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), body)
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "print daemon health as JSON")
 	return cmd
 }
 

@@ -33,8 +33,9 @@ and readiness gates over the same CAP RPC methods used by CLI clients.
 
 ### `capd health` — check the daemon
 
-Checks the configured daemon `/healthz` endpoint and prints `ok`. Failures point
-to `capd start`, making it useful before daemon-side account readiness checks.
+Checks the configured daemon `/healthz` endpoint and prints `ok`, or
+`{"ok":true,"addr":"..."}` with `--json`. Failures point to `capd start`,
+making it useful before daemon-side account readiness checks.
 
 ### `capd run <prompt>` — send one task and stream it
 
@@ -71,7 +72,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 
 | Command | Output |
 |---------|--------|
-| `capd health` | prints `ok` when the configured daemon is serving `/healthz` |
+| `capd health [--json]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok` and `addr` |
 | `capd agents list` | table: id, available/not installed, version, binary path |
 | `capd agents route [--account <id\|auto>] [--capability name] [--require-fresh-quota] [--json]` | preview local routing without starting a session; with `--account auto`, shows the Codex account selected by conservative quota scoring. `--require-fresh-quota` fails unless that auto selection is backed by fresh cached quota |
 | `capd agents usage <id>` | account snapshot JSON: plan, 5h/weekly window used %, reset timestamps, credits (codex) |

@@ -73,7 +73,7 @@ capd accounts codex smoke --quota --require-multiple --require-fresh-quota --req
 # In another terminal, keep the daemon running for CAP/WebSocket checks:
 capd start
 
-capd health
+capd health --json
 capd accounts check --json
 capd accounts check --refresh-quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
 capd agents usage codex --account auto

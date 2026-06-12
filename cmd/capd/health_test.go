@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -34,6 +35,25 @@ func TestHealthCmdChecksDaemonHealthz(t *testing.T) {
 	}
 	if strings.TrimSpace(out.String()) != "ok" {
 		t.Fatalf("out = %q", out.String())
+	}
+
+	out.Reset()
+	cmd = newHealthCmd()
+	cmd.SetArgs([]string{"--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		OK   bool   `json:"ok"`
+		Addr string `json:"addr"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.OK || got.Addr != net.JoinHostPort(host, port) {
+		t.Fatalf("json = %+v", got)
 	}
 }
 
