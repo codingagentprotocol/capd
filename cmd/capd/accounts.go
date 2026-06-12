@@ -90,7 +90,51 @@ func newAccountsCmd() *cobra.Command {
 	}
 	listCmd.Flags().Bool("json", false, "print imported account metadata as JSON without token material")
 
-	cmd.AddCommand(listCmd, newCodexAccountsCmd())
+	checkCmd := &cobra.Command{
+		Use:   "check",
+		Short: "Run daemon-side account smoke checks through CAP",
+		Long:  "Run the daemon-side accounts/check RPC and print safe account smoke evidence without token material or runtime paths.",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			provider, _ := cmd.Flags().GetString("provider")
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			raw, err := daemonRPCCall(cmd.Context(), "capd-accounts-check", protocol.MethodAccountsCheck, protocol.AccountsCheckParams{Provider: provider})
+			if err != nil {
+				return err
+			}
+			var result protocol.AccountsCheckResult
+			if err := json.Unmarshal(raw, &result); err != nil {
+				return err
+			}
+			if jsonOut {
+				out, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+				return nil
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "provider: %s\n", result.Provider)
+			if result.CurrentAccountID != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "current: %s\n", result.CurrentAccountID)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "secret backend: %s\n", result.SecretBackend)
+			if result.AutoRoute != nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "auto route: score %.2f quota %s\n", result.AutoRoute.Score, result.AutoRoute.QuotaState)
+			}
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
+			fmt.Fprintln(w, "CURRENT\tID\tEMAIL\tSECRET\tCREDENTIAL\tRUNTIME\tAUTH_JSON\tMARKER\tQUOTA")
+			for _, row := range result.Accounts {
+				mark := ""
+				if row.Current {
+					mark = "*"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%t\t%t\t%t\t%t\t%t\t%s\n",
+					mark, row.ID, row.Email, row.SecretBackendOK, row.CredentialReadable, row.RuntimeReady, row.AuthJSONPrivate, row.ProjectionMarkerOK, row.QuotaState)
+			}
+			return w.Flush()
+		},
+	}
+	checkCmd.Flags().String("provider", "codex", "account provider to check")
+	checkCmd.Flags().Bool("json", false, "print accounts/check result as JSON without token material")
+
+	cmd.AddCommand(listCmd, checkCmd, newCodexAccountsCmd())
 	return cmd
 }
 

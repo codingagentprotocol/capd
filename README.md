@@ -149,6 +149,7 @@ capd accounts codex project  # create a per-account CODEX_HOME projection
 capd accounts codex quota    # refresh quota and print a safe summary
 capd accounts codex quota auto
 capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
+capd accounts check --json   # daemon-side accounts/check smoke evidence
 ```
 
 Every flag, protocol field, and event is documented in
@@ -285,6 +286,9 @@ flowchart TB
   headers so access tokens never land in logs or protocol events.
 - See [docs/testing.md](docs/testing.md) for standard regression, native
   SecretStore, and live Codex account smoke commands.
+- `capd accounts check --json` exercises the running daemon's CAP
+  `accounts/check` RPC, while `capd accounts codex smoke` performs a direct
+  local CLI smoke check.
 - Codex account support is split into a control plane and a runtime plane:
   SQLite stores account metadata and quota snapshots, while each runtime can
   use its own `CODEX_HOME` and app-server profile.

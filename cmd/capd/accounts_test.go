@@ -5,10 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +21,7 @@ import (
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/daemon"
+	"github.com/codingagentprotocol/capd/internal/server"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
@@ -80,6 +85,69 @@ func TestCodexAccountsListShowsZeroQuotaWithoutLeakingSecrets(t *testing.T) {
 	}
 	if strings.Contains(text, "access-secret") || strings.Contains(text, "refresh-secret") || strings.Contains(text, "secretRef") {
 		t.Fatalf("list output leaked secret: %s", text)
+	}
+}
+
+func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	token := "tok &with?chars"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	accounts, secrets := seedCodexAccount(t)
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 12}); err != nil {
+		t.Fatal(err)
+	}
+	port := freeTCPPort(t)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", strconv.Itoa(port))
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	s := server.New(server.Options{
+		Host: "127.0.0.1", Port: port, Token: token, Version: "it",
+		Accounts: accounts, Secrets: secrets, RuntimeRoot: filepath.Join(home, "runtimes"),
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	go func() { errCh <- s.Run(ctx) }()
+	waitForHealthz(t, port)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("server shutdown: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("server did not shut down")
+		}
+		accounts.Close()
+	})
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var result protocol.AccountsCheckResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Provider != codexauth.Provider || result.CurrentAccountID != "codex-test" || result.SecretBackend != secret.BackendFile || result.CheckedAccounts != 1 || len(result.Accounts) != 1 {
+		t.Fatalf("result = %+v", result)
+	}
+	row := result.Accounts[0]
+	if row.ID != "codex-test" || !row.Current || !row.SecretBackendOK || !row.CredentialReadable || !row.RuntimeReady || !row.AuthJSONPrivate || !row.ProjectionMarkerOK || row.QuotaState != protocol.AccountQuotaStateFresh || !row.QuotaFresh {
+		t.Fatalf("row = %+v", row)
+	}
+	text := out.String()
+	for _, leaked := range []string{token, "access-secret", "refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
+		if strings.Contains(text, leaked) {
+			t.Fatalf("accounts check leaked %q: %s", leaked, text)
+		}
 	}
 }
 
@@ -907,4 +975,33 @@ func seedCodexAccount(t *testing.T) (*account.Store, secret.Store) {
 		t.Fatal(err)
 	}
 	return accounts, secrets
+}
+
+func freeTCPPort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr).Port
+}
+
+func waitForHealthz(t *testing.T, port int) {
+	t.Helper()
+	url := "http://127.0.0.1:" + strconv.Itoa(port) + "/healthz"
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		resp, err := http.Get(url)
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("server did not become healthy at %s", url)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

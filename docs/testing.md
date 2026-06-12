@@ -56,6 +56,7 @@ For multi-account routing readiness:
 
 ```bash
 capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
+capd accounts check --json
 capd agents usage codex --account auto
 ```
 
@@ -76,3 +77,9 @@ from the OS secret backend.
 Projection, quota refresh, and smoke all fail closed if an account `secret_ref`
 points at a different backend than the active SecretStore. Use `--json` to
 capture machine-readable smoke evidence in long tasks or CI logs.
+
+Use `capd accounts check --json` when you want the same safe evidence through
+the running daemon and CAP WebSocket path used by web clients. Unlike
+`capd accounts codex smoke --quota`, it does not refresh remote quota; it
+checks cached quota freshness, SecretStore readability, runtime projection, and
+auto-route evidence without returning runtime paths or token material.
