@@ -27,6 +27,7 @@ func newDoctorCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			jsonOut, _ := cmd.Flags().GetBool("json")
 			failOnIssues, _ := cmd.Flags().GetBool("fail")
+			verifySecretStore, _ := cmd.Flags().GetBool("verify-secretstore")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			requireSecretBackend, err := secret.NormalizeBackend(requireSecretBackend)
 			if err != nil {
@@ -34,6 +35,7 @@ func newDoctorCmd() *cobra.Command {
 			}
 			report, err := buildDoctorReport(cmd.Context(), doctorOptions{
 				RequireSecretBackend: requireSecretBackend,
+				VerifySecretStore:    verifySecretStore,
 			})
 			if err != nil {
 				return err
@@ -55,12 +57,14 @@ func newDoctorCmd() *cobra.Command {
 	}
 	cmd.Flags().Bool("json", false, "print machine-readable readiness evidence without token material")
 	cmd.Flags().Bool("fail", false, "return a non-zero exit code when readiness issues are found, including with --json")
+	cmd.Flags().Bool("verify-secretstore", false, "write, read, and delete a diagnostic secret to verify the active SecretStore backend")
 	cmd.Flags().String("require-secret-backend", "", "fail unless this SecretStore backend is active (file or native)")
 	return cmd
 }
 
 type doctorOptions struct {
 	RequireSecretBackend string
+	VerifySecretStore    bool
 }
 
 type doctorReport struct {
@@ -198,6 +202,22 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		Evidence: fmt.Sprintf("secret backend %s", report.Codex.SecretBackend),
 		NextStep: doctorCheckNextStep(!secretOK, fmt.Sprintf("set CAPD_SECRET_BACKEND=%s or pass --secret-backend %s for account commands", opts.RequireSecretBackend, opts.RequireSecretBackend)),
 	})
+	if opts.VerifySecretStore {
+		evidence := fmt.Sprintf("roundtrip ok for backend %s", report.Codex.SecretBackend)
+		roundTripOK := true
+		if err := doctorSecretStoreRoundTrip(ctx, secrets); err != nil {
+			roundTripOK = false
+			evidence = fmt.Sprintf("roundtrip failed for backend %s", report.Codex.SecretBackend)
+			report.Issues = append(report.Issues, "SecretStore roundtrip failed")
+			report.NextSteps = append(report.NextSteps, "verify native SecretStore support with: make verify-secretstore")
+		}
+		report.Checks = append(report.Checks, doctorCheckReport{
+			Name:     "SecretStore roundtrip",
+			OK:       roundTripOK,
+			Evidence: evidence,
+			NextStep: doctorCheckNextStep(!roundTripOK, "verify native SecretStore support with: make verify-secretstore"),
+		})
+	}
 	current, err := accounts.CurrentAccount(codexauth.Provider)
 	if err != nil {
 		return doctorReport{}, err
@@ -341,6 +361,30 @@ func doctorDaemonAccountsCheck(ctx context.Context, requireSecretBackend string)
 		return protocol.AccountsCheckResult{}, "decode daemon accounts/check response failed"
 	}
 	return result, ""
+}
+
+func doctorSecretStoreRoundTrip(ctx context.Context, secrets secret.Store) error {
+	id := fmt.Sprintf("doctor-%d", time.Now().UnixNano())
+	ref, err := secrets.Put(ctx, id, secret.Bundle{
+		Provider:    "capd-doctor",
+		AuthMode:    "diagnostic",
+		AccessToken: "doctor-secretstore-check",
+	})
+	if err != nil {
+		return err
+	}
+	defer secrets.Delete(context.Background(), ref)
+	got, err := secrets.Get(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if got.Provider != "capd-doctor" || got.AuthMode != "diagnostic" || got.AccessToken != "doctor-secretstore-check" {
+		return fmt.Errorf("secret store roundtrip mismatch")
+	}
+	if err := secrets.Delete(ctx, ref); err != nil {
+		return err
+	}
+	return nil
 }
 
 func safeDoctorDaemonError(err error) string {

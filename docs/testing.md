@@ -124,12 +124,13 @@ When doctor reports missing accounts and the daemon is running, prefer
 as the Web Console. `capd accounts codex import` remains available for direct
 local imports when the daemon is not running.
 
-`capd doctor --json --fail --require-secret-backend native` is the recommended
-preflight before the live chain. It does not refresh quota or read token
-material into the output; it reports daemon health, Codex CLI availability,
-imported account count, cached quota freshness, auto-route freshness,
-SecretStore backend, daemon-side CAP `accounts/check` reachability, readiness
-issues, and concrete next steps. After fixing account or quota issues, use
+`capd doctor --json --fail --verify-secretstore --require-secret-backend native`
+is the recommended preflight before the live chain. It does not refresh quota or
+read token material into the output; it reports daemon health, Codex CLI
+availability, imported account count, cached quota freshness, auto-route
+freshness, SecretStore backend, an explicit SecretStore write/read/delete
+roundtrip, daemon-side CAP `accounts/check` reachability, readiness issues, and
+concrete next steps. After fixing account or quota issues, use
 `capd accounts check --json --readiness` to
 refresh and verify the daemon-side readiness gate before the final live run,
 with safe partial evidence printed on failure.

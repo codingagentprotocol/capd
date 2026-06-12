@@ -154,6 +154,37 @@ func TestDoctorRequiresSecretBackend(t *testing.T) {
 	}
 }
 
+func TestDoctorVerifySecretStoreRoundTripWithoutLeakingDiagnosticSecret(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+	var out bytes.Buffer
+	cmd := newDoctorCmd()
+	cmd.SetArgs([]string{"--json", "--verify-secretstore"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var got doctorReport
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !containsDoctorCheck(got.Checks, doctorCheckReport{
+		Name:     "SecretStore roundtrip",
+		OK:       true,
+		Evidence: "roundtrip ok for backend file",
+	}) {
+		t.Fatalf("missing secretstore roundtrip check: %+v", got.Checks)
+	}
+	for _, leaked := range []string{"doctor-secretstore-check", "capd-doctor", home} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("doctor secretstore check leaked %q: %s", leaked, out.String())
+		}
+	}
+}
+
 func TestDoctorRecommendsDaemonImportWhenDaemonHealthy(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

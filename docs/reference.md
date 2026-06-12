@@ -52,12 +52,14 @@ freshness, and the active SecretStore backend. Use
 `--require-secret-backend native` to turn native SecretStore into an explicit
 readiness issue. When the daemon is healthy, doctor also calls daemon-side
 `accounts/check` over CAP/WebSocket to confirm the same account evidence that
-the Web Console uses. Text output returns a non-zero exit code when readiness
-issues are found. `--json` prints safe machine-readable evidence and next steps
-without token material or local secret paths; add `--fail` when JSON output
-should also return non-zero on readiness issues. Auto-route evidence includes
-the selected account id, quota state, freshness, primary quota usage, routing
-score, checked time, and the same human-readable reason used by routing previews. The
+the Web Console uses. Add `--verify-secretstore` when you want doctor to write,
+read, and delete a diagnostic secret in the active SecretStore backend; this is
+useful before native-backend live runs. Text output returns a non-zero exit code
+when readiness issues are found. `--json` prints safe machine-readable evidence
+and next steps without token material or local secret paths; add `--fail` when
+JSON output should also return non-zero on readiness issues. Auto-route evidence
+includes the selected account id, quota state, freshness, primary quota usage,
+routing score, checked time, and the same human-readable reason used by routing previews. The
 `codex.accounts` JSON array lists safe per-account quota evidence (id, email,
 current marker, plan, quota state, freshness, primary usage, checked time) and
 never includes SecretStore refs, token material, runtime paths, or raw auth JSON.
@@ -111,7 +113,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 |---------|--------|
 | `capd health [--json]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok` and `addr` |
 | `capd console [--probe] [--url]` | opens the local web console, or the compact validation probe with `--probe`, after checking daemon health. By default it passes the daemon token to the browser without printing it; `--url` prints the tokenized URL only when explicitly requested. |
-| `capd doctor [--json] [--fail] [--require-secret-backend <file\|native>]` | local readiness preflight for daemon health, Codex CLI availability, imported account count, quota freshness, auto-route freshness, and SecretStore backend; text mode fails when issues are found, and `--fail` makes JSON mode fail too |
+| `capd doctor [--json] [--fail] [--verify-secretstore] [--require-secret-backend <file\|native>]` | local readiness preflight for daemon health, Codex CLI availability, imported account count, quota freshness, auto-route freshness, daemon-side CAP account evidence, and SecretStore backend; `--verify-secretstore` performs an explicit write/read/delete diagnostic roundtrip; text mode fails when issues are found, and `--fail` makes JSON mode fail too |
 | `capd agents list` | table: id, available/not installed, version, binary path |
 | `capd agents route [--account <id\|auto>] [--capability name] [--require-fresh-quota] [--json]` | preview local routing without starting a session; with `--account auto`, shows the Codex account selected by conservative quota scoring. `--require-fresh-quota` fails unless that auto selection is backed by fresh cached quota |
 | `capd agents usage <id>` | account snapshot JSON: plan, 5h/weekly window used %, reset timestamps, credits (codex) |

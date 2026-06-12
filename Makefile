@@ -39,7 +39,7 @@ verify-codex-readiness-sim:
 
 live-codex-readiness:
 	@echo "live-codex-readiness requires >=2 imported Codex accounts, CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND), and a running daemon from: CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) capd start"
-	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd doctor --json --fail --require-secret-backend $(LIVE_SECRET_BACKEND)
+	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd doctor --json --fail --verify-secretstore --require-secret-backend $(LIVE_SECRET_BACKEND)
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex smoke --require-multiple --require-secret-backend $(LIVE_SECRET_BACKEND)
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd health --json
 	CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) go run ./cmd/capd accounts --secret-backend $(LIVE_SECRET_BACKEND) codex quota all
