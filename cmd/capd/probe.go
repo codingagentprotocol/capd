@@ -117,18 +117,20 @@ type probeDataResponse struct {
 		CheckedAccounts int    `json:"checkedAccounts"`
 	} `json:"accountsCheck"`
 	AutoRoute *struct {
-		AccountID  string   `json:"accountId"`
-		QuotaState string   `json:"quotaState"`
-		Fresh      bool     `json:"fresh"`
-		Primary    *float64 `json:"primaryUsedPercent"`
+		AccountID     string   `json:"accountId"`
+		SecretBackend string   `json:"secretBackend"`
+		QuotaState    string   `json:"quotaState"`
+		Fresh         bool     `json:"fresh"`
+		Primary       *float64 `json:"primaryUsedPercent"`
 	} `json:"autoRoute"`
 	RouteCandidates []struct {
-		AccountID  string   `json:"accountId"`
-		QuotaState string   `json:"quotaState"`
-		Fresh      bool     `json:"fresh"`
-		Primary    *float64 `json:"primaryUsedPercent"`
-		Score      float64  `json:"score"`
-		Reason     string   `json:"reason"`
+		AccountID     string   `json:"accountId"`
+		SecretBackend string   `json:"secretBackend"`
+		QuotaState    string   `json:"quotaState"`
+		Fresh         bool     `json:"fresh"`
+		Primary       *float64 `json:"primaryUsedPercent"`
+		Score         float64  `json:"score"`
+		Reason        string   `json:"reason"`
 	} `json:"routeCandidates"`
 	Checks []struct {
 		Name     string `json:"name"`
@@ -228,12 +230,19 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 		fmt.Fprintf(cmd.OutOrStdout(), "secret backend: actual=%s required=%s ok=%t\n", result.Summary.SecretBackend, required, result.Summary.SecretBackendOK)
 	}
 	if result.AutoRoute != nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s fresh=%t\n", result.AutoRoute.AccountID, result.AutoRoute.QuotaState, result.AutoRoute.Fresh)
+		backend := ""
+		if result.AutoRoute.SecretBackend != "" {
+			backend = " secret=" + result.AutoRoute.SecretBackend
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s fresh=%t%s\n", result.AutoRoute.AccountID, result.AutoRoute.QuotaState, result.AutoRoute.Fresh, backend)
 	}
 	if len(result.RouteCandidates) > 0 {
 		parts := make([]string, 0, len(result.RouteCandidates))
 		for _, candidate := range result.RouteCandidates {
 			part := fmt.Sprintf("%s %s fresh=%t", candidate.AccountID, candidate.QuotaState, candidate.Fresh)
+			if candidate.SecretBackend != "" {
+				part += " secret=" + candidate.SecretBackend
+			}
 			if candidate.Primary != nil {
 				part += fmt.Sprintf(" primary=%.1f%%", *candidate.Primary)
 			}
