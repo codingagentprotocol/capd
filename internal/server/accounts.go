@@ -27,7 +27,7 @@ func (s *Server) runtimeEnvForAccount(ctx context.Context, agentID, accountID st
 	if strings.TrimSpace(accountID) == "" {
 		return nil, protocol.NewError(protocol.CodeInvalidParams, "accountId is required")
 	}
-	if perr := rejectReservedAccountID(accountID); perr != nil {
+	if perr := rejectConcreteAccountID(accountID); perr != nil {
 		return nil, perr
 	}
 	acc, err := s.opts.Accounts.LoadAccount(accountID)
@@ -55,6 +55,17 @@ func (s *Server) runtimeEnvForAccount(ctx context.Context, agentID, accountID st
 func rejectReservedAccountID(accountID string) *protocol.Error {
 	if strings.TrimSpace(accountID) == protocol.AccountAll {
 		return protocol.NewError(protocol.CodeInvalidParams, "accountId %q is reserved for accounts/quota batch refresh", protocol.AccountAll)
+	}
+	return nil
+}
+
+func rejectConcreteAccountID(accountID string) *protocol.Error {
+	accountID = strings.TrimSpace(accountID)
+	if perr := rejectReservedAccountID(accountID); perr != nil {
+		return perr
+	}
+	if accountID == protocol.AccountAuto {
+		return protocol.NewError(protocol.CodeInvalidParams, "accountId %q is supported only for account-aware routing", protocol.AccountAuto)
 	}
 	return nil
 }
@@ -166,7 +177,7 @@ func (s *Server) currentAccount(params protocol.AccountsCurrentParams) (protocol
 	}
 	accountID := strings.TrimSpace(params.AccountID)
 	if accountID != "" {
-		if perr := rejectReservedAccountID(accountID); perr != nil {
+		if perr := rejectConcreteAccountID(accountID); perr != nil {
 			return protocol.AccountsCurrentResult{}, perr
 		}
 		acc, err := s.opts.Accounts.LoadAccount(accountID)
@@ -454,7 +465,7 @@ func (s *Server) removeAccount(ctx context.Context, params protocol.AccountsRemo
 	if accountID == "" {
 		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInvalidParams, "accountId is required")
 	}
-	if perr := rejectReservedAccountID(accountID); perr != nil {
+	if perr := rejectConcreteAccountID(accountID); perr != nil {
 		return protocol.AccountsRemoveResult{}, perr
 	}
 	acc, err := s.opts.Accounts.LoadAccount(accountID)

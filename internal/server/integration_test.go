@@ -703,6 +703,26 @@ func TestAccountAllIsReservedOutsideQuotaBatchRefresh(t *testing.T) {
 	}
 }
 
+func TestAccountAutoIsRejectedForConcreteAccountOperations(t *testing.T) {
+	_, ts, _, _ := newCodexAccountIntegrationServer(t)
+	c := initialized(t, ts)
+
+	cases := []struct {
+		method string
+		params any
+	}{
+		{protocol.MethodAccountsCurrent, protocol.AccountsCurrentParams{Provider: codexauth.Provider, AccountID: protocol.AccountAuto}},
+		{protocol.MethodAccountsProject, protocol.AccountsProjectParams{Provider: codexauth.Provider, AccountID: protocol.AccountAuto}},
+		{protocol.MethodAccountsRemove, protocol.AccountsRemoveParams{Provider: codexauth.Provider, AccountID: protocol.AccountAuto}},
+	}
+	for _, tc := range cases {
+		resp := c.call(tc.method, tc.params)
+		if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "account-aware routing") {
+			t.Fatalf("%s response = %+v", tc.method, resp)
+		}
+	}
+}
+
 func TestAgentsRouteAutoAccountIgnoresStaleLowQuota(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
 	addCodexAccountForTest(t, accounts, "codex-fresh", "fresh@example.com")
