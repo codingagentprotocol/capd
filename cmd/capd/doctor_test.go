@@ -631,6 +631,51 @@ func TestDoctorQuotaNextStepsPreferRouteSecretBackend(t *testing.T) {
 	}
 }
 
+func TestDoctorQuotaNextStepsHonorExplicitRequiredSecretBackend(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/healthz" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		w.Write([]byte("ok\n"))
+	}))
+	defer ts.Close()
+	host, port := splitTestURL(t, ts.URL)
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	staleAt := time.Now().Add(-account.QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 9, CheckedAt: staleAt}); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := buildDoctorReport(t.Context(), doctorOptions{RequireSecretBackend: secret.BackendNative})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Codex.RouteCandidates) != 1 || report.Codex.RouteCandidates[0].SecretBackend != secret.BackendFile {
+		t.Fatalf("route candidates = %+v", report.Codex.RouteCandidates)
+	}
+	want := "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend native --timeout 2m"
+	if !containsString(report.NextSteps, want) {
+		t.Fatalf("next steps ignored explicit backend %q: %+v", want, report.NextSteps)
+	}
+	if !containsDoctorCheck(report.Checks, doctorCheckReport{
+		Name:     "Codex quota freshness",
+		OK:       false,
+		Evidence: "fresh 0/1, stale 1, missing 0",
+		NextStep: want,
+	}) {
+		t.Fatalf("quota freshness check ignored explicit backend: %+v", report.Checks)
+	}
+	if containsString(report.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend file --timeout 2m") {
+		t.Fatalf("next steps used route backend instead of explicit backend: %+v", report.NextSteps)
+	}
+}
+
 func TestDoctorReportsUnreadableAccountSecretsSafely(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

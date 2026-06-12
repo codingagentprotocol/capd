@@ -119,8 +119,9 @@ When quota or auto-route freshness is missing, doctor next steps point to
 `capd accounts check --json --readiness` so the same daemon-side
 refresh-and-verify gate used by web clients can confirm the fix while returning
 safe partial evidence on failure. Those quota and route next steps prefer the
-selected route account's `secretBackend` evidence, so mixed file/native
-installations get a backend-specific verification command.
+selected route account's `secretBackend` evidence when no backend was
+explicitly required, so mixed file/native installations get a backend-specific
+verification command without overriding an intentional gate.
 
 ### `capd run <prompt>` — send one task and stream it
 

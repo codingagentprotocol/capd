@@ -648,6 +648,9 @@ func doctorRouteCheckNextStep(imported int, daemonOK bool, requireSecretBackend 
 }
 
 func doctorRouteBackendHint(candidates []protocol.AccountRouteEvidence, autoRouteAccountID, fallback string) string {
+	if fallback != "" {
+		return fallback
+	}
 	if autoRouteAccountID != "" {
 		for _, candidate := range candidates {
 			if candidate.AccountID == autoRouteAccountID && candidate.SecretBackend != "" {
