@@ -242,6 +242,7 @@ func newCodexAccountsCmd() *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			baseURL, _ := cmd.Flags().GetString("base-url")
+			rawOut, _ := cmd.Flags().GetBool("raw")
 			accounts, secrets, err := openAccountDeps()
 			if err != nil {
 				return err
@@ -278,12 +279,17 @@ func newCodexAccountsCmd() *cobra.Command {
 			if err := accounts.SaveQuota(result.Quota); err != nil {
 				return err
 			}
-			out, _ := json.MarshalIndent(result.Usage, "", "  ")
+			var body any = codexQuotaSummaryFrom(acc, result.Quota)
+			if rawOut {
+				body = result.Usage
+			}
+			out, _ := json.MarshalIndent(body, "", "  ")
 			fmt.Fprintln(cmd.OutOrStdout(), string(out))
 			return nil
 		},
 	}
 	quotaCmd.Flags().String("base-url", "", "override ChatGPT base URL for testing")
+	quotaCmd.Flags().Bool("raw", false, "print raw backend usage JSON for debugging")
 
 	smokeCmd := &cobra.Command{
 		Use:   "smoke",
@@ -488,6 +494,40 @@ type codexSmokeAccount struct {
 	ProjectionMarkerOK bool     `json:"projectionMarkerOk"`
 	PrimaryUsed        string   `json:"primaryUsed"`
 	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
+}
+
+type codexQuotaSummary struct {
+	ID                    string  `json:"id"`
+	Provider              string  `json:"provider"`
+	Email                 string  `json:"email,omitempty"`
+	AccountID             string  `json:"accountId,omitempty"`
+	Plan                  string  `json:"plan,omitempty"`
+	PrimaryUsedPercent    float64 `json:"primaryUsedPercent"`
+	PrimaryResetAt        string  `json:"primaryResetAt,omitempty"`
+	SecondaryUsedPercent  float64 `json:"secondaryUsedPercent"`
+	SecondaryResetAt      string  `json:"secondaryResetAt,omitempty"`
+	CodeReviewUsedPercent float64 `json:"codeReviewUsedPercent"`
+	CheckedAt             int64   `json:"checkedAt"`
+}
+
+func codexQuotaSummaryFrom(acc account.Account, q account.QuotaSnapshot) codexQuotaSummary {
+	plan := acc.Plan
+	if plan == "" {
+		plan = q.Plan
+	}
+	return codexQuotaSummary{
+		ID:                    acc.ID,
+		Provider:              acc.Provider,
+		Email:                 acc.Email,
+		AccountID:             acc.AccountID,
+		Plan:                  plan,
+		PrimaryUsedPercent:    q.PrimaryUsedPercent,
+		PrimaryResetAt:        q.PrimaryResetAt,
+		SecondaryUsedPercent:  q.SecondaryUsedPercent,
+		SecondaryResetAt:      q.SecondaryResetAt,
+		CodeReviewUsedPercent: q.CodeReviewUsedPercent,
+		CheckedAt:             q.CheckedAt,
+	}
 }
 
 type codexSmokeProjection struct {

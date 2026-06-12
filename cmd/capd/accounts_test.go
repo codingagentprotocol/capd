@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -75,6 +77,79 @@ func TestCodexAccountsListShowsZeroQuotaWithoutLeakingSecrets(t *testing.T) {
 	}
 	if strings.Contains(text, "access-secret") || strings.Contains(text, "refresh-secret") || strings.Contains(text, "secretRef") {
 		t.Fatalf("list output leaked secret: %s", text)
+	}
+}
+
+func TestCodexAccountsQuotaPrintsSafeSummaryByDefault(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer access-secret" {
+			t.Fatalf("Authorization = %q", got)
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType":   "pro",
+			"debugToken": "backend-secret",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": 37, "resetsAt": "2026-06-12T10:00:00Z"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "quota", "--base-url", srv.URL})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, secret := range []string{"backend-secret", "debugToken", "access-secret", "refresh-secret", "rawJson", "RawJSON"} {
+		if strings.Contains(text, secret) {
+			t.Fatalf("quota summary leaked %q: %s", secret, text)
+		}
+	}
+	var result codexQuotaSummary
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.ID != "codex-test" || result.Provider != codexauth.Provider || result.Plan != "pro" || result.PrimaryUsedPercent != 37 {
+		t.Fatalf("result = %+v", result)
+	}
+	if q, err := accounts.LoadQuota("codex-test"); err != nil || q.PrimaryUsedPercent != 37 {
+		t.Fatalf("cached quota = %+v err=%v", q, err)
+	}
+}
+
+func TestCodexAccountsQuotaRawFlagPrintsBackendUsage(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"planType":   "pro",
+			"debugToken": "backend-debug-value",
+			"rateLimits": map[string]any{
+				"primary": map[string]any{"usedPercent": 11},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "quota", "--base-url", srv.URL, "--raw"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if !strings.Contains(text, "debugToken") || !strings.Contains(text, "backend-debug-value") {
+		t.Fatalf("raw output missing backend JSON: %s", text)
 	}
 }
 
