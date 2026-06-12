@@ -396,6 +396,9 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if len(result.RouteCandidates) != 1 || result.RouteCandidates[0].AccountID != "codex-test" || !result.RouteCandidates[0].Fresh {
 		t.Fatalf("route candidates = %+v", result.RouteCandidates)
 	}
+	if !result.Summary.Ready || result.Summary.CheckedAccounts != 1 || result.Summary.RequiredAccounts != 2 || result.Summary.MissingAccounts != 1 || result.Summary.FreshQuotaAccounts != 1 || !result.Summary.AutoRouteFresh || result.Summary.RouteCandidates != 1 || !result.Summary.SecretBackendOK {
+		t.Fatalf("summary = %+v", result.Summary)
+	}
 	text := out.String()
 	for _, leaked := range []string{token, "access-secret", "refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
 		if strings.Contains(text, leaked) {
@@ -414,7 +417,7 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if !strings.Contains(out.String(), "quota refreshed: false") {
 		t.Fatalf("text output missing quota refresh evidence: %s", out.String())
 	}
-	for _, want := range []string{"auto route: codex-test quota fresh fresh true primary 12.0% score ", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountQuotaStateFresh, "true", "12.0%"} {
+	for _, want := range []string{"summary: ready=true accounts=1/2 missing=1 quota fresh=1 stale=0 missing=0 autoFresh=true secretOK=true", "auto route: codex-test quota fresh fresh true primary 12.0% score ", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountQuotaStateFresh, "true", "12.0%"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("text output missing %q: %s", want, out.String())
 		}
@@ -455,6 +458,9 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	}
 	if !refreshed.QuotaRefreshed {
 		t.Fatalf("quotaRefreshed = false")
+	}
+	if !refreshed.Summary.Ready || !refreshed.Summary.QuotaRefreshed || refreshed.Summary.FreshQuotaAccounts != 1 || !refreshed.Summary.AutoRouteFresh {
+		t.Fatalf("refreshed summary = %+v", refreshed.Summary)
 	}
 	for _, leaked := range []string{token, "access-secret", "refresh-secret", "backend-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
 		if strings.Contains(out.String(), leaked) {
@@ -743,6 +749,9 @@ func TestAccountsCheckReadinessShortcutSetsDaemonGateParams(t *testing.T) {
 	}
 	if result.CheckedAccounts != 2 || !result.QuotaRefreshed || result.SecretBackend != secret.BackendFile || result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-alt" || !result.AutoRoute.Fresh {
 		t.Fatalf("result = %+v", result)
+	}
+	if !result.Summary.Ready || result.Summary.CheckedAccounts != 2 || result.Summary.MissingAccounts != 0 || result.Summary.FreshQuotaAccounts != 2 || result.Summary.RequiredSecretBackend != secret.BackendFile || !result.Summary.SecretBackendOK {
+		t.Fatalf("summary = %+v", result.Summary)
 	}
 	for _, row := range result.Accounts {
 		if !row.QuotaFresh || row.QuotaState != protocol.AccountQuotaStateFresh {

@@ -1373,6 +1373,9 @@ func TestAccountsCheckReturnsSafeSmokeEvidence(t *testing.T) {
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateFresh || !result.AutoRoute.Fresh {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
+	if !result.Summary.Ready || result.Summary.CheckedAccounts != 1 || result.Summary.RequiredAccounts != 2 || result.Summary.MissingAccounts != 1 || result.Summary.FreshQuotaAccounts != 1 || !result.Summary.AutoRouteFresh || result.Summary.RouteCandidates != 1 || !result.Summary.SecretBackendOK {
+		t.Fatalf("summary = %+v", result.Summary)
+	}
 	profileHome := filepath.Join(s.opts.RuntimeRoot, codexauth.Provider, "codex-test")
 	if _, err := os.Stat(filepath.Join(profileHome, "auth.json")); err != nil {
 		t.Fatal(err)
@@ -1460,6 +1463,9 @@ func TestAccountsCheckCanRefreshQuotaAndEnforceReadiness(t *testing.T) {
 	if result.CheckedAccounts != 2 || !result.QuotaRefreshed || result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-low" || !result.AutoRoute.Fresh {
 		t.Fatalf("result = %+v", result)
 	}
+	if !result.Summary.Ready || result.Summary.CheckedAccounts != 2 || result.Summary.MissingAccounts != 0 || result.Summary.FreshQuotaAccounts != 2 || !result.Summary.AutoRouteFresh || result.Summary.RequiredSecretBackend != secret.BackendFile || !result.Summary.SecretBackendOK {
+		t.Fatalf("summary = %+v", result.Summary)
+	}
 	if len(result.Accounts) != 2 || result.Accounts[0].ID != "codex-low" || result.Accounts[1].ID != "codex-test" {
 		t.Fatalf("accounts not sorted by account id: %+v", result.Accounts)
 	}
@@ -1508,6 +1514,9 @@ func TestAccountsCheckReadinessFailureIsDaemonSideAndSafe(t *testing.T) {
 	partial := accountsCheckErrorData(t, resp.Error)
 	if partial.CheckedAccounts != 1 || len(partial.RouteCandidates) != 1 || partial.RouteCandidates[0].AccountID != "codex-test" {
 		t.Fatalf("partial evidence = %+v", partial)
+	}
+	if partial.Summary.Ready || partial.Summary.CheckedAccounts != 1 || partial.Summary.MissingAccounts != 1 || partial.Summary.RouteCandidates != 1 {
+		t.Fatalf("partial summary = %+v", partial.Summary)
 	}
 	data, _ := json.Marshal(partial)
 	for _, leaked := range []string{"test-token", "backend-secret", "secretRef", "file:codex-test", "CODEX_HOME", s.opts.RuntimeRoot} {
@@ -1572,6 +1581,9 @@ func TestAccountsCheckAllFreshFailureReportsEveryStaleAccountSafely(t *testing.T
 	if partial.CheckedAccounts != 2 || len(partial.Accounts) != 2 || partial.Accounts[0].ID != "codex-missing" || partial.Accounts[1].QuotaState != protocol.AccountQuotaStateStale {
 		t.Fatalf("partial evidence = %+v", partial)
 	}
+	if partial.Summary.Ready || partial.Summary.CheckedAccounts != 2 || partial.Summary.FreshQuotaAccounts != 0 || partial.Summary.StaleQuotaAccounts != 1 || partial.Summary.MissingQuotaAccounts != 1 {
+		t.Fatalf("partial summary = %+v", partial.Summary)
+	}
 	data, _ := json.Marshal(partial)
 	for _, leaked := range []string{"test-token", "missing-token", "must-not-return", "secretRef", "file:codex", "CODEX_HOME", s.opts.RuntimeRoot} {
 		if strings.Contains(string(data), leaked) {
@@ -1602,6 +1614,9 @@ func TestAccountsCheckReadinessBackendMismatchAvoidsQuotaCalls(t *testing.T) {
 	partial := accountsCheckErrorData(t, resp.Error)
 	if partial.CheckedAccounts != 1 || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 0 {
 		t.Fatalf("partial evidence = %+v", partial)
+	}
+	if partial.Summary.Ready || partial.Summary.CheckedAccounts != 1 || partial.Summary.SecretBackendOK || partial.Summary.RequiredSecretBackend != secret.BackendNative {
+		t.Fatalf("partial summary = %+v", partial.Summary)
 	}
 	if quotaCalls.Load() != 0 {
 		t.Fatalf("quota calls = %d", quotaCalls.Load())
@@ -1638,6 +1653,9 @@ func TestAccountsCheckReadinessSingleAccountFailureKeepsCheckedEvidence(t *testi
 	partial := accountsCheckErrorData(t, resp.Error)
 	if partial.CheckedAccounts != 1 || !partial.QuotaRefreshed || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 1 || partial.AutoRoute == nil || !partial.AutoRoute.Fresh {
 		t.Fatalf("partial evidence = %+v", partial)
+	}
+	if partial.Summary.Ready || partial.Summary.CheckedAccounts != 1 || partial.Summary.FreshQuotaAccounts != 1 || !partial.Summary.AutoRouteFresh || !partial.Summary.SecretBackendOK {
+		t.Fatalf("partial summary = %+v", partial.Summary)
 	}
 	if partial.Accounts[0].ID != "codex-test" || !partial.Accounts[0].RuntimeReady || !partial.Accounts[0].QuotaFresh || partial.Accounts[0].PrimaryUsedPercent == nil || *partial.Accounts[0].PrimaryUsedPercent != 11 {
 		t.Fatalf("account evidence = %+v", partial.Accounts[0])

@@ -200,9 +200,27 @@ type AccountsCheckResult struct {
 	SecretBackend    string                 `json:"secretBackend"`
 	CheckedAccounts  int                    `json:"checkedAccounts"`
 	QuotaRefreshed   bool                   `json:"quotaRefreshed,omitempty"`
+	Summary          AccountsCheckSummary   `json:"summary"`
 	AutoRoute        *AccountRouteEvidence  `json:"autoRoute,omitempty"`
 	RouteCandidates  []AccountRouteEvidence `json:"routeCandidates,omitempty"`
 	Accounts         []AccountCheckEvidence `json:"accounts"`
+}
+
+type AccountsCheckSummary struct {
+	Ready                 bool   `json:"ready"`
+	CheckedAccounts       int    `json:"checkedAccounts"`
+	RequiredAccounts      int    `json:"requiredAccounts"`
+	MissingAccounts       int    `json:"missingAccounts"`
+	FreshQuotaAccounts    int    `json:"freshQuotaAccounts"`
+	StaleQuotaAccounts    int    `json:"staleQuotaAccounts"`
+	MissingQuotaAccounts  int    `json:"missingQuotaAccounts"`
+	AutoRouteAccountID    string `json:"autoRouteAccountId,omitempty"`
+	AutoRouteFresh        bool   `json:"autoRouteFresh"`
+	RouteCandidates       int    `json:"routeCandidates"`
+	SecretBackend         string `json:"secretBackend,omitempty"`
+	RequiredSecretBackend string `json:"requiredSecretBackend,omitempty"`
+	SecretBackendOK       bool   `json:"secretBackendOk"`
+	QuotaRefreshed        bool   `json:"quotaRefreshed,omitempty"`
 }
 
 type AccountCheckEvidence struct {

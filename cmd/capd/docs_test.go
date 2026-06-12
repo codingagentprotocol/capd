@@ -17,7 +17,7 @@ func TestReferenceDocsCoverRouteCandidateEvidence(t *testing.T) {
 		`"routeCandidates": [{"accountId": "codex-acct"`,
 		"`routeCandidates` contains the same safe evidence for every",
 		"`accountRoute` should match the first",
-		`{"provider", "currentAccountId", "secretBackend", "checkedAccounts", "quotaRefreshed", "autoRoute", "routeCandidates", "accounts"}`,
+		`{"provider", "currentAccountId", "secretBackend", "checkedAccounts", "quotaRefreshed", "summary", "autoRoute", "routeCandidates", "accounts"}`,
 		"`routeCandidates` is included with the",
 		"why `autoRoute` was selected without making a second route call",
 		"partial evidence may still include cached\n`routeCandidates`",

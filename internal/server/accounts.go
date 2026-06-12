@@ -338,11 +338,11 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		}
 	}
 	if perr := validateAccountsCheckPreflight(s.opts.Secrets.Backend(), len(accounts), params); perr != nil {
-		return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result)
+		return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result, params)
 	}
 	if params.RefreshQuota {
 		if _, perr := s.refreshAccountQuota(ctx, protocol.AccountsQuotaParams{Provider: provider, AccountID: protocol.AccountAll}); perr != nil {
-			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(protocol.NewError(perr.Code, "refresh quota: %s", perr.Message), result)
+			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(protocol.NewError(perr.Code, "refresh quota: %s", perr.Message), result, params)
 		}
 		accounts, err = s.opts.Accounts.ListAccounts(provider)
 		if err != nil {
@@ -357,14 +357,14 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 	for _, acc := range accounts {
 		row, perr := s.checkAccount(ctx, acc, current)
 		if perr != nil {
-			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result)
+			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result, params)
 		}
 		result.Accounts = append(result.Accounts, row)
 	}
 	if len(accounts) > 0 {
 		selected, _, perr := s.selectCodexAccountForRoute()
 		if perr != nil {
-			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result)
+			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result, params)
 		}
 		evidence := account.QuotaRouteEvidence(s.opts.Accounts, selected)
 		result.AutoRoute = &evidence
@@ -373,17 +373,62 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		}
 	}
 	if perr := validateAccountsCheckResult(result, params); perr != nil {
-		return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result)
+		return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result, params)
 	}
+	result.Summary = accountsCheckSummary(result, params)
 	return result, nil
 }
 
-func accountsCheckErrorWithEvidence(perr *protocol.Error, result protocol.AccountsCheckResult) *protocol.Error {
+func accountsCheckErrorWithEvidence(perr *protocol.Error, result protocol.AccountsCheckResult, params protocol.AccountsCheckParams) *protocol.Error {
 	if perr == nil {
 		return nil
 	}
+	result.Summary = accountsCheckSummary(result, params)
 	perr.Data = result
 	return perr
+}
+
+func accountsCheckSummary(result protocol.AccountsCheckResult, params protocol.AccountsCheckParams) protocol.AccountsCheckSummary {
+	requiredAccounts := 2
+	missingAccounts := requiredAccounts - result.CheckedAccounts
+	if missingAccounts < 0 {
+		missingAccounts = 0
+	}
+	summary := protocol.AccountsCheckSummary{
+		CheckedAccounts:       result.CheckedAccounts,
+		RequiredAccounts:      requiredAccounts,
+		MissingAccounts:       missingAccounts,
+		RouteCandidates:       len(result.RouteCandidates),
+		SecretBackend:         result.SecretBackend,
+		RequiredSecretBackend: params.RequireSecretBackend,
+		SecretBackendOK:       params.RequireSecretBackend == "" || result.SecretBackend == params.RequireSecretBackend,
+		QuotaRefreshed:        result.QuotaRefreshed,
+	}
+	for _, row := range result.Accounts {
+		switch row.QuotaState {
+		case protocol.AccountQuotaStateFresh:
+			summary.FreshQuotaAccounts++
+		case protocol.AccountQuotaStateStale:
+			summary.StaleQuotaAccounts++
+		default:
+			summary.MissingQuotaAccounts++
+		}
+	}
+	if result.AutoRoute != nil {
+		summary.AutoRouteAccountID = result.AutoRoute.AccountID
+		summary.AutoRouteFresh = result.AutoRoute.Fresh
+	}
+	summary.Ready = result.CheckedAccounts > 0 && summary.SecretBackendOK
+	if params.RequireMultiple {
+		summary.Ready = summary.Ready && result.CheckedAccounts >= requiredAccounts
+	}
+	if params.RequireFreshQuota {
+		summary.Ready = summary.Ready && summary.AutoRouteFresh
+	}
+	if params.RequireAllFreshQuota {
+		summary.Ready = summary.Ready && result.CheckedAccounts > 0 && summary.FreshQuotaAccounts == result.CheckedAccounts
+	}
+	return summary
 }
 
 func validateAccountsCheckPreflight(secretBackend string, checkedAccounts int, params protocol.AccountsCheckParams) *protocol.Error {

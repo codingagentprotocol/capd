@@ -159,7 +159,7 @@ the file backend.
 |---------|---------|
 | `capd accounts list [--json]` | List imported account metadata across all providers; provider-scoped current accounts are marked with `*`; quota state is reported as `fresh`, `stale`, or `missing`. |
 | `capd accounts import [--provider codex] [--auth path ...] [--json]` | Requires a running daemon (`capd start`). Imports one or more Codex `auth.json` files through daemon `accounts/import`, matching the CAP/WebSocket path used by web clients. Repeat `--auth` to import multiple explicit paths; without `--auth`, the daemon uses its default `~/.codex/auth.json`. |
-| `capd accounts check [--provider codex] [--json] [--readiness] [--refresh-quota] [--require-multiple] [--require-fresh-quota] [--require-all-fresh-quota] [--require-secret-backend <file\|native>] [--timeout 2m]` | Requires a running daemon (`capd start`). Optionally refresh every imported Codex quota through daemon `accounts/quota`, then call the daemon's `accounts/check` RPC and print safe smoke evidence without token material or runtime paths. JSON includes `routeCandidates` when imported accounts are available, using the same ordering as `agents/route --account auto`; failing JSON calls also print structured `ok:false` errors when possible. Use `capd accounts codex smoke` for direct local checks that do not need the daemon. `--readiness` is the recommended daemon-side gate for live Codex work: it enables quota refresh, multiple-account, fresh auto-route, all-fresh quota, and native SecretStore requirements by default. `--timeout` bounds daemon-side waits so live preflight does not hang on remote quota refresh. `--require-secret-backend` accepts only `file` or `native` and can override the readiness backend for intentional file-backend tests. |
+| `capd accounts check [--provider codex] [--json] [--readiness] [--refresh-quota] [--require-multiple] [--require-fresh-quota] [--require-all-fresh-quota] [--require-secret-backend <file\|native>] [--timeout 2m]` | Requires a running daemon (`capd start`). Optionally refresh every imported Codex quota through daemon `accounts/quota`, then call the daemon's `accounts/check` RPC and print safe smoke evidence without token material or runtime paths. JSON includes a compact `summary` and `routeCandidates` when imported accounts are available, using the same ordering as `agents/route --account auto`; failing JSON calls also print structured `ok:false` errors when possible. Use `capd accounts codex smoke` for direct local checks that do not need the daemon. `--readiness` is the recommended daemon-side gate for live Codex work: it enables quota refresh, multiple-account, fresh auto-route, all-fresh quota, and native SecretStore requirements by default. `--timeout` bounds daemon-side waits so live preflight does not hang on remote quota refresh. `--require-secret-backend` accepts only `file` or `native` and can override the readiness backend for intentional file-backend tests. |
 
 ### `capd accounts codex` — local Codex account control plane
 
@@ -322,7 +322,7 @@ or local filesystem paths.
 ### `accounts/check`
 
 `{"provider": "codex", "refreshQuota": true, "requireMultiple": true, "requireFreshQuota": true, "requireAllFreshQuota": true, "requireSecretBackend": "native"}` →
-`{"provider", "currentAccountId", "secretBackend", "checkedAccounts", "quotaRefreshed", "autoRoute", "routeCandidates", "accounts"}`.
+`{"provider", "currentAccountId", "secretBackend", "checkedAccounts", "quotaRefreshed", "summary", "autoRoute", "routeCandidates", "accounts"}`.
 
 Runs a safe local smoke check for imported Codex accounts: verifies SecretStore
 backend matching, credential readability, per-account runtime projection,
@@ -331,7 +331,12 @@ auto-route evidence including the selected `autoRoute.accountId`. By default it
 reads cached quota only; set `refreshQuota:true` to refresh every imported Codex
 account first inside the daemon. The `require*` fields turn the same RPC into a
 failing readiness gate for multi-account checks, fresh auto-route quota, fresh
-quota on every checked account, and a specific SecretStore backend.
+quota on every checked account, and a specific SecretStore backend. The
+response-level `summary` is the shared compact readiness view for CLI, Web,
+Probe, and automation clients. It includes `ready`, account counts, quota
+fresh/stale/missing counts, selected auto-route freshness, route-candidate
+count, active and required SecretStore backend, and whether quota was refreshed
+inside the call.
 `capd accounts check --readiness` is CLI shorthand for setting
 `refreshQuota:true`, `requireMultiple:true`, `requireFreshQuota:true`,
 `requireAllFreshQuota:true`, and `requireSecretBackend:"native"` unless a
@@ -339,7 +344,8 @@ different `--require-secret-backend` is supplied.
 With `--json`, a failing readiness or smoke gate still exits non-zero but prints
 `{"ok":false,"error":{...},"data":{...}}` when the daemon returned safe partial
 evidence in JSON-RPC error `data`. The partial evidence follows the same
-redaction contract as a successful `accounts/check` response.
+redaction contract as a successful `accounts/check` response, including
+`summary` when the daemon accumulated partial evidence.
 `quotaRefreshed:true` means the returned evidence follows a successful quota
 refresh in this same call. The response never returns token material,
 `secret_ref`, raw auth JSON, or local filesystem paths.
@@ -351,7 +357,8 @@ error `data` may contain the same safe `accounts/check` evidence accumulated so
 far. Clients should treat it as partial evidence for diagnostics, not as a
 successful readiness result. If remote quota refresh fails before per-account
 runtime checks complete, partial evidence may still include cached
-`routeCandidates` so clients can show the pre-refresh account routing state.
+`routeCandidates` and `summary` so clients can show the pre-refresh account
+routing and readiness state.
 
 ### `accounts/quota`
 
