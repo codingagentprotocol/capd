@@ -206,6 +206,10 @@ user-level launchd/systemd/Windows SCM unit running `capd start`; starts on
 boot, restarts on crash, never root. `capd service install --secret-backend
 native` persists the daemon backend as `capd start --secret-backend native`,
 which is the recommended persistent setup for live multi-account Codex checks.
+If `--secret-backend` is omitted, `capd service install` also honors
+`CAPD_SECRET_BACKEND` at install time and writes the selected backend into the
+service arguments so launchd/systemd/Windows SCM do not need to inherit shell
+environment variables later.
 
 ## Environment variables
 

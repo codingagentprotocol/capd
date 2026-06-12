@@ -98,6 +98,7 @@ never runs as root):
 ```bash
 capd start --secret-backend native                                  # foreground
 capd service install --secret-backend native && capd service start  # persistent
+# or: CAPD_SECRET_BACKEND=native capd service install && capd service start
 ```
 
 The local web console is served by the daemon at

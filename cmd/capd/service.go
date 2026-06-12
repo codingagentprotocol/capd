@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
+	"github.com/codingagentprotocol/capd/internal/config"
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
@@ -23,14 +24,11 @@ func newServiceCmd() *cobra.Command {
 			Use:   action,
 			Short: action + " the capd service",
 			RunE: func(cmd *cobra.Command, _ []string) error {
-				if action == "install" && cmd.Flags().Changed("secret-backend") {
-					backend, err := secret.NormalizeBackend(secretBackend)
-					if err != nil {
-						return err
-					}
-					secretBackend = backend
+				opts, err := serviceOptionsFor(action, cmd, secretBackend)
+				if err != nil {
+					return err
 				}
-				svc, err := newService(serviceOptions{SecretBackend: secretBackend})
+				svc, err := newService(opts)
 				if err != nil {
 					return err
 				}
@@ -74,6 +72,24 @@ func (noopProgram) Stop(service.Service) error  { return nil }
 
 type serviceOptions struct {
 	SecretBackend string
+}
+
+func serviceOptionsFor(action string, cmd *cobra.Command, secretBackendFlag string) (serviceOptions, error) {
+	if action != "install" {
+		return serviceOptions{}, nil
+	}
+	backend := config.Load().SecretBackend
+	if cmd.Flags().Changed("secret-backend") {
+		backend = secretBackendFlag
+	}
+	if backend == "" {
+		return serviceOptions{}, nil
+	}
+	backend, err := secret.NormalizeBackend(backend)
+	if err != nil {
+		return serviceOptions{}, err
+	}
+	return serviceOptions{SecretBackend: backend}, nil
 }
 
 func newService(opts serviceOptions) (service.Service, error) {
