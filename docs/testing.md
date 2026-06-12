@@ -53,8 +53,10 @@ capd agents usage codex --account auto
 ```
 
 The smoke command verifies imported account metadata, SecretStore readability,
-per-account `CODEX_HOME` projection, private `auth.json` permissions, auto-route
-account selection, and optionally ChatGPT backend quota refresh. It prints only
-account metadata, projection paths, quota percentages, and the selected
-`autoRoute.accountId` plus `secretBackend`; token material is never printed. Use
-`--json` to capture machine-readable smoke evidence in long tasks or CI logs.
+per-account `CODEX_HOME` projection, runtime `CODEX_HOME` env, private
+`auth.json` permissions, capd projection marker integrity, auto-route account
+selection, and optionally ChatGPT backend quota refresh. It prints only account
+metadata, projection paths, quota percentages, projection booleans, and the
+selected `autoRoute.accountId` plus `secretBackend`; token material is never
+printed. Use `--json` to capture machine-readable smoke evidence in long tasks
+or CI logs.

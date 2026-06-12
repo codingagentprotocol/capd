@@ -191,7 +191,7 @@ func TestCodexAccountsSmokeJSONWithoutLeakingSecrets(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 	acc := result.Accounts[0]
-	if acc.ID != "codex-test" || !acc.ProjectionOK || acc.PrimaryUsed != "0.0%" || acc.PrimaryUsedPercent == nil || *acc.PrimaryUsedPercent != 0 {
+	if acc.ID != "codex-test" || !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK || acc.PrimaryUsed != "0.0%" || acc.PrimaryUsedPercent == nil || *acc.PrimaryUsedPercent != 0 {
 		t.Fatalf("account = %+v", acc)
 	}
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" {
@@ -250,6 +250,11 @@ func TestCodexAccountsSmokeJSONIncludesAutoRouteEvidence(t *testing.T) {
 	}
 	if result.CheckedAccounts != 2 || result.SecretBackend != secret.BackendFile || result.AutoRoute == nil {
 		t.Fatalf("result = %+v", result)
+	}
+	for _, acc := range result.Accounts {
+		if !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK {
+			t.Fatalf("projection evidence missing: %+v", acc)
+		}
 	}
 	if result.AutoRoute.AccountID != "codex-low" || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 4 {
 		t.Fatalf("auto route = %+v", result.AutoRoute)

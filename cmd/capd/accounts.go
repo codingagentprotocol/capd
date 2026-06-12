@@ -335,7 +335,8 @@ func newCodexAccountsCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("%s: project runtime: %w", acc.ID, err)
 				}
-				if err := verifyProjectedAuth(profile.CodexHome); err != nil {
+				projection, err := verifyProjectedRuntime(profile)
+				if err != nil {
 					return fmt.Errorf("%s: verify projection: %w", acc.ID, err)
 				}
 				row := codexSmokeAccount{
@@ -344,6 +345,9 @@ func newCodexAccountsCmd() *cobra.Command {
 					AuthMode:           acc.AuthMode,
 					ProjectedCodexHome: profile.CodexHome,
 					ProjectionOK:       true,
+					RuntimeEnvOK:       projection.RuntimeEnvOK,
+					AuthJSONPrivate:    projection.AuthJSONPrivate,
+					ProjectionMarkerOK: projection.ProjectionMarkerOK,
 				}
 				used := "cached-missing"
 				if refreshQuota {
@@ -408,6 +412,54 @@ func verifyProjectedAuth(codexHome string) error {
 	return nil
 }
 
+func verifyProjectedRuntime(profile codexauth.RuntimeProfile) (codexSmokeProjection, error) {
+	if profile.CodexHome == "" {
+		return codexSmokeProjection{}, fmt.Errorf("CODEX_HOME projection path is empty")
+	}
+	wantEnv := "CODEX_HOME=" + profile.CodexHome
+	envOK := false
+	for _, entry := range profile.Env {
+		if entry == wantEnv {
+			envOK = true
+			break
+		}
+	}
+	if !envOK {
+		return codexSmokeProjection{}, fmt.Errorf("runtime env missing %s", wantEnv)
+	}
+	if err := verifyProjectedAuth(profile.CodexHome); err != nil {
+		return codexSmokeProjection{}, err
+	}
+	markerPath := filepath.Join(profile.CodexHome, ".capd_projection.json")
+	info, err := os.Stat(markerPath)
+	if err != nil {
+		return codexSmokeProjection{}, err
+	}
+	if info.Mode().Perm() != 0o600 {
+		return codexSmokeProjection{}, fmt.Errorf(".capd_projection.json mode = %o, want 600", info.Mode().Perm())
+	}
+	data, err := os.ReadFile(markerPath)
+	if err != nil {
+		return codexSmokeProjection{}, err
+	}
+	var marker struct {
+		ManagedBy string `json:"managedBy"`
+		Provider  string `json:"provider"`
+		Account   string `json:"account"`
+	}
+	if err := json.Unmarshal(data, &marker); err != nil {
+		return codexSmokeProjection{}, err
+	}
+	if marker.ManagedBy != "capd" || marker.Provider != codexauth.Provider || marker.Account != profile.AccountID {
+		return codexSmokeProjection{}, fmt.Errorf("projection marker mismatch")
+	}
+	return codexSmokeProjection{
+		RuntimeEnvOK:       true,
+		AuthJSONPrivate:    true,
+		ProjectionMarkerOK: true,
+	}, nil
+}
+
 type codexSmokeResult struct {
 	OK              bool                 `json:"ok"`
 	CheckedAccounts int                  `json:"checkedAccounts"`
@@ -431,8 +483,17 @@ type codexSmokeAccount struct {
 	AuthMode           string   `json:"authMode,omitempty"`
 	ProjectedCodexHome string   `json:"projectedCodexHome"`
 	ProjectionOK       bool     `json:"projectionOk"`
+	RuntimeEnvOK       bool     `json:"runtimeEnvOk"`
+	AuthJSONPrivate    bool     `json:"authJsonPrivate"`
+	ProjectionMarkerOK bool     `json:"projectionMarkerOk"`
 	PrimaryUsed        string   `json:"primaryUsed"`
 	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
+}
+
+type codexSmokeProjection struct {
+	RuntimeEnvOK       bool
+	AuthJSONPrivate    bool
+	ProjectionMarkerOK bool
 }
 
 type accountListRow struct {
