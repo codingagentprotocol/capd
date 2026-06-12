@@ -363,10 +363,14 @@ func validateAccountsCheckResult(result protocol.AccountsCheckResult, params pro
 		return protocol.NewError(protocol.CodeInvalidParams, freshQuotaRefreshHint)
 	}
 	if params.RequireAllFreshQuota {
+		var stale []string
 		for _, row := range result.Accounts {
 			if !row.QuotaFresh {
-				return protocol.NewError(protocol.CodeInvalidParams, "%s: quota is %s; refresh every account first", row.ID, row.QuotaState)
+				stale = append(stale, fmt.Sprintf("%s=%s", row.ID, row.QuotaState))
 			}
+		}
+		if len(stale) > 0 {
+			return protocol.NewError(protocol.CodeInvalidParams, "quota is not fresh for %s; refresh every account first", strings.Join(stale, ", "))
 		}
 	}
 	return nil

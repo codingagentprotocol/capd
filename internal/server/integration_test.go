@@ -1446,6 +1446,59 @@ func TestAccountsCheckReadinessFailureIsDaemonSideAndSafe(t *testing.T) {
 	}
 }
 
+func TestAccountsCheckAllFreshFailureReportsEveryStaleAccountSafely(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	ref, err := s.opts.Secrets.Put(context.Background(), "codex-missing", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "missing-token",
+		AccountID:   "acct_missing",
+		Email:       "missing@example.com",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"missing-token"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-missing",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "missing@example.com",
+		AccountID: "acct_missing",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	staleAt := time.Now().Add(-2 * account.QuotaRouteCacheTTL).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{
+		AccountID:          "codex-test",
+		PrimaryUsedPercent: 8,
+		CheckedAt:          staleAt,
+		RawJSON:            `{"token":"must-not-return"}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider:             codexauth.Provider,
+		RequireAllFreshQuota: true,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams {
+		t.Fatalf("response = %+v", resp)
+	}
+	for _, want := range []string{"codex-missing=missing", "codex-test=stale", "refresh every account first"} {
+		if !strings.Contains(resp.Error.Message, want) {
+			t.Fatalf("error missing %q: %s", want, resp.Error.Message)
+		}
+	}
+	for _, leaked := range []string{"test-token", "missing-token", "must-not-return", "secretRef", "file:codex", "CODEX_HOME", s.opts.RuntimeRoot} {
+		if strings.Contains(resp.Error.Message, leaked) {
+			t.Fatalf("accounts/check all-fresh error leaked %q: %s", leaked, resp.Error.Message)
+		}
+	}
+}
+
 func TestAccountsCheckReadinessPreflightAvoidsQuotaCalls(t *testing.T) {
 	s, ts, _, _ := newCodexAccountIntegrationServer(t)
 	var quotaCalls atomic.Int32
