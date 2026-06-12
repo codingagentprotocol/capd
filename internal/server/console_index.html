@@ -230,6 +230,7 @@ async function previewRoute() {
     const agent = routed.agent || {};
     const parts = [`agent ${agent.id || "unknown"}`];
     if (routed.accountId) parts.push(`account ${routed.accountId}`);
+    if (routed.accountRoute) parts.push(`quota ${routed.accountRoute.quotaState} score ${routed.accountRoute.score}`);
     if (routed.reason) parts.push(routed.reason);
     routePreviewEl.textContent = parts.join(" · ");
   } catch (e) {

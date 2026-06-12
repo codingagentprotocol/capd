@@ -85,6 +85,12 @@ const AgentAuto = "auto"
 
 const AccountAuto = "auto"
 
+const (
+	AccountQuotaStateFresh   = "fresh"
+	AccountQuotaStateStale   = "stale"
+	AccountQuotaStateMissing = "missing"
+)
+
 type AgentRouteParams struct {
 	Prompt       string            `json:"prompt,omitempty"`
 	Attachments  []Attachment      `json:"attachments,omitempty"`
@@ -96,9 +102,18 @@ type AgentRouteParams struct {
 }
 
 type AgentRouteResult struct {
-	Agent     AgentInfo `json:"agent"`
-	AccountID string    `json:"accountId,omitempty"`
-	Reason    string    `json:"reason"`
+	Agent        AgentInfo             `json:"agent"`
+	AccountID    string                `json:"accountId,omitempty"`
+	AccountRoute *AccountRouteEvidence `json:"accountRoute,omitempty"`
+	Reason       string                `json:"reason"`
+}
+
+type AccountRouteEvidence struct {
+	Score              float64  `json:"score"`
+	QuotaState         string   `json:"quotaState"`
+	Fresh              bool     `json:"fresh"`
+	CheckedAt          int64    `json:"checkedAt,omitempty"`
+	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
 }
 
 type AgentsUsageParams struct {

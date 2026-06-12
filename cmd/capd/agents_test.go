@@ -56,6 +56,9 @@ func TestRouteCLIAccountAutoSelectsFreshLowestQuotaCodex(t *testing.T) {
 	if result.Agent.ID != "codex" || result.AccountID != "codex-low" {
 		t.Fatalf("result = %+v", result)
 	}
+	if result.AccountRoute == nil || result.AccountRoute.QuotaState != protocol.AccountQuotaStateFresh || !result.AccountRoute.Fresh || result.AccountRoute.PrimaryUsedPercent == nil || *result.AccountRoute.PrimaryUsedPercent != 3 {
+		t.Fatalf("account route = %+v", result.AccountRoute)
+	}
 	if !strings.Contains(result.Reason, "primary 3%") {
 		t.Fatalf("reason = %q", result.Reason)
 	}
@@ -96,6 +99,9 @@ func TestRouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache(t *testing.T) 
 	}
 	if result.AccountID != "codex-test" || !strings.Contains(result.Reason, "primary 8%") {
 		t.Fatalf("result = %+v", result)
+	}
+	if result.AccountRoute == nil || result.AccountRoute.QuotaState != protocol.AccountQuotaStateFresh || result.AccountRoute.PrimaryUsedPercent == nil || *result.AccountRoute.PrimaryUsedPercent != 8 {
+		t.Fatalf("account route = %+v", result.AccountRoute)
 	}
 }
 

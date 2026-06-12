@@ -157,14 +157,16 @@ No params. → `{"agents": [{"id", "name", "bin", "version", "available", "capab
 Ask capd to pick an installed agent. Params mirror route signals:
 `{"prompt", "attachments", "accountId", "model", "effort", "capabilities", "prefer"}`.
 
-→ `{"agent": {...}, "accountId": "codex-acct", "reason": "matched capabilities: effort, review"}`
+→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"quotaState": "fresh", "score": 12}, "reason": "matched capabilities: effort, review"}`
 
 When `accountId` is present, routing is account-aware and currently selects
 Codex only, because imported account runtimes are Codex-specific. Use
 `accountId:"auto"` to choose an imported Codex account by conservative quota
 scoring: fresh cached primary quota uses the actual usage percent, while missing
 quota or rows older than 30 minutes receive a conservative unknown score until
-`accounts/quota` or `agents/usage` refreshes them.
+`accounts/quota` or `agents/usage` refreshes them. When account routing is in
+play, `accountRoute` reports the score plus `quotaState` (`fresh`, `stale`, or
+`missing`) without exposing token material.
 
 ### `agents/usage`
 

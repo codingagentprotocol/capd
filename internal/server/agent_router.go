@@ -46,6 +46,7 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 	accountID := strings.TrimSpace(params.AccountID)
 	var selectedAccountID string
 	var accountReason string
+	var selectedAccount account.Account
 	if accountID != "" {
 		prefer = []string{codexAgentID}
 		required.Usage = true
@@ -56,12 +57,15 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 				return protocol.AgentRouteResult{}, perr
 			}
 			selectedAccountID = account.ID
+			selectedAccount = account
 			accountReason = reason
 		} else {
-			if _, perr := s.loadCodexAccountForRoute(accountID); perr != nil {
+			account, perr := s.loadCodexAccountForRoute(accountID)
+			if perr != nil {
 				return protocol.AgentRouteResult{}, perr
 			}
 			selectedAccountID = accountID
+			selectedAccount = account
 			accountReason = "explicit accountId"
 		}
 	}
@@ -92,7 +96,12 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 			reason += "; " + accountReason
 		}
 	}
-	return protocol.AgentRouteResult{Agent: best, AccountID: selectedAccountID, Reason: reason}, nil
+	result := protocol.AgentRouteResult{Agent: best, AccountID: selectedAccountID, Reason: reason}
+	if selectedAccount.ID != "" && s.opts.Accounts != nil {
+		evidence := accountRouteEvidence(s.opts.Accounts, selectedAccount)
+		result.AccountRoute = &evidence
+	}
+	return result, nil
 }
 
 func (s *Server) loadCodexAccountForRoute(accountID string) (account.Account, *protocol.Error) {
@@ -121,6 +130,29 @@ func (s *Server) selectCodexAccountForRoute() (account.Account, string, *protoco
 		return best, fmt.Sprintf("auto account %s primary %.0f%%", best.ID, q.PrimaryUsedPercent), nil
 	}
 	return best, fmt.Sprintf("auto account %s without fresh cached quota", best.ID), nil
+}
+
+func accountRouteEvidence(accounts *account.Store, acc account.Account) protocol.AccountRouteEvidence {
+	evidence := protocol.AccountRouteEvidence{
+		Score:      account.QuotaRouteScore(accounts, acc, currentAccount(accounts, acc.Provider)),
+		QuotaState: protocol.AccountQuotaStateMissing,
+	}
+	if q, err := accounts.LoadQuota(acc.ID); err == nil {
+		evidence.CheckedAt = q.CheckedAt
+		evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
+		if account.QuotaSnapshotFresh(q, time.Now()) {
+			evidence.QuotaState = protocol.AccountQuotaStateFresh
+			evidence.Fresh = true
+		} else {
+			evidence.QuotaState = protocol.AccountQuotaStateStale
+		}
+	}
+	return evidence
+}
+
+func currentAccount(accounts *account.Store, provider string) string {
+	current, _ := accounts.CurrentAccount(provider)
+	return current
 }
 
 func routeRequirements(params protocol.AgentRouteParams) protocol.AgentCapabilities {

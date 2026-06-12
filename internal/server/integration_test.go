@@ -608,6 +608,9 @@ func TestAgentsRouteWithAccountRequiresCodex(t *testing.T) {
 	if routed.Agent.ID != "codex" || !strings.Contains(routed.Reason, "accountId") {
 		t.Fatalf("route = %+v", routed)
 	}
+	if routed.AccountRoute == nil || routed.AccountRoute.QuotaState != protocol.AccountQuotaStateMissing || routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent != nil {
+		t.Fatalf("account route = %+v", routed.AccountRoute)
+	}
 }
 
 func TestAgentsRouteAutoAccountChoosesLowestCachedQuota(t *testing.T) {
@@ -627,6 +630,9 @@ func TestAgentsRouteAutoAccountChoosesLowestCachedQuota(t *testing.T) {
 	}), &routed)
 	if routed.Agent.ID != "codex" || routed.AccountID != "codex-low" {
 		t.Fatalf("route = %+v", routed)
+	}
+	if routed.AccountRoute == nil || routed.AccountRoute.QuotaState != protocol.AccountQuotaStateFresh || !routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 10 {
+		t.Fatalf("account route = %+v", routed.AccountRoute)
 	}
 	if !strings.Contains(routed.Reason, "auto account codex-low") {
 		t.Fatalf("reason = %q", routed.Reason)
@@ -651,6 +657,9 @@ func TestAgentsRouteAutoAccountIgnoresStaleLowQuota(t *testing.T) {
 	}), &routed)
 	if routed.Agent.ID != "codex" || routed.AccountID != "codex-fresh" {
 		t.Fatalf("route = %+v", routed)
+	}
+	if routed.AccountRoute == nil || routed.AccountRoute.QuotaState != protocol.AccountQuotaStateFresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 20 {
+		t.Fatalf("account route = %+v", routed.AccountRoute)
 	}
 	if !strings.Contains(routed.Reason, "auto account codex-fresh primary 20%") {
 		t.Fatalf("reason = %q", routed.Reason)

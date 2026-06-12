@@ -84,6 +84,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		`call("accounts/list", { provider: "codex" })`,
 		"accounts/quota",
 		"agents/route",
+		"accountRoute",
 		"previewRoute",
 		"routePreview",
 		"refreshSelectedQuota",

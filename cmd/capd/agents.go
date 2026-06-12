@@ -240,6 +240,7 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 	accountID := strings.TrimSpace(params.AccountID)
 	selectedAccountID := ""
 	accountReason := ""
+	var selectedAccount account.Account
 	if accountID != "" {
 		prefer = []string{codexauth.Provider}
 		required.Usage = true
@@ -256,6 +257,7 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 				return protocol.AgentRouteResult{}, err
 			}
 			selectedAccountID = acc.ID
+			selectedAccount = acc
 			if params.RequireFresh {
 				if q, err := accounts.LoadQuota(acc.ID); err != nil || !account.QuotaSnapshotFresh(q, time.Now()) {
 					return protocol.AgentRouteResult{}, fmt.Errorf("auto route does not have fresh cached quota; run capd accounts codex smoke --quota --require-fresh-quota or refresh quota first")
@@ -268,6 +270,7 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 				return protocol.AgentRouteResult{}, err
 			}
 			selectedAccountID = acc.ID
+			selectedAccount = acc
 			accountReason = "explicit accountId"
 		}
 	}
@@ -297,7 +300,31 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 			reason += "; " + accountReason
 		}
 	}
-	return protocol.AgentRouteResult{Agent: best, AccountID: selectedAccountID, Reason: reason}, nil
+	result := protocol.AgentRouteResult{Agent: best, AccountID: selectedAccountID, Reason: reason}
+	if selectedAccount.ID != "" && accounts != nil {
+		evidence := accountRouteEvidence(accounts, selectedAccount)
+		result.AccountRoute = &evidence
+	}
+	return result, nil
+}
+
+func accountRouteEvidence(accounts *account.Store, acc account.Account) protocol.AccountRouteEvidence {
+	current, _ := accounts.CurrentAccount(acc.Provider)
+	evidence := protocol.AccountRouteEvidence{
+		Score:      account.QuotaRouteScore(accounts, acc, current),
+		QuotaState: protocol.AccountQuotaStateMissing,
+	}
+	if q, err := accounts.LoadQuota(acc.ID); err == nil {
+		evidence.CheckedAt = q.CheckedAt
+		evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
+		if account.QuotaSnapshotFresh(q, time.Now()) {
+			evidence.QuotaState = protocol.AccountQuotaStateFresh
+			evidence.Fresh = true
+		} else {
+			evidence.QuotaState = protocol.AccountQuotaStateStale
+		}
+	}
+	return evidence
 }
 
 func autoRouteReason(accounts *account.Store, acc account.Account) string {
