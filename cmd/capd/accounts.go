@@ -527,9 +527,22 @@ func newCodexAccountsCmd() *cobra.Command {
 					if bundle.AccountID == "" {
 						bundle.AccountID = acc.AccountID
 					}
+					updatedAcc, changed := codexauth.AccountWithBundleMetadata(acc, bundle)
 					quotaResult, err := codexquota.Client{BaseURL: baseURL}.Usage(cmd.Context(), acc.ID, bundle)
 					if err != nil {
 						return fmt.Errorf("%s: refresh quota: %w", acc.ID, err)
+					}
+					if updatedAcc.Plan == "" && quotaResult.Quota.Plan != "" {
+						updatedAcc.Plan = quotaResult.Quota.Plan
+						changed = true
+					}
+					if changed {
+						if err := accounts.UpsertAccount(updatedAcc); err != nil {
+							return fmt.Errorf("%s: update account metadata: %w", acc.ID, err)
+						}
+						acc = updatedAcc
+						row.Email = acc.Email
+						row.AuthMode = acc.AuthMode
 					}
 					if err := accounts.SaveQuota(quotaResult.Quota); err != nil {
 						return fmt.Errorf("%s: save quota: %w", acc.ID, err)
