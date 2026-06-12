@@ -64,6 +64,12 @@ capd accounts codex migrate-secrets --from file --to native --timeout 2m
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --require-secret-backend native --json --timeout 2m
 ```
 
+On macOS, repeated native SecretStore prompts or `macOS keychain status -128`
+mean the OS denied or canceled Keychain access for the current process. Approve
+the Keychain prompt and rerun the readiness check, or avoid native prompts for
+local testing by restarting with `capd start --secret-backend file` and
+re-importing accounts with `capd accounts --secret-backend file codex import`.
+
 ## Codex Account Smoke
 
 Import at least one Codex `auth.json`, then run the local smoke check:
@@ -172,6 +178,9 @@ checks that should not depend on a second terminal. It reuses an already healthy
 daemon when one is listening on `CAPD_HOST`/`CAPD_PORT`; otherwise it starts a
 temporary foreground daemon in the background, waits for health with the
 requested SecretStore backend, and cleans up that temporary process on exit.
+If the live preflight fails, the selftest prints safe `capd doctor --json
+--fail --verify-secretstore` diagnostics and, while the daemon is still
+reachable, authenticated `/probe/data` readiness diagnostics before cleaning up.
 If a daemon is already healthy on the target port but reports a different
 SecretStore backend, the selftest fails immediately and asks you to restart
 that daemon instead of trying to start a second process on the same port.

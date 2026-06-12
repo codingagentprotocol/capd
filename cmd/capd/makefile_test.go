@@ -137,7 +137,10 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`kill "$daemon_pid"`,
 		`if [ "$bin_owned" -eq 1 ]; then`,
 		`rm -f "$bin"`,
-		`make live-codex-preflight LIVE_SECRET_BACKEND="$backend"`,
+		`if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend"; then`,
+		"live-codex-preflight failed; safe diagnostics follow",
+		`"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true`,
+		`"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true`,
 		`LIVE_RUN_PROMPT`,
 		`go run ./cmd/capd run --agent codex --account auto --require-fresh-quota "$prompt"`,
 	} {

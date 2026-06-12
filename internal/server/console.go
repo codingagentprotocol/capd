@@ -182,7 +182,7 @@ func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBac
 		}
 	}
 	result.Checks = probeDataChecks(result, readiness, requireSecretBackend)
-	result.NextSteps = probeDataNextSteps(result.Checks)
+	result.NextSteps = probeDataNextSteps(result.Checks, result.Errors)
 	result.OK = len(result.Errors) == 0 && allProbeChecksOK(result.Checks)
 	result.Summary = probeDataSummaryFor(result, readiness, requireSecretBackend)
 	return result
@@ -327,9 +327,17 @@ func allProbeChecksOK(checks []probeDataCheck) bool {
 	return true
 }
 
-func probeDataNextSteps(checks []probeDataCheck) []string {
+func probeDataNextSteps(checks []probeDataCheck, errors []probeDataError) []string {
 	seen := map[string]bool{}
 	steps := []string{}
+	for _, perr := range errors {
+		step := probeErrorNextStep(perr)
+		if step == "" || seen[step] {
+			continue
+		}
+		seen[step] = true
+		steps = append(steps, step)
+	}
 	for _, check := range checks {
 		step := strings.TrimSpace(check.NextStep)
 		if step == "" || seen[step] {
@@ -339,6 +347,18 @@ func probeDataNextSteps(checks []probeDataCheck) []string {
 		steps = append(steps, step)
 	}
 	return steps
+}
+
+func probeErrorNextStep(perr probeDataError) string {
+	msg := strings.ToLower(perr.Message)
+	switch {
+	case strings.Contains(msg, "macos keychain status -128"):
+		return "macOS Keychain denied or canceled credential access; approve the prompt, or avoid native prompts by restarting with: capd start --secret-backend file and re-importing accounts with: capd accounts --secret-backend file codex import --auth /path/to/auth.json"
+	case strings.Contains(msg, "keychain"):
+		return "unlock or approve OS SecretStore access, then rerun: capd probe data --readiness --require-secret-backend native"
+	default:
+		return ""
+	}
 }
 
 func probeError(source string, perr *protocol.Error) probeDataError {

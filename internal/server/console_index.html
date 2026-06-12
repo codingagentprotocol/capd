@@ -619,10 +619,16 @@ function accountQuotaDiagnosticText(account) {
 
 function accountDiagnosticIssue(account) {
   if (!account.secretBackendOk) return `secret backend ${account.secretState || "not ready"}; align CAPD_SECRET_BACKEND or re-import account`;
-  if (!account.credentialReadable) return `credential ${account.secretState || "unreadable"}; unlock SecretStore or re-import account`;
+  if (!account.credentialReadable) return secretAccessNextStep(account.secretState);
   if (!account.runtimeReady) return "project account runtime with 准备运行 or rerun accounts/check";
   if (!account.quotaFresh) return "refresh quota for this account or run 就绪门禁";
   return "";
+}
+
+function secretAccessNextStep(state) {
+  if (state === "timeout") return "unlock or approve OS SecretStore access, then rerun readiness";
+  if (state === "unreadable") return "credential unreadable; approve macOS Keychain access, or restart with file SecretStore and re-import";
+  return `credential ${state || "unreadable"}; unlock SecretStore or re-import account`;
 }
 
 function accountDiagnosticNextStep(result) {
@@ -630,7 +636,7 @@ function accountDiagnosticNextStep(result) {
   const summary = result.summary || {};
   if ((result.checkedAccounts || 0) < 2) return "import a second Codex account, then run 就绪门禁";
   if (summary.requiredSecretBackend && !summary.secretBackendOk) return `restart daemon with capd start --secret-backend ${summary.requiredSecretBackend}`;
-  if (accounts.some(a => !a.secretBackendOk || !a.credentialReadable)) return "fix SecretStore access or re-import failing accounts";
+  if (accounts.some(a => !a.secretBackendOk || !a.credentialReadable)) return "approve macOS Keychain access, or restart with file SecretStore and re-import failing accounts";
   if (accounts.some(a => !a.runtimeReady)) return "project each failing account runtime, then rerun accounts/check";
   if (accounts.some(a => !a.quotaFresh)) return "refresh quota for all accounts";
   return "rerun 就绪门禁 after fixing the failed check";

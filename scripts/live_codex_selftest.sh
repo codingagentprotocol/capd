@@ -68,7 +68,14 @@ else
 	done
 fi
 
-make live-codex-preflight LIVE_SECRET_BACKEND="$backend"
+if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend"; then
+	echo "live-codex-preflight failed; safe diagnostics follow" >&2
+	"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true
+	if health; then
+		"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true
+	fi
+	exit 1
+fi
 
 case "$run_prompt" in
 	1|true|TRUE|yes|YES)
