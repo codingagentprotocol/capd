@@ -1324,6 +1324,79 @@ func TestCodexAccountsQuotaAllRefreshesEveryAccountSafely(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsQuotaAllFailurePrintsSafePartialEvidence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, secrets := seedCodexAccount(t)
+	defer accounts.Close()
+	ref, err := secrets.Put(context.Background(), "codex-zlow", secret.Bundle{
+		Provider:     codexauth.Provider,
+		AuthMode:     "chatgpt",
+		AccessToken:  "zlow-access-secret",
+		RefreshToken: "zlow-refresh-secret",
+		AccountID:    "acct_zlow",
+		RawAuthJSON:  []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"zlow-access-secret","refresh_token":"zlow-refresh-secret","secret":"raw-secret"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-zlow",
+		Provider:  codexauth.Provider,
+		AuthMode:  "chatgpt",
+		Email:     "zlow@example.com",
+		AccountID: "acct_zlow",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("Authorization") {
+		case "Bearer access-secret":
+			json.NewEncoder(w).Encode(map[string]any{
+				"planType": "pro",
+				"rateLimits": map[string]any{
+					"primary": map[string]any{"usedPercent": 17},
+				},
+			})
+		case "Bearer zlow-access-secret":
+			http.Error(w, "backend-secret zlow-access-secret secretRef=file:codex-zlow", http.StatusTooManyRequests)
+		default:
+			http.Error(w, "unexpected auth", http.StatusUnauthorized)
+		}
+	}))
+	defer srv.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "quota", "all", "--base-url", srv.URL})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "codex-zlow") || !strings.Contains(err.Error(), "HTTP 429") {
+		t.Fatalf("err = %v", err)
+	}
+	text := out.String()
+	for _, secret := range []string{"access-secret", "refresh-secret", "zlow-access-secret", "zlow-refresh-secret", "backend-secret", "raw-secret", "secretRef", ref.String()} {
+		if strings.Contains(text, secret) || strings.Contains(err.Error(), secret) {
+			t.Fatalf("quota all partial failure leaked %q: err=%v out=%s", secret, err, text)
+		}
+	}
+	var failure codexQuotaAllFailure
+	if err := json.Unmarshal(out.Bytes(), &failure); err != nil {
+		t.Fatalf("partial failure JSON = %q: %v", text, err)
+	}
+	if failure.OK || failure.FailedAccount != "codex-zlow" || !strings.Contains(failure.Error, "HTTP 429") || len(failure.Refreshed) != 1 {
+		t.Fatalf("failure = %+v", failure)
+	}
+	if failure.Refreshed[0].ID != "codex-test" || failure.Refreshed[0].PrimaryUsedPercent != 17 || failure.Refreshed[0].QuotaState != protocol.AccountQuotaStateFresh {
+		t.Fatalf("refreshed partial = %+v", failure.Refreshed)
+	}
+	if len(failure.NextSteps) == 0 || !strings.Contains(failure.NextSteps[0], "codex smoke --json") {
+		t.Fatalf("next steps = %+v", failure.NextSteps)
+	}
+}
+
 func TestCodexAccountsQuotaAllRejectsRawOutput(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)

@@ -681,6 +681,7 @@ the native OS backend and keeps the source secret as a rollback path. Add
 				for _, acc := range list {
 					row, err := refreshCodexQuota(callCtx, accounts, secrets, baseURL, acc)
 					if err != nil {
+						printCodexQuotaAllPartialFailure(cmd, rows, acc.ID, err)
 						return fmt.Errorf("%s: %w", acc.ID, err)
 					}
 					rows = append(rows, row)
@@ -1348,6 +1349,33 @@ type codexQuotaSummary struct {
 	CodeReviewUsedPercent float64 `json:"codeReviewUsedPercent"`
 	CheckedAt             int64   `json:"checkedAt"`
 	QuotaState            string  `json:"quotaState"`
+}
+
+type codexQuotaAllFailure struct {
+	OK            bool                `json:"ok"`
+	Refreshed     []codexQuotaSummary `json:"refreshed"`
+	FailedAccount string              `json:"failedAccount"`
+	Error         string              `json:"error"`
+	NextSteps     []string            `json:"nextSteps,omitempty"`
+}
+
+func printCodexQuotaAllPartialFailure(cmd *cobra.Command, refreshed []codexQuotaSummary, failedAccount string, err error) {
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+	payload := codexQuotaAllFailure{
+		OK:            false,
+		Refreshed:     refreshed,
+		FailedAccount: failedAccount,
+		Error:         err.Error(),
+		NextSteps: []string{
+			"inspect safe account evidence with: capd accounts codex smoke --json",
+			"after fixing the failing account, rerun: capd accounts codex quota all",
+		},
+	}
+	out, marshalErr := json.MarshalIndent(payload, "", "  ")
+	if marshalErr == nil {
+		fmt.Fprintln(cmd.OutOrStdout(), string(out))
+	}
 }
 
 func codexQuotaSummaryFrom(acc account.Account, q account.QuotaSnapshot) codexQuotaSummary {

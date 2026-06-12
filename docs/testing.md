@@ -92,6 +92,11 @@ For real quota validation:
 capd accounts codex smoke --quota
 ```
 
+`capd accounts codex quota all` refreshes accounts in stable account-id order.
+If a later account fails, the command still prints safe `ok:false` partial JSON
+with summaries for accounts refreshed before the failure, the failed account id,
+and next steps; token material and backend debug fields stay redacted.
+
 For multi-account routing readiness:
 
 ```bash
