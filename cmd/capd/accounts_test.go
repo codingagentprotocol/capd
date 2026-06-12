@@ -518,6 +518,71 @@ func TestCodexAccountsQuotaRejectsSecretBackendMismatch(t *testing.T) {
 	}
 }
 
+func TestAccountsCheckRefreshQuotaFailureDoesNotLeakSecrets(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	token := "tok-refresh-fail"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	accounts, secrets := seedCodexAccount(t)
+	var quotaCalls atomic.Int32
+	quotaBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		quotaCalls.Add(1)
+		if got := r.Header.Get("Authorization"); got != "Bearer access-secret" {
+			t.Fatalf("Authorization = %q", got)
+		}
+		if got := r.Header.Get("ChatGPT-Account-Id"); got != "acct_test" {
+			t.Fatalf("ChatGPT-Account-Id = %q", got)
+		}
+		http.Error(w, "backend-secret access-secret secretRef=file:codex-test", http.StatusTooManyRequests)
+	}))
+	defer quotaBackend.Close()
+	port := freeTCPPort(t)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", strconv.Itoa(port))
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	s := server.New(server.Options{
+		Host: "127.0.0.1", Port: port, Token: token, Version: "it",
+		Accounts: accounts, Secrets: secrets, RuntimeRoot: filepath.Join(home, "runtimes"),
+		CodexQuotaBaseURL: quotaBackend.URL,
+		Log:               slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	go func() { errCh <- s.Run(ctx) }()
+	waitForHealthz(t, port)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("server shutdown: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("server did not shut down")
+		}
+		accounts.Close()
+	})
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--refresh-quota", "--require-fresh-quota", "--require-all-fresh-quota"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "codex-test") || !strings.Contains(err.Error(), "HTTP 429") {
+		t.Fatalf("err = %v", err)
+	}
+	if quotaCalls.Load() != 1 {
+		t.Fatalf("quota calls = %d", quotaCalls.Load())
+	}
+	for _, leaked := range []string{token, "access-secret", "refresh-secret", "backend-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
+		if strings.Contains(err.Error(), leaked) || strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts check refresh failure leaked %q: err=%v out=%s", leaked, err, out.String())
+		}
+	}
+}
+
 func TestAccountsListShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)
