@@ -77,7 +77,7 @@ func TestProbeDataTextPrintsReadinessSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	for _, want := range []string{"summary: ready=true accounts=2/2 missing=0 quota fresh=2 stale=0 missing=0 autoFresh=true routeDecision=true secretOK=true", "secret backend: actual=native required=native ok=true", "auto route: codex-a fresh fresh=true"} {
+	for _, want := range []string{"summary: ready=true accounts=2/2 missing=0 quota fresh=2 stale=0 missing=0 autoFresh=true routeDecision=true routeCandidates=2 secretOK=true", "secret backend: actual=native required=native ok=true", "auto route: codex-a fresh fresh=true"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("text missing %q: %s", want, text)
 		}

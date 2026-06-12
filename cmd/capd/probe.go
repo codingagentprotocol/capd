@@ -194,7 +194,7 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 		fmt.Fprintf(cmd.OutOrStdout(), "accounts: %d checked, secret %s\n", result.AccountsCheck.CheckedAccounts, result.AccountsCheck.SecretBackend)
 	}
 	if result.Summary.RequiredAccounts > 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "summary: ready=%t accounts=%d/%d missing=%d quota fresh=%d stale=%d missing=%d autoFresh=%t routeDecision=%t secretOK=%t\n",
+		fmt.Fprintf(cmd.OutOrStdout(), "summary: ready=%t accounts=%d/%d missing=%d quota fresh=%d stale=%d missing=%d autoFresh=%t routeDecision=%t routeCandidates=%d secretOK=%t\n",
 			result.Summary.Ready,
 			result.Summary.CheckedAccounts,
 			result.Summary.RequiredAccounts,
@@ -204,6 +204,7 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 			result.Summary.MissingQuotaAccounts,
 			result.Summary.AutoRouteFresh,
 			result.Summary.RouteDecisionOK,
+			result.Summary.RouteCandidates,
 			result.Summary.SecretBackendOK,
 		)
 	}
