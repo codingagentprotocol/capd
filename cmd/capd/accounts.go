@@ -100,6 +100,58 @@ func newAccountsCmd() *cobra.Command {
 	}
 	listCmd.Flags().Bool("json", false, "print imported account metadata as JSON without token material")
 
+	importCmd := &cobra.Command{
+		Use:   "import",
+		Short: "Import Codex auth.json through the running daemon",
+		Long: `Import one or more Codex auth.json files through the daemon-side
+accounts/import RPC. This exercises the same CAP/WebSocket path used by web
+clients. Start capd first with "capd start".
+
+For a direct local import that does not require the daemon, use
+"capd accounts codex import".`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			provider, _ := cmd.Flags().GetString("provider")
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			authPathsFlag, _ := cmd.Flags().GetStringArray("auth")
+			params := protocol.AccountsImportParams{Provider: provider}
+			authPaths := cleanImportAuthPaths(authPathsFlag)
+			switch len(authPaths) {
+			case 0:
+			case 1:
+				params.AuthPath = authPaths[0]
+			default:
+				params.AuthPaths = authPaths
+			}
+			raw, err := daemonRPCCall(cmd.Context(), "capd-accounts-import", protocol.MethodAccountsImport, params)
+			if err != nil {
+				return err
+			}
+			var result protocol.AccountsImportResult
+			if err := json.Unmarshal(raw, &result); err != nil {
+				return err
+			}
+			if jsonOut {
+				out, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+				return nil
+			}
+			imported := result.Accounts
+			if len(imported) == 0 && result.Account.ID != "" {
+				imported = []protocol.AccountSummary{result.Account}
+			}
+			for _, acc := range imported {
+				fmt.Fprintf(cmd.OutOrStdout(), "imported %s <%s>\n", acc.ID, acc.Email)
+			}
+			if result.CurrentAccountID != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "current %s\n", result.CurrentAccountID)
+			}
+			return nil
+		},
+	}
+	importCmd.Flags().String("provider", "codex", "account provider to import")
+	importCmd.Flags().StringArray("auth", nil, "path to Codex auth.json; repeat to import multiple accounts through the daemon")
+	importCmd.Flags().Bool("json", false, "print accounts/import result as JSON without token material")
+
 	checkCmd := &cobra.Command{
 		Use:   "check",
 		Short: "Run daemon-side account smoke checks through CAP",
@@ -191,7 +243,7 @@ SecretStore smoke check that does not require the daemon, use
 	checkCmd.Flags().Bool("readiness", false, "run the daemon-side Codex readiness gate: refresh quota, require multiple accounts, fresh auto-route quota, all fresh quotas, and native SecretStore by default")
 	checkCmd.Flags().Bool("json", false, "print accounts/check result as JSON without token material")
 
-	cmd.AddCommand(listCmd, checkCmd, newCodexAccountsCmd())
+	cmd.AddCommand(listCmd, importCmd, checkCmd, newCodexAccountsCmd())
 	return cmd
 }
 
@@ -909,6 +961,16 @@ func codexImportAuthPaths(authPaths []string) ([]string, error) {
 		return nil, err
 	}
 	return []string{path}, nil
+}
+
+func cleanImportAuthPaths(authPaths []string) []string {
+	var clean []string
+	for _, raw := range authPaths {
+		if path := strings.TrimSpace(raw); path != "" {
+			clean = append(clean, path)
+		}
+	}
+	return clean
 }
 
 func openAccountDepsWithBackend(backend string) (*account.Store, secret.Store, error) {

@@ -455,6 +455,92 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	}
 }
 
+func TestAccountsImportCallsDaemonRPCWithRepeatedAuthFlags(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	token := "tok-import-daemon"
+	if err := writeTokenForTest(home, token); err != nil {
+		t.Fatal(err)
+	}
+	accounts, secrets := seedCodexAccount(t)
+	defer accounts.Close()
+	dir := t.TempDir()
+	firstPath := filepath.Join(dir, "first-auth.json")
+	secondPath := filepath.Join(dir, "second-auth.json")
+	for path, body := range map[string]string{
+		firstPath:  `{"email":"first@example.com","tokens":{"access_token":"first-access-secret","refresh_token":"first-refresh-secret","account_id":"acct_first"}}`,
+		secondPath: `{"email":"second@example.com","tokens":{"access_token":"second-access-secret","refresh_token":"second-refresh-secret","account_id":"acct_second"}}`,
+	} {
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	port := freeTCPPort(t)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", strconv.Itoa(port))
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	s := server.New(server.Options{
+		Host: "127.0.0.1", Port: port, Token: token, Version: "it",
+		Accounts: accounts, Secrets: secrets, RuntimeRoot: filepath.Join(home, "runtimes"),
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	go func() { errCh <- s.Run(ctx) }()
+	waitForHealthz(t, port)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("server shutdown: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("server did not shut down")
+		}
+	})
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"import", "--json", "--auth", firstPath, "--auth", secondPath})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var result protocol.AccountsImportResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Accounts) != 2 || result.Accounts[0].ID != "codex-acct_first" || result.Accounts[1].ID != "codex-acct_second" || result.Account.ID != "codex-acct_second" {
+		t.Fatalf("result = %+v", result)
+	}
+	for _, id := range []string{"codex-acct_first", "codex-acct_second"} {
+		if _, err := accounts.LoadAccount(id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, leaked := range []string{token, firstPath, secondPath, "first-access-secret", "second-access-secret", "first-refresh-secret", "second-refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts import leaked %q: %s", leaked, out.String())
+		}
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"import", "--auth", firstPath})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "imported codex-acct_first <first@example.com>") || !strings.Contains(out.String(), "current codex-test") {
+		t.Fatalf("text output = %s", out.String())
+	}
+	if strings.Contains(out.String(), firstPath) || strings.Contains(out.String(), "first-access-secret") || strings.Contains(out.String(), token) {
+		t.Fatalf("accounts import text leaked data: %s", out.String())
+	}
+}
+
 func TestAccountsCheckReadinessShortcutSetsDaemonGateParams(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -157,6 +157,7 @@ CAPD_SECRET_BACKEND=native capd doctor --json --fail --require-secret-backend na
 CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
 open "http://127.0.0.1:7777/probe/?token=$(cat ~/.capd/token)" # simple web data probe
 capd health --json           # confirm daemon /healthz before CAP checks
+capd accounts import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # daemon-side CAP import
 capd accounts check --json   # daemon-side accounts/check smoke evidence
 capd accounts check --readiness # daemon-side multi-account readiness gate
 capd agents route --account auto --require-fresh-quota

@@ -82,6 +82,7 @@ CAPD_SECRET_BACKEND=native capd start
 
 open "http://127.0.0.1:7777/probe/?token=$(cat ~/.capd/token)"
 capd health --json
+capd accounts import --auth /tmp/acct-a/auth.json --auth /tmp/acct-b/auth.json
 capd accounts check --json
 capd accounts check --readiness
 capd agents usage codex --account auto
