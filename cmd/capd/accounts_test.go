@@ -126,6 +126,131 @@ func TestCodexAccountsListJSONShowsQuotaWithoutLeakingSecrets(t *testing.T) {
 	}
 }
 
+func TestMigrateCodexAccountSecretsMovesToTargetBackend(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, source := seedCodexAccount(t)
+	defer accounts.Close()
+	target := newMemorySecretStore(secret.BackendNative)
+
+	result, err := migrateCodexAccountSecrets(context.Background(), accounts, source, target, codexSecretMigrationOptions{
+		AccountID:     protocol.AccountAll,
+		SourceBackend: secret.BackendFile,
+		TargetBackend: secret.BackendNative,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK || len(result.Migrated) != 1 || result.Migrated[0].Status != "migrated" || result.Migrated[0].From != secret.BackendFile || result.Migrated[0].To != "native:codex-test" {
+		t.Fatalf("result = %+v", result)
+	}
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acc.SecretRef != "native:codex-test" {
+		t.Fatalf("secret ref = %q", acc.SecretRef)
+	}
+	bundle, err := target.Get(context.Background(), secret.Ref{Backend: secret.BackendNative, ID: "codex-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bundle.AccessToken != "access-secret" || bundle.RefreshToken != "refresh-secret" {
+		t.Fatalf("bundle metadata lost: %+v", bundle)
+	}
+	if _, err := source.Get(context.Background(), secret.Ref{Backend: secret.BackendFile, ID: "codex-test"}); err != nil {
+		t.Fatalf("source should remain by default: %v", err)
+	}
+	data, _ := json.Marshal(result)
+	for _, leaked := range []string{"access-secret", "refresh-secret", "rawAuthJson", "secretRef"} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("migration result leaked %q: %s", leaked, data)
+		}
+	}
+}
+
+func TestMigrateCodexAccountSecretsDryRunAndDeleteSource(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, source := seedCodexAccount(t)
+	defer accounts.Close()
+	target := newMemorySecretStore(secret.BackendNative)
+
+	dryRun, err := migrateCodexAccountSecrets(context.Background(), accounts, source, target, codexSecretMigrationOptions{
+		AccountID:     "codex-test",
+		DryRun:        true,
+		SourceBackend: secret.BackendFile,
+		TargetBackend: secret.BackendNative,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !dryRun.OK || !dryRun.DryRun || len(dryRun.Migrated) != 1 || dryRun.Migrated[0].Status != "dry-run" {
+		t.Fatalf("dry run = %+v", dryRun)
+	}
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acc.SecretRef != "file:codex-test" {
+		t.Fatalf("dry run changed secret ref: %q", acc.SecretRef)
+	}
+	if _, err := target.Get(context.Background(), secret.Ref{Backend: secret.BackendNative, ID: "codex-test"}); err == nil {
+		t.Fatal("dry run wrote target secret")
+	}
+
+	result, err := migrateCodexAccountSecrets(context.Background(), accounts, source, target, codexSecretMigrationOptions{
+		AccountID:     "codex-test",
+		DeleteSource:  true,
+		SourceBackend: secret.BackendFile,
+		TargetBackend: secret.BackendNative,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK || !result.DeleteSource || len(result.Migrated) != 1 {
+		t.Fatalf("result = %+v", result)
+	}
+	if _, err := source.Get(context.Background(), secret.Ref{Backend: secret.BackendFile, ID: "codex-test"}); err == nil {
+		t.Fatal("source secret still exists after --delete-source")
+	}
+}
+
+func TestMigrateCodexAccountSecretsSkipsSourceMismatch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	source := newMemorySecretStore(secret.BackendNative)
+	target := secret.NewFileStore(filepath.Join(t.TempDir(), "target-secrets"))
+
+	result, err := migrateCodexAccountSecrets(context.Background(), accounts, source, target, codexSecretMigrationOptions{
+		AccountID:     protocol.AccountAll,
+		SourceBackend: secret.BackendNative,
+		TargetBackend: secret.BackendFile,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK || len(result.Migrated) != 0 || len(result.Skipped) != 1 || result.Skipped[0].Reason != "source-backend-mismatch" {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestCodexAccountsMigrateSecretsHelp(t *testing.T) {
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "migrate-secrets", "--help"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{"migrate-secrets", "--from", "--to", "--delete-source", "--dry-run", "--timeout", "--json", "native"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("help missing %q: %s", want, text)
+		}
+	}
+}
+
 func TestAccountsCheckHelpExplainsDaemonRequirement(t *testing.T) {
 	var out bytes.Buffer
 	cmd := newAccountsCmd()
@@ -2201,6 +2326,44 @@ func seedCodexAccount(t *testing.T) (*account.Store, secret.Store) {
 		t.Fatal(err)
 	}
 	return accounts, secrets
+}
+
+type memorySecretStore struct {
+	backend string
+	bundles map[string]secret.Bundle
+}
+
+func newMemorySecretStore(backend string) *memorySecretStore {
+	return &memorySecretStore{backend: backend, bundles: map[string]secret.Bundle{}}
+}
+
+func (st *memorySecretStore) Backend() string { return st.backend }
+
+func (st *memorySecretStore) Put(_ context.Context, id string, bundle secret.Bundle) (secret.Ref, error) {
+	if id == "" {
+		return secret.Ref{}, fmt.Errorf("secret id is required")
+	}
+	st.bundles[id] = bundle
+	return secret.Ref{Backend: st.backend, ID: id}, nil
+}
+
+func (st *memorySecretStore) Get(_ context.Context, ref secret.Ref) (secret.Bundle, error) {
+	if ref.Backend != "" && ref.Backend != st.backend {
+		return secret.Bundle{}, fmt.Errorf("secret backend %q is not %q", ref.Backend, st.backend)
+	}
+	bundle, ok := st.bundles[ref.ID]
+	if !ok {
+		return secret.Bundle{}, os.ErrNotExist
+	}
+	return bundle, nil
+}
+
+func (st *memorySecretStore) Delete(_ context.Context, ref secret.Ref) error {
+	if ref.Backend != "" && ref.Backend != st.backend {
+		return fmt.Errorf("secret backend %q is not %q", ref.Backend, st.backend)
+	}
+	delete(st.bundles, ref.ID)
+	return nil
 }
 
 func freeTCPPort(t *testing.T) int {

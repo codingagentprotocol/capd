@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -522,6 +523,90 @@ func newCodexAccountsCmd() *cobra.Command {
 		},
 	}
 
+	migrateSecretsCmd := &cobra.Command{
+		Use:   "migrate-secrets [account-id|all]",
+		Short: "Move imported Codex account credentials between SecretStore backends",
+		Long: `Move imported Codex account credentials between SecretStore backends and
+update account metadata to point at the new safe secret reference.
+
+By default this migrates every imported Codex account from the file backend to
+the native OS backend and keeps the source secret as a rollback path. Add
+--delete-source only after a successful readiness check.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fromBackend, _ := cmd.Flags().GetString("from")
+			toBackend, _ := cmd.Flags().GetString("to")
+			deleteSource, _ := cmd.Flags().GetBool("delete-source")
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			timeout, _ := cmd.Flags().GetDuration("timeout")
+			fromBackend, err := secret.NormalizeBackend(fromBackend)
+			if err != nil {
+				return err
+			}
+			toBackend, err = secret.NormalizeBackend(toBackend)
+			if err != nil {
+				return err
+			}
+			if fromBackend == "" {
+				fromBackend = secret.BackendFile
+			}
+			if toBackend == "" {
+				toBackend = secret.BackendNative
+			}
+			if fromBackend == toBackend {
+				return fmt.Errorf("source and target secret backends are both %q", fromBackend)
+			}
+			targetID := protocol.AccountAll
+			if len(args) == 1 {
+				targetID = strings.TrimSpace(args[0])
+				if targetID == "" {
+					targetID = protocol.AccountAll
+				}
+				if targetID != protocol.AccountAll {
+					if err := rejectConcreteCodexAccountArg(targetID); err != nil {
+						return err
+					}
+				}
+			}
+			migrateCtx := cmd.Context()
+			var cancel context.CancelFunc
+			if timeout > 0 {
+				migrateCtx, cancel = context.WithTimeout(migrateCtx, timeout)
+				defer cancel()
+			}
+			accounts, sourceStore, targetStore, err := codexSecretMigrationDeps(fromBackend, toBackend)
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			result, err := migrateCodexAccountSecrets(migrateCtx, accounts, sourceStore, targetStore, codexSecretMigrationOptions{
+				AccountID:     targetID,
+				DeleteSource:  deleteSource,
+				DryRun:        dryRun,
+				SourceBackend: fromBackend,
+				TargetBackend: toBackend,
+			})
+			if jsonOut {
+				out, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+			} else {
+				printCodexSecretMigrationResult(cmd, result)
+			}
+			if err != nil {
+				cmd.SilenceUsage = true
+				return err
+			}
+			return nil
+		},
+	}
+	migrateSecretsCmd.Flags().String("from", secret.BackendFile, "source SecretStore backend")
+	migrateSecretsCmd.Flags().String("to", secret.BackendNative, "target SecretStore backend")
+	migrateSecretsCmd.Flags().Bool("delete-source", false, "delete each source secret after its account metadata is updated")
+	migrateSecretsCmd.Flags().Bool("dry-run", false, "check which accounts would migrate without writing target secrets")
+	migrateSecretsCmd.Flags().Duration("timeout", 2*time.Minute, "maximum time to wait for SecretStore reads and writes")
+	migrateSecretsCmd.Flags().Bool("json", false, "print migration evidence without token material")
+
 	quotaCmd := &cobra.Command{
 		Use:   "quota [account-id|auto|all]",
 		Short: "Fetch ChatGPT backend quota for imported Codex accounts",
@@ -781,7 +866,7 @@ func newCodexAccountsCmd() *cobra.Command {
 	smokeCmd.Flags().Duration("timeout", 2*time.Minute, "maximum time to wait for local smoke checks, SecretStore reads, projections, and quota refresh")
 	smokeCmd.Flags().Bool("json", false, "print machine-readable smoke evidence without token material")
 
-	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, removeCmd, quotaCmd, smokeCmd)
+	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, removeCmd, migrateSecretsCmd, quotaCmd, smokeCmd)
 	return cmd
 }
 
@@ -892,6 +977,220 @@ type codexSmokeAccount struct {
 	QuotaState         string   `json:"quotaState"`
 	QuotaFresh         bool     `json:"quotaFresh"`
 	QuotaCheckedAt     int64    `json:"quotaCheckedAt,omitempty"`
+}
+
+type codexSecretMigrationOptions struct {
+	AccountID     string
+	DeleteSource  bool
+	DryRun        bool
+	SourceBackend string
+	TargetBackend string
+}
+
+type codexSecretMigrationResult struct {
+	OK            bool                      `json:"ok"`
+	Provider      string                    `json:"provider"`
+	SourceBackend string                    `json:"sourceBackend"`
+	TargetBackend string                    `json:"targetBackend"`
+	DeleteSource  bool                      `json:"deleteSource,omitempty"`
+	DryRun        bool                      `json:"dryRun,omitempty"`
+	Migrated      []codexSecretMigrationRow `json:"migrated,omitempty"`
+	Skipped       []codexSecretMigrationRow `json:"skipped,omitempty"`
+	Issues        []string                  `json:"issues,omitempty"`
+	NextSteps     []string                  `json:"nextSteps,omitempty"`
+}
+
+type codexSecretMigrationRow struct {
+	ID       string `json:"id"`
+	Email    string `json:"email,omitempty"`
+	From     string `json:"from,omitempty"`
+	To       string `json:"to,omitempty"`
+	Status   string `json:"status"`
+	Reason   string `json:"reason,omitempty"`
+	Provider string `json:"provider,omitempty"`
+}
+
+func codexSecretMigrationDeps(fromBackend, toBackend string) (*account.Store, secret.Store, secret.Store, error) {
+	home, err := daemon.Home()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	accounts, err := account.OpenStore(filepath.Join(home, "accounts.db"))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	sourceStore, err := secret.Open(filepath.Join(home, "secrets", "codex"), fromBackend)
+	if err != nil {
+		accounts.Close()
+		return nil, nil, nil, err
+	}
+	targetStore, err := secret.Open(filepath.Join(home, "secrets", "codex"), toBackend)
+	if err != nil {
+		accounts.Close()
+		return nil, nil, nil, err
+	}
+	return accounts, sourceStore, targetStore, nil
+}
+
+func migrateCodexAccountSecrets(ctx context.Context, accounts *account.Store, sourceStore, targetStore secret.Store, opts codexSecretMigrationOptions) (codexSecretMigrationResult, error) {
+	result := codexSecretMigrationResult{
+		OK:            true,
+		Provider:      codexauth.Provider,
+		SourceBackend: sourceStore.Backend(),
+		TargetBackend: targetStore.Backend(),
+		DeleteSource:  opts.DeleteSource,
+		DryRun:        opts.DryRun,
+	}
+	if opts.SourceBackend != "" {
+		result.SourceBackend = opts.SourceBackend
+	}
+	if opts.TargetBackend != "" {
+		result.TargetBackend = opts.TargetBackend
+	}
+	targetID := strings.TrimSpace(opts.AccountID)
+	if targetID == "" {
+		targetID = protocol.AccountAll
+	}
+	list, err := codexSecretMigrationAccounts(accounts, targetID)
+	if err != nil {
+		result.OK = false
+		result.Issues = append(result.Issues, err.Error())
+		return result, err
+	}
+	if len(list) == 0 {
+		err := fmt.Errorf("no imported Codex accounts")
+		result.OK = false
+		result.Issues = append(result.Issues, err.Error())
+		result.NextSteps = append(result.NextSteps, "import Codex auth with: capd accounts codex import")
+		return result, err
+	}
+	for _, acc := range list {
+		row, err := migrateCodexAccountSecret(ctx, accounts, sourceStore, targetStore, acc, opts)
+		if row.Status == "skipped" {
+			result.Skipped = append(result.Skipped, row)
+			continue
+		}
+		if row.ID != "" {
+			result.Migrated = append(result.Migrated, row)
+		}
+		if err != nil {
+			result.OK = false
+			result.Issues = append(result.Issues, acc.ID+": "+err.Error())
+			result.NextSteps = append(result.NextSteps, "fix the failing SecretStore entry, then rerun migrate-secrets")
+			return result, err
+		}
+	}
+	if len(result.Migrated) == 0 && len(result.Skipped) > 0 {
+		result.NextSteps = append(result.NextSteps, "rerun with --from matching the account secret backend or choose a specific account")
+	}
+	if len(result.Migrated) > 0 {
+		result.NextSteps = append(result.NextSteps, "restart capd with CAPD_SECRET_BACKEND="+result.TargetBackend+" and run capd accounts check --readiness")
+		if !opts.DeleteSource {
+			result.NextSteps = append(result.NextSteps, "after readiness passes, rerun with --delete-source to remove old source secrets")
+		}
+	}
+	return result, nil
+}
+
+func codexSecretMigrationAccounts(accounts *account.Store, targetID string) ([]account.Account, error) {
+	if targetID == protocol.AccountAll {
+		list, err := accounts.ListAccounts(codexauth.Provider)
+		if err != nil {
+			return nil, err
+		}
+		sort.Slice(list, func(i, j int) bool {
+			return list[i].ID < list[j].ID
+		})
+		return list, nil
+	}
+	acc, err := accounts.LoadAccount(targetID)
+	if err != nil {
+		return nil, err
+	}
+	if acc.Provider != codexauth.Provider {
+		return nil, fmt.Errorf("account %q belongs to provider %q, not %q", acc.ID, acc.Provider, codexauth.Provider)
+	}
+	return []account.Account{acc}, nil
+}
+
+func migrateCodexAccountSecret(ctx context.Context, accounts *account.Store, sourceStore, targetStore secret.Store, acc account.Account, opts codexSecretMigrationOptions) (codexSecretMigrationRow, error) {
+	row := codexSecretMigrationRow{
+		ID:       acc.ID,
+		Email:    acc.Email,
+		Provider: acc.Provider,
+		Status:   "migrated",
+	}
+	ref, err := secret.ParseRef(acc.SecretRef)
+	if err != nil {
+		row.Status = "failed"
+		row.Reason = "malformed-ref"
+		return row, errors.New(row.Reason)
+	}
+	row.From = ref.Backend
+	if row.From == "" {
+		row.From = sourceStore.Backend()
+	}
+	if row.From != sourceStore.Backend() {
+		row.Status = "skipped"
+		row.Reason = "source-backend-mismatch"
+		return row, nil
+	}
+	if opts.DryRun {
+		row.Status = "dry-run"
+		row.To = secret.Ref{Backend: targetStore.Backend(), ID: acc.ID}.String()
+		return row, nil
+	}
+	bundle, err := sourceStore.Get(ctx, ref)
+	if err != nil {
+		row.Status = "failed"
+		row.Reason = "source-unreadable"
+		return row, errors.New(row.Reason)
+	}
+	newRef, err := targetStore.Put(ctx, acc.ID, bundle)
+	if err != nil {
+		row.Status = "failed"
+		row.Reason = "target-unwritable"
+		return row, errors.New(row.Reason)
+	}
+	row.To = newRef.String()
+	updated, _ := codexauth.AccountWithBundleMetadata(acc, bundle)
+	updated.SecretRef = newRef.String()
+	if err := accounts.UpsertAccount(updated); err != nil {
+		_ = targetStore.Delete(ctx, newRef)
+		row.Status = "failed"
+		row.Reason = "metadata-update-failed"
+		return row, errors.New(row.Reason)
+	}
+	if opts.DeleteSource {
+		if err := sourceStore.Delete(ctx, ref); err != nil {
+			row.Status = "failed"
+			row.Reason = "source-delete-failed"
+			return row, errors.New(row.Reason)
+		}
+	}
+	return row, nil
+}
+
+func printCodexSecretMigrationResult(cmd *cobra.Command, result codexSecretMigrationResult) {
+	fmt.Fprintf(cmd.OutOrStdout(), "provider: %s\n", result.Provider)
+	fmt.Fprintf(cmd.OutOrStdout(), "secret backend: %s -> %s\n", result.SourceBackend, result.TargetBackend)
+	fmt.Fprintf(cmd.OutOrStdout(), "dry run: %t\n", result.DryRun)
+	fmt.Fprintf(cmd.OutOrStdout(), "delete source: %t\n", result.DeleteSource)
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "STATUS\tID\tEMAIL\tFROM\tTO\tREASON")
+	for _, row := range result.Migrated {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", row.Status, row.ID, row.Email, row.From, row.To, row.Reason)
+	}
+	for _, row := range result.Skipped {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", row.Status, row.ID, row.Email, row.From, row.To, row.Reason)
+	}
+	_ = w.Flush()
+	for _, issue := range result.Issues {
+		fmt.Fprintf(cmd.OutOrStdout(), "issue: %s\n", issue)
+	}
+	for _, next := range result.NextSteps {
+		fmt.Fprintf(cmd.OutOrStdout(), "next: %s\n", next)
+	}
 }
 
 type codexQuotaSummary struct {

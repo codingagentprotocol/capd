@@ -48,6 +48,15 @@ capd accounts --secret-backend native codex import
 capd accounts --secret-backend native codex smoke --require-secret-backend native --json --timeout 2m
 ```
 
+For accounts that were already imported with the file backend, migrate the
+stored token bundle into the native backend first:
+
+```bash
+capd accounts codex migrate-secrets --from file --to native --dry-run
+capd accounts codex migrate-secrets --from file --to native --timeout 2m
+CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --require-secret-backend native --json --timeout 2m
+```
+
 ## Codex Account Smoke
 
 Import at least one Codex `auth.json`, then run the local smoke check:
