@@ -202,6 +202,64 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 	return protocol.AccountsQuotaResult{Account: summary}, nil
 }
 
+func (s *Server) removeAccount(ctx context.Context, params protocol.AccountsRemoveParams) (protocol.AccountsRemoveResult, *protocol.Error) {
+	if s.opts.Accounts == nil || s.opts.Secrets == nil || s.opts.RuntimeRoot == "" {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
+	}
+	provider := strings.TrimSpace(params.Provider)
+	if provider == "" {
+		provider = codexauth.Provider
+	}
+	if provider != codexauth.Provider {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInvalidParams, "account removal is currently supported only for provider %q", codexauth.Provider)
+	}
+	accountID := strings.TrimSpace(params.AccountID)
+	if accountID == "" {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInvalidParams, "accountId is required")
+	}
+	acc, err := s.opts.Accounts.LoadAccount(accountID)
+	if err != nil {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInvalidParams, "unknown accountId %q", accountID)
+	}
+	if acc.Provider != codexauth.Provider {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInvalidParams, "accountId %q is not a Codex account", accountID)
+	}
+	ref, err := secret.ParseRef(acc.SecretRef)
+	if err != nil {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInternalError, "parse secret ref: %v", err)
+	}
+	if err := secret.EnsureRefBackend(s.opts.Secrets, ref); err != nil {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInternalError, "%v", err)
+	}
+	unlock := s.lockAccountRuntime(acc.ID)
+	defer unlock()
+	runtimeRemoved, err := codexauth.RemoveRuntimeProjection(s.opts.RuntimeRoot, acc)
+	if err != nil {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInternalError, "remove account runtime: %v", err)
+	}
+	if err := s.opts.Secrets.Delete(ctx, ref); err != nil {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInternalError, "remove account credentials: %v", err)
+	}
+	if err := s.opts.Accounts.DeleteAccount(acc.ID); err != nil {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInternalError, "remove account metadata: %v", err)
+	}
+	current, err := s.opts.Accounts.CurrentAccount(provider)
+	if err != nil {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
+	}
+	remaining, err := s.opts.Accounts.ListAccounts(provider)
+	if err != nil {
+		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInternalError, "list accounts: %v", err)
+	}
+	return protocol.AccountsRemoveResult{
+		AccountID:         acc.ID,
+		RuntimeRemoved:    runtimeRemoved,
+		CredentialRemoved: true,
+		CurrentAccountID:  current,
+		RemainingAccounts: len(remaining),
+	}, nil
+}
+
 func accountSummary(acc account.Account, quota account.QuotaSnapshot) protocol.AccountSummary {
 	summary := protocol.AccountSummary{
 		ID:        acc.ID,

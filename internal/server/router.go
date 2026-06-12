@@ -125,6 +125,13 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		}
 		return s.refreshAccountQuota(ctx, params)
 
+	case protocol.MethodAccountsRemove:
+		var params protocol.AccountsRemoveParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		return s.removeAccount(ctx, params)
+
 	case protocol.MethodSessionCreate:
 		var params protocol.SessionCreateParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {

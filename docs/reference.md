@@ -213,6 +213,17 @@ Use `"accountId":"auto"` to refresh the account selected by the same
 conservative quota scoring rule used by account-aware routing.
 The response never returns token material, `secret_ref`, or raw backend JSON.
 
+### `accounts/remove`
+
+`{"provider": "codex", "accountId": "codex-acct"}` →
+`{"accountId", "runtimeRemoved", "credentialRemoved", "currentAccountId", "remainingAccounts"}`.
+
+Removes the imported account metadata, cached quota, session bindings,
+SecretStore token bundle, and capd-managed `CODEX_HOME` projection. Runtime
+removal fails closed unless `.capd_projection.json` proves the directory is
+owned by capd for the requested Codex account. The response never returns token
+material, `secret_ref`, or filesystem paths.
+
 ### `session/create`
 
 | Field | Type | Default | Meaning |

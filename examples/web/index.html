@@ -207,7 +207,10 @@ function renderAccounts(accounts, currentAccountId) {
       const refresh = document.createElement("button");
       refresh.textContent = "刷新 quota";
       refresh.onclick = () => refreshQuota(a.id, refresh);
-      card.append(current, refresh);
+      const remove = document.createElement("button");
+      remove.textContent = "移除";
+      remove.onclick = () => removeAccount(a.id, remove);
+      card.append(current, refresh, remove);
     }
     accountsEl.appendChild(card);
   }
@@ -304,6 +307,22 @@ async function setCurrentAccount(accountId, button) {
     await loadAccounts();
   } catch (e) {
     line("ev-err", `✗ 设置当前账号失败: ${e.message || JSON.stringify(e)}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function removeAccount(accountId, button) {
+  if (!confirm(`移除账号 ${accountId}？`)) return;
+  button.disabled = true;
+  try {
+    const removed = await call("accounts/remove", { provider: "codex", accountId });
+    line("ev-sys", `· 已移除账号 ${removed.accountId}`);
+    const accountSel = document.getElementById("account");
+    if (accountSel.value === accountId) accountSel.value = removed.currentAccountId || "";
+    await loadAccounts();
+  } catch (e) {
+    line("ev-err", `✗ 移除账号失败: ${e.message || JSON.stringify(e)}`);
   } finally {
     button.disabled = false;
   }

@@ -968,6 +968,100 @@ func TestAccountsCurrentRejectsUnknownAndProviderMismatch(t *testing.T) {
 	}
 }
 
+func TestAccountsRemoveDeletesSecretProjectionAndMetadata(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := codexauth.RuntimeProjector{
+		Root:    s.opts.RuntimeRoot,
+		Secrets: s.opts.Secrets,
+	}.Project(context.Background(), acc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(profile.CodexHome, "auth.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 22}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.BindSessionAccount("s_1", "codex-test"); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var result protocol.AccountsRemoveResult
+	c.mustResult(c.call(protocol.MethodAccountsRemove, protocol.AccountsRemoveParams{
+		Provider:  codexauth.Provider,
+		AccountID: "codex-test",
+	}), &result)
+	if result.AccountID != "codex-test" || !result.RuntimeRemoved || !result.CredentialRemoved || result.CurrentAccountID != "" || result.RemainingAccounts != 0 {
+		t.Fatalf("result = %+v", result)
+	}
+	if _, err := os.Stat(profile.CodexHome); !os.IsNotExist(err) {
+		t.Fatalf("projection still exists err=%v", err)
+	}
+	if _, err := s.opts.Secrets.Get(context.Background(), secret.Ref{Backend: secret.BackendFile, ID: "codex-test"}); err == nil {
+		t.Fatal("secret still readable after remove")
+	}
+	if _, err := accounts.LoadAccount("codex-test"); !strings.Contains(fmt.Sprint(err), "unknown account") {
+		t.Fatalf("account err = %v", err)
+	}
+	if _, err := accounts.LoadQuota("codex-test"); !strings.Contains(fmt.Sprint(err), "unknown account") {
+		t.Fatalf("quota err = %v", err)
+	}
+	sessionAccount, err := accounts.SessionAccount("s_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sessionAccount != "" {
+		t.Fatalf("session account = %q", sessionAccount)
+	}
+	data, _ := json.Marshal(result)
+	for _, leaked := range []string{"test-token", "secret", profile.CodexHome, "secretRef"} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("accounts/remove leaked %q: %s", leaked, data)
+		}
+	}
+}
+
+func TestAccountsRemoveRejectsUnsafeProjectionWithoutDeletingMetadata(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	unsafeHome := filepath.Join(s.opts.RuntimeRoot, codexauth.Provider, "codex-test")
+	if err := os.MkdirAll(unsafeHome, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(unsafeHome, "auth.json"), []byte("test-token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(unsafeHome, ".capd_projection.json"), []byte(`{"managedBy":"other","provider":"codex","account":"codex-test"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsRemove, protocol.AccountsRemoveParams{
+		Provider:  codexauth.Provider,
+		AccountID: "codex-test",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInternalError || !strings.Contains(resp.Error.Message, "runtime projection marker mismatch") {
+		t.Fatalf("response = %+v", resp)
+	}
+	if _, err := accounts.LoadAccount("codex-test"); err != nil {
+		t.Fatalf("metadata should remain: %v", err)
+	}
+	if _, err := s.opts.Secrets.Get(context.Background(), secret.Ref{Backend: secret.BackendFile, ID: "codex-test"}); err != nil {
+		t.Fatalf("secret should remain: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(unsafeHome, "auth.json")); err != nil {
+		t.Fatalf("projection should remain: %v", err)
+	}
+	if strings.Contains(resp.Error.Message, "test-token") {
+		t.Fatalf("remove error leaked token: %v", resp.Error)
+	}
+}
+
 func addCodexAccountForTest(t *testing.T, accounts *account.Store, id, email string) {
 	t.Helper()
 	if err := accounts.UpsertAccount(account.Account{

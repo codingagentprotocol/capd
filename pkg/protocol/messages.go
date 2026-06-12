@@ -9,6 +9,7 @@ const (
 	MethodAccountsList    = "accounts/list"    // list imported agent accounts, without secrets
 	MethodAccountsCurrent = "accounts/current" // show or set provider-scoped current account, without secrets
 	MethodAccountsQuota   = "accounts/quota"   // refresh one imported account quota, without secrets
+	MethodAccountsRemove  = "accounts/remove"  // remove an imported account and local token material
 	MethodSessionCreate   = "session/create"   // start an agent session
 	MethodSessionList     = "session/list"     // enumerate sessions and their liveness
 	MethodSessionAttach   = "session/attach"   // re-attach to a live or persisted session
@@ -158,6 +159,19 @@ type AccountsQuotaParams struct {
 
 type AccountsQuotaResult struct {
 	Account AccountSummary `json:"account"`
+}
+
+type AccountsRemoveParams struct {
+	Provider  string `json:"provider,omitempty"` // empty = codex
+	AccountID string `json:"accountId"`
+}
+
+type AccountsRemoveResult struct {
+	AccountID         string `json:"accountId"`
+	RuntimeRemoved    bool   `json:"runtimeRemoved"`
+	CredentialRemoved bool   `json:"credentialRemoved"`
+	CurrentAccountID  string `json:"currentAccountId,omitempty"`
+	RemainingAccounts int    `json:"remainingAccounts"`
 }
 
 type AccountSummary struct {
