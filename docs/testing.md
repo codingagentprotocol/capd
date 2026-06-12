@@ -69,6 +69,7 @@ For multi-account routing readiness:
 ```bash
 capd accounts codex quota all
 capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
+capd doctor --json
 
 # In another terminal, keep the daemon running for CAP/WebSocket checks:
 capd start
@@ -88,9 +89,15 @@ the same live chain is available as:
 make live-codex-readiness
 ```
 
-The target first checks that at least two Codex accounts are imported, then
-runs the quota/readiness chain. Override the final live prompt with
-`LIVE_PROMPT="..." make live-codex-readiness`.
+The target first prints `capd doctor --json`, then checks that at least two
+Codex accounts are imported and runs the quota/readiness chain. Override the
+final live prompt with `LIVE_PROMPT="..." make live-codex-readiness`.
+
+`capd doctor --json` is the recommended preflight before the live chain. It
+does not refresh quota or read token material into the output; it reports daemon
+health, Codex CLI availability, imported account count, cached quota freshness,
+auto-route freshness, SecretStore backend, readiness issues, and concrete next
+steps.
 
 The smoke command verifies imported account metadata, SecretStore readability,
 per-account `CODEX_HOME` projection, runtime `CODEX_HOME` env, private

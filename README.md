@@ -151,6 +151,7 @@ capd accounts codex quota    # refresh quota and print a safe summary
 capd accounts codex quota auto
 capd accounts codex quota all
 capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
+capd doctor --json           # local readiness preflight with safe next steps
 capd start                   # keep running in another terminal for CAP/WebSocket checks
 capd health --json           # confirm daemon /healthz before CAP checks
 capd accounts check --json   # daemon-side accounts/check smoke evidence
@@ -159,10 +160,14 @@ capd agents route --account auto --require-fresh-quota
 ```
 
 For deterministic local regression, run `make verify`; for native SecretStore
-coverage, run `make verify-secretstore`. After importing multiple Codex
-accounts and starting `capd start` in another terminal, `make
-live-codex-readiness` runs the live quota/routing/readiness chain. Override the
-final prompt with `LIVE_PROMPT="..." make live-codex-readiness`.
+coverage, run `make verify-secretstore`. `capd doctor --json` is the safe
+preflight to run before live Codex work: it checks daemon health, Codex CLI
+availability, imported account count, quota freshness, auto-route freshness,
+and the active SecretStore backend without printing token material. After
+importing multiple Codex accounts and starting `capd start` in another
+terminal, `make live-codex-readiness` runs the live quota/routing/readiness
+chain. Override the final prompt with `LIVE_PROMPT="..." make
+live-codex-readiness`.
 
 Every flag, protocol field, and event is documented in
 [docs/reference.md](docs/reference.md).

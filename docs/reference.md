@@ -37,6 +37,14 @@ Checks the configured daemon `/healthz` endpoint and prints `ok`, or
 `{"ok":true,"addr":"..."}` with `--json`. Failures point to `capd start`,
 making it useful before daemon-side account readiness checks.
 
+### `capd doctor` — local readiness preflight
+
+Runs a read-only readiness preflight across daemon health, local agent
+discovery, imported Codex account count, cached quota freshness, auto-route
+freshness, and the active SecretStore backend. Text output returns a non-zero
+exit code when readiness issues are found. `--json` prints safe machine-readable
+evidence and next steps without token material or local secret paths.
+
 ### `capd run <prompt>` — send one task and stream it
 
 | Flag | Default | Meaning |
@@ -73,6 +81,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 | Command | Output |
 |---------|--------|
 | `capd health [--json]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok` and `addr` |
+| `capd doctor [--json]` | local readiness preflight for daemon health, Codex CLI availability, imported account count, quota freshness, auto-route freshness, and SecretStore backend; text mode fails when issues are found |
 | `capd agents list` | table: id, available/not installed, version, binary path |
 | `capd agents route [--account <id\|auto>] [--capability name] [--require-fresh-quota] [--json]` | preview local routing without starting a session; with `--account auto`, shows the Codex account selected by conservative quota scoring. `--require-fresh-quota` fails unless that auto selection is backed by fresh cached quota |
 | `capd agents usage <id>` | account snapshot JSON: plan, 5h/weekly window used %, reset timestamps, credits (codex) |

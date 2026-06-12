@@ -33,6 +33,7 @@ verify-secretstore:
 
 live-codex-readiness:
 	@echo "live-codex-readiness requires >=2 imported Codex accounts and a running daemon from: capd start"
+	go run ./cmd/capd doctor --json
 	go run ./cmd/capd accounts codex smoke --require-multiple
 	go run ./cmd/capd health
 	go run ./cmd/capd accounts codex quota all
