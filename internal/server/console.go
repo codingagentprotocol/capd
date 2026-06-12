@@ -163,6 +163,14 @@ func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBac
 	})
 	if perr != nil {
 		result.Errors = append(result.Errors, probeError("agents/route", perr))
+		if data, ok := probeRouteErrorData(perr); ok {
+			if data.AccountRoute != nil {
+				result.AutoRoute = data.AccountRoute
+			}
+			if len(data.RouteCandidates) > 0 {
+				result.RouteCandidates = data.RouteCandidates
+			}
+		}
 	} else {
 		result.RouteDecision = &route
 		if route.AccountRoute != nil {
@@ -322,6 +330,24 @@ func probeError(source string, perr *protocol.Error) probeDataError {
 		return probeDataError{Source: source}
 	}
 	return probeDataError{Source: source, Code: perr.Code, Message: perr.Message}
+}
+
+func probeRouteErrorData(perr *protocol.Error) (protocol.AgentRouteErrorData, bool) {
+	if perr == nil || perr.Data == nil {
+		return protocol.AgentRouteErrorData{}, false
+	}
+	if data, ok := perr.Data.(protocol.AgentRouteErrorData); ok {
+		return data, data.AccountRoute != nil || len(data.RouteCandidates) > 0
+	}
+	raw, err := json.Marshal(perr.Data)
+	if err != nil {
+		return protocol.AgentRouteErrorData{}, false
+	}
+	var data protocol.AgentRouteErrorData
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return protocol.AgentRouteErrorData{}, false
+	}
+	return data, data.AccountRoute != nil || len(data.RouteCandidates) > 0
 }
 
 func parseBoolQuery(r *http.Request, key string) bool {

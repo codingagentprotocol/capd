@@ -376,6 +376,15 @@ func TestProbeDataReadinessDefaultsToNativeAndAvoidsQuotaOnBackendMismatch(t *te
 	if got.Summary.RequiredSecretBackend != secret.BackendNative || got.Summary.SecretBackend != secret.BackendFile || got.Summary.SecretBackendOK {
 		t.Fatalf("summary = %+v", got.Summary)
 	}
+	if got.AutoRoute == nil || got.AutoRoute.AccountID != "codex-test" || got.AutoRoute.QuotaState != protocol.AccountQuotaStateMissing || got.AutoRoute.Fresh {
+		t.Fatalf("autoRoute partial route evidence = %+v", got.AutoRoute)
+	}
+	if len(got.RouteCandidates) != 1 || got.RouteCandidates[0].AccountID != "codex-test" || got.RouteCandidates[0].QuotaState != protocol.AccountQuotaStateMissing {
+		t.Fatalf("routeCandidates partial route evidence = %+v", got.RouteCandidates)
+	}
+	if got.Summary.AutoRouteAccountID != "codex-test" || got.Summary.AutoRouteFresh || got.Summary.RouteCandidates != 1 || got.Summary.RouteDecisionOK {
+		t.Fatalf("summary route evidence = %+v", got.Summary)
+	}
 	if check := probeCheckByName(got.Checks, "SecretStore backend"); check.OK || !strings.Contains(check.Evidence, "secret file, want native") || !strings.Contains(check.NextStep, "capd start --secret-backend native") {
 		t.Fatalf("SecretStore backend check = %+v", check)
 	}
