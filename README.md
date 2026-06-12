@@ -149,10 +149,10 @@ capd accounts codex list     # imported Codex accounts, current account marked
 capd accounts codex project  # create a per-account CODEX_HOME projection
 capd accounts codex quota    # refresh quota and print a safe summary
 capd accounts codex quota auto
-capd accounts codex quota all
-capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
-capd doctor --json --fail --require-secret-backend native # readiness gate
-capd start                   # keep running in another terminal for CAP/WebSocket checks
+CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all
+CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
+CAPD_SECRET_BACKEND=native capd doctor --json --fail --require-secret-backend native # readiness gate
+CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
 capd health --json           # confirm daemon /healthz before CAP checks
 capd accounts check --json   # daemon-side accounts/check smoke evidence
 capd accounts check --refresh-quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
@@ -164,10 +164,11 @@ coverage, run `make verify-secretstore`. `capd doctor --json --fail` is the safe
 preflight to run before live Codex work: it checks daemon health, Codex CLI
 availability, imported account count, quota freshness, auto-route freshness,
 and the active SecretStore backend without printing token material. After
-importing multiple Codex accounts and starting `capd start` in another
-terminal, `make live-codex-readiness` runs the live quota/routing/readiness
-chain. Override the final prompt with `LIVE_PROMPT="..." make
-live-codex-readiness`.
+importing multiple Codex accounts and starting `capd start` with the same
+backend in another terminal, `make live-codex-readiness` runs the live
+quota/routing/readiness chain. Override the final prompt with
+`LIVE_PROMPT="..." make live-codex-readiness`; override the backend only for
+intentional testing with `LIVE_SECRET_BACKEND=file`.
 
 Every flag, protocol field, and event is documented in
 [docs/reference.md](docs/reference.md).

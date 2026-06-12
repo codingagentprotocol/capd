@@ -67,12 +67,12 @@ capd accounts codex smoke --quota
 For multi-account routing readiness:
 
 ```bash
-capd accounts codex quota all
-capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
-capd doctor --json --fail --require-secret-backend native
+CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all
+CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
+CAPD_SECRET_BACKEND=native capd doctor --json --fail --require-secret-backend native
 
 # In another terminal, keep the daemon running for CAP/WebSocket checks:
-capd start
+CAPD_SECRET_BACKEND=native capd start
 
 capd health --json
 capd accounts check --json
@@ -92,6 +92,8 @@ make live-codex-readiness
 The target first runs `capd doctor --json --fail`, then checks that at least
 two Codex accounts are imported and runs the quota/readiness chain. Override
 the final live prompt with `LIVE_PROMPT="..." make live-codex-readiness`.
+Override the backend with `LIVE_SECRET_BACKEND=file` only when intentionally
+testing the file SecretStore path; the default live backend is `native`.
 
 `capd doctor --json --fail --require-secret-backend native` is the recommended
 preflight before the live chain. It does not refresh quota or read token
