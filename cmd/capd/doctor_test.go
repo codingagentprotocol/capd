@@ -181,6 +181,12 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	if report.Codex.CurrentAccountID != "codex-test" || report.Codex.AutoRouteAccountID != "codex-low" || !report.Codex.AutoRouteFresh {
 		t.Fatalf("codex route summary = %+v", report.Codex)
 	}
+	if report.Codex.AutoRouteScore != 5 || report.Codex.AutoRoutePrimary == nil || *report.Codex.AutoRoutePrimary != 5 || report.Codex.AutoRouteCheckedAt == 0 {
+		t.Fatalf("codex route evidence = %+v", report.Codex)
+	}
+	if report.Codex.AutoRouteReason != "auto account codex-low primary 5%" {
+		t.Fatalf("codex route reason = %q", report.Codex.AutoRouteReason)
+	}
 	for _, forbidden := range []string{
 		"no imported Codex accounts",
 		"multi-account readiness requires at least two imported Codex accounts",

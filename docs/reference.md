@@ -46,7 +46,9 @@ freshness, and the active SecretStore backend. Use
 readiness issue. Text output returns a non-zero exit code when readiness issues
 are found. `--json` prints safe machine-readable evidence and next steps without
 token material or local secret paths; add `--fail` when JSON output should also
-return non-zero on readiness issues.
+return non-zero on readiness issues. Auto-route evidence includes the selected
+account id, quota state, freshness, primary quota usage, routing score, checked
+time, and the same human-readable reason used by routing previews.
 
 ### `capd run <prompt>` — send one task and stream it
 

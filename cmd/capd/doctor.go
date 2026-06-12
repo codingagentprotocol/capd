@@ -98,6 +98,9 @@ type doctorCodexReport struct {
 	AutoRouteAccountID   string   `json:"autoRouteAccountId,omitempty"`
 	AutoRouteQuotaState  string   `json:"autoRouteQuotaState,omitempty"`
 	AutoRouteFresh       bool     `json:"autoRouteFresh"`
+	AutoRouteScore       float64  `json:"autoRouteScore,omitempty"`
+	AutoRouteReason      string   `json:"autoRouteReason,omitempty"`
+	AutoRouteCheckedAt   int64    `json:"autoRouteCheckedAt,omitempty"`
 	AutoRoutePrimary     *float64 `json:"autoRoutePrimaryUsedPercent,omitempty"`
 }
 
@@ -194,13 +197,14 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		if err != nil {
 			report.Issues = append(report.Issues, "auto account routing could not select a Codex account")
 		} else {
-			report.Codex.AutoRouteAccountID = route.ID
-			report.Codex.AutoRouteQuotaState = protocol.AccountQuotaStateMissing
-			if q, err := accounts.LoadQuota(route.ID); err == nil {
-				report.Codex.AutoRoutePrimary = &q.PrimaryUsedPercent
-				report.Codex.AutoRouteQuotaState = accountQuotaState(q)
-				report.Codex.AutoRouteFresh = report.Codex.AutoRouteQuotaState == protocol.AccountQuotaStateFresh
-			}
+			evidence := account.QuotaRouteEvidence(accounts, route)
+			report.Codex.AutoRouteAccountID = evidence.AccountID
+			report.Codex.AutoRouteQuotaState = evidence.QuotaState
+			report.Codex.AutoRouteFresh = evidence.Fresh
+			report.Codex.AutoRouteScore = evidence.Score
+			report.Codex.AutoRouteCheckedAt = evidence.CheckedAt
+			report.Codex.AutoRoutePrimary = evidence.PrimaryUsedPercent
+			report.Codex.AutoRouteReason = account.QuotaRouteReason(accounts, route)
 			if !report.Codex.AutoRouteFresh {
 				report.Issues = append(report.Issues, "auto account route is not backed by fresh quota")
 				report.NextSteps = append(report.NextSteps, "refresh quota and verify routing with: capd agents route --account auto --require-fresh-quota")
@@ -239,7 +243,8 @@ func printDoctorReport(cmd *cobra.Command, report doctorReport) {
 		if report.Codex.AutoRoutePrimary != nil {
 			primary = " primary=" + formatPercent(*report.Codex.AutoRoutePrimary)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s quota=%s fresh=%t%s\n", report.Codex.AutoRouteAccountID, report.Codex.AutoRouteQuotaState, report.Codex.AutoRouteFresh, primary)
+		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s quota=%s fresh=%t score=%.2f%s %s\n",
+			report.Codex.AutoRouteAccountID, report.Codex.AutoRouteQuotaState, report.Codex.AutoRouteFresh, report.Codex.AutoRouteScore, primary, report.Codex.AutoRouteReason)
 	}
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "AGENT\tSTATUS\tVERSION\tBIN")
