@@ -296,11 +296,15 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 	routeReadinessCommand := probeAccountsCheckReadinessCommand(routeBackend)
 	secretStates := accountSecretStatesEvidence(accounts)
 	credentialReady, credentialEvidence := accountCredentialEvidence(checked, accounts)
+	credentialBackend := requireSecretBackend
+	if credentialBackend == "" {
+		credentialBackend = secretBackend
+	}
 	runtimeReady, runtimeEvidence := accountRuntimeEvidence(checked, accounts)
 	checks := []probeDataCheck{
 		{Name: "daemon health", OK: true, Evidence: "health ok"},
 		{Name: "accounts/check data", OK: result.AccountsCheck != nil, Evidence: checkedEvidence(checked, secretBackend, secretStates), NextStep: missingStep(result.AccountsCheck != nil, "start capd with account support enabled")},
-		{Name: "account credentials", OK: credentialReady, Evidence: credentialEvidence, NextStep: missingStep(credentialReady, "fix SecretStore access or re-import failing accounts")},
+		{Name: "account credentials", OK: credentialReady, Evidence: credentialEvidence, NextStep: missingStep(credentialReady, probeCredentialNextStep(accounts, credentialBackend))},
 		{Name: "account runtime", OK: runtimeReady, Evidence: runtimeEvidence, NextStep: missingStep(runtimeReady, "project account runtimes with accounts/project or rerun accounts/check")},
 		{Name: "multi-account readiness", OK: !readiness || checked >= 2, Evidence: countEvidence(checked, 2), NextStep: missingStep(!readiness || checked >= 2, "import at least two accounts with: capd accounts import --auth /path/a --auth /path/b")},
 		{Name: "quota freshness", OK: !readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), Evidence: quotaFreshEvidence(quotaFresh, len(accounts)), NextStep: missingStep(!readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), "refresh and verify daemon-side readiness with: "+routeReadinessCommand)},
@@ -318,6 +322,49 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 		})
 	}
 	return checks
+}
+
+func probeCredentialNextStep(accounts []protocol.AccountCheckEvidence, backend string) string {
+	switch {
+	case probeAccountsHaveSecretState(accounts, protocol.AccountSecretStateAccessDenied):
+		return "macOS Keychain access was denied or canceled; approve the prompt, or restart with file SecretStore and re-import accounts: capd start --secret-backend file"
+	case probeAccountsHaveSecretState(accounts, protocol.AccountSecretStateTimeout):
+		return "unlock or approve OS SecretStore access, then rerun: capd probe data --json --readiness --require-secret-backend " + probeSecretBackendOrNative(backend) + " --timeout 2m --fail"
+	case probeAccountsHaveSecretState(accounts, protocol.AccountSecretStateBackendMismatch):
+		return "restart daemon with the account SecretStore backend or re-import affected accounts through CAP: capd accounts import --auth /path/to/auth.json"
+	case probeAccountsHaveSecretState(accounts, protocol.AccountSecretStateMissing):
+		return "re-import missing Codex credentials through CAP: capd accounts import --auth /path/to/auth.json"
+	case probeAccountsHaveSecretState(accounts, protocol.AccountSecretStateMalformedRef):
+		return "remove and re-import malformed Codex account metadata"
+	case probeAccountsHaveSecretState(accounts, protocol.AccountSecretStateUnreadable):
+		return "verify SecretStore directly with: " + probeSecretStoreCheckCommand(backend) + ", then re-import affected accounts through CAP: capd accounts import --auth /path/to/auth.json"
+	default:
+		return "fix SecretStore access or re-import failing accounts"
+	}
+}
+
+func probeAccountsHaveSecretState(accounts []protocol.AccountCheckEvidence, state string) bool {
+	for _, row := range accounts {
+		if row.SecretState == state {
+			return true
+		}
+	}
+	return false
+}
+
+func probeSecretStoreCheckCommand(backend string) string {
+	cmd := "capd secretstore check --json --roundtrip"
+	if backend != "" {
+		cmd += " --secret-backend " + backend + " --require-backend " + backend
+	}
+	return cmd + " --timeout 2m"
+}
+
+func probeSecretBackendOrNative(backend string) string {
+	if backend != "" {
+		return backend
+	}
+	return secret.BackendNative
 }
 
 func probeRouteBackendHint(result probeDataResult, fallback string) string {

@@ -61,6 +61,9 @@ from the browser without exposing token material or local runtime paths.
 When the native SecretStore gate is enabled, the console and probe distinguish
 backend mismatches from deeper OS SecretStore verification and point the latter to
 `capd doctor --json --fail --verify-secretstore --require-secret-backend native`.
+Credential failures also use the safe per-account `secretState` enum to choose
+the next step, including direct `capd secretstore check --json --roundtrip`
+guidance for generic `unreadable` SecretStore failures.
 If macOS reports `macOS keychain status -128`, the OS denied or canceled
 Keychain access; approve the prompt, or run a local no-prompt file-backend test
 with `capd start --secret-backend file` and re-import with

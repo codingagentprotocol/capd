@@ -415,6 +415,51 @@ func TestAccountSecretStatesEvidenceIncludesAccessDenied(t *testing.T) {
 	}
 }
 
+func TestProbeCredentialNextStepUsesSecretState(t *testing.T) {
+	cases := []struct {
+		name    string
+		state   string
+		backend string
+		want    []string
+	}{
+		{
+			name:    "unreadable",
+			state:   protocol.AccountSecretStateUnreadable,
+			backend: secret.BackendNative,
+			want:    []string{"capd secretstore check --json --roundtrip --secret-backend native --require-backend native --timeout 2m", "re-import affected accounts through CAP"},
+		},
+		{
+			name:    "timeout",
+			state:   protocol.AccountSecretStateTimeout,
+			backend: secret.BackendNative,
+			want:    []string{"unlock or approve OS SecretStore access", "capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail"},
+		},
+		{
+			name:  "access denied",
+			state: protocol.AccountSecretStateAccessDenied,
+			want:  []string{"macOS Keychain access was denied or canceled", "capd start --secret-backend file"},
+		},
+		{
+			name:  "backend mismatch",
+			state: protocol.AccountSecretStateBackendMismatch,
+			want:  []string{"restart daemon with the account SecretStore backend", "capd accounts import --auth /path/to/auth.json"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := probeCredentialNextStep([]protocol.AccountCheckEvidence{{SecretState: tc.state}}, tc.backend)
+			for _, want := range tc.want {
+				if !strings.Contains(got, want) {
+					t.Fatalf("next step missing %q: %q", want, got)
+				}
+			}
+		})
+	}
+	if got := probeSecretStoreCheckCommand(""); got != "capd secretstore check --json --roundtrip --timeout 2m" {
+		t.Fatalf("generic secretstore command = %q", got)
+	}
+}
+
 func TestProbeDataReadinessDefaultsToNativeAndAvoidsQuotaOnBackendMismatch(t *testing.T) {
 	s, _, _, accounts := newCodexAccountIntegrationServer(t)
 	acc, err := accounts.LoadAccount("codex-test")
