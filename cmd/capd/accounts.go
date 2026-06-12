@@ -680,6 +680,9 @@ func newCodexAccountsCmd() *cobra.Command {
 			} else {
 				result.AutoRoute = route
 			}
+			if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil {
+				result.RouteCandidates = candidates
+			}
 			if requireFreshQuota && (result.AutoRoute == nil || !result.AutoRoute.Fresh) {
 				return fmt.Errorf("auto route does not have fresh cached quota; run with --quota or refresh quota first")
 			}
@@ -698,6 +701,12 @@ func newCodexAccountsCmd() *cobra.Command {
 			}
 			if result.AutoRoute != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s (%s)\n", result.AutoRoute.AccountID, smokeRouteEvidenceText(*result.AutoRoute), result.AutoRoute.Reason)
+			}
+			if len(result.RouteCandidates) > 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "route candidates:")
+				for _, candidate := range result.RouteCandidates {
+					fmt.Fprintf(cmd.OutOrStdout(), "  %s %s\n", candidate.AccountID, routeEvidenceText(candidate))
+				}
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "secret backend: %s\n", result.SecretBackend)
 			return nil
@@ -765,12 +774,13 @@ func verifyProjectedRuntime(profile codexauth.RuntimeProfile) (codexSmokeProject
 }
 
 type codexSmokeResult struct {
-	OK              bool                 `json:"ok"`
-	CheckedAccounts int                  `json:"checkedAccounts"`
-	QuotaRefreshed  bool                 `json:"quotaRefreshed"`
-	SecretBackend   string               `json:"secretBackend"`
-	AutoRoute       *codexSmokeAutoRoute `json:"autoRoute,omitempty"`
-	Accounts        []codexSmokeAccount  `json:"accounts"`
+	OK              bool                            `json:"ok"`
+	CheckedAccounts int                             `json:"checkedAccounts"`
+	QuotaRefreshed  bool                            `json:"quotaRefreshed"`
+	SecretBackend   string                          `json:"secretBackend"`
+	AutoRoute       *codexSmokeAutoRoute            `json:"autoRoute,omitempty"`
+	RouteCandidates []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
+	Accounts        []codexSmokeAccount             `json:"accounts"`
 }
 
 type codexSmokeAutoRoute struct {

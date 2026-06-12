@@ -1548,6 +1548,9 @@ func TestCodexAccountsSmokeJSONMarksAutoRouteMissingQuota(t *testing.T) {
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateMissing || result.AutoRoute.Fresh || result.AutoRoute.Primary != nil {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
+	if len(result.RouteCandidates) != 1 || result.RouteCandidates[0].AccountID != "codex-test" || result.RouteCandidates[0].QuotaState != protocol.AccountQuotaStateMissing || result.RouteCandidates[0].Fresh {
+		t.Fatalf("route candidates = %+v", result.RouteCandidates)
+	}
 	if result.Accounts[0].QuotaState != protocol.AccountQuotaStateMissing || result.Accounts[0].QuotaFresh || result.Accounts[0].PrimaryUsed != "cached-missing" || result.Accounts[0].PrimaryUsedPercent != nil {
 		t.Fatalf("account quota = %+v", result.Accounts[0])
 	}
@@ -1577,6 +1580,9 @@ func TestCodexAccountsSmokeJSONMarksAutoRouteStaleQuota(t *testing.T) {
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" || result.AutoRoute.QuotaState != protocol.AccountQuotaStateStale || result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 2 || result.AutoRoute.CheckedAt != staleAt {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
+	if len(result.RouteCandidates) != 1 || result.RouteCandidates[0].AccountID != "codex-test" || result.RouteCandidates[0].QuotaState != protocol.AccountQuotaStateStale || result.RouteCandidates[0].Fresh {
+		t.Fatalf("route candidates = %+v", result.RouteCandidates)
+	}
 	if result.Accounts[0].QuotaState != protocol.AccountQuotaStateStale || result.Accounts[0].QuotaFresh || result.Accounts[0].QuotaCheckedAt != staleAt || result.Accounts[0].PrimaryUsedPercent == nil || *result.Accounts[0].PrimaryUsedPercent != 2 {
 		t.Fatalf("account quota = %+v", result.Accounts[0])
 	}
@@ -1605,6 +1611,9 @@ func TestCodexAccountsSmokeRequireFreshQuotaPassesWithFreshCache(t *testing.T) {
 	if result.AutoRoute == nil || result.AutoRoute.QuotaState != protocol.AccountQuotaStateFresh || !result.AutoRoute.Fresh || result.AutoRoute.Primary == nil || *result.AutoRoute.Primary != 9 {
 		t.Fatalf("auto route = %+v", result.AutoRoute)
 	}
+	if len(result.RouteCandidates) != 1 || result.RouteCandidates[0].AccountID != "codex-test" || !result.RouteCandidates[0].Fresh || result.RouteCandidates[0].PrimaryUsedPercent == nil || *result.RouteCandidates[0].PrimaryUsedPercent != 9 {
+		t.Fatalf("route candidates = %+v", result.RouteCandidates)
+	}
 }
 
 func TestCodexAccountsSmokeTextIncludesAutoRouteEvidence(t *testing.T) {
@@ -1626,6 +1635,8 @@ func TestCodexAccountsSmokeTextIncludesAutoRouteEvidence(t *testing.T) {
 	text := out.String()
 	for _, want := range []string{
 		"auto route: codex-test quota fresh fresh true primary 9.0% score ",
+		"route candidates:",
+		"codex-test quota fresh fresh true primary 9.0% score ",
 		"checked ",
 		"secret backend: file",
 	} {

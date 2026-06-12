@@ -150,7 +150,7 @@ per-account `CODEX_HOME` projection, runtime `CODEX_HOME` env, private
 selection, and optionally ChatGPT backend quota refresh. It prints only account
 metadata, projection paths, quota percentages, projection booleans, and the
 selected `autoRoute.accountId`, `autoRoute.quotaState` (`fresh`, `stale`, or
-`missing`), plus `secretBackend`; per-account rows include
+`missing`), sorted `routeCandidates`, plus `secretBackend`; per-account rows include
 `secretBackendOk`, `secretReadable`, `quotaState`, `quotaFresh`, and
 `quotaCheckedAt` fields. Token material is never printed. Use
 `--require-fresh-quota` to fail unless the auto-route decision is backed by a
