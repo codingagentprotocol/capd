@@ -35,6 +35,9 @@ func newProbeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if readiness && requireSecretBackend == "" {
+				requireSecretBackend = secret.BackendNative
+			}
 			callCtx := cmd.Context()
 			var cancel context.CancelFunc
 			if timeout > 0 {

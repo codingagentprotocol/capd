@@ -59,7 +59,9 @@ func TestProbeDataTextPrintsReadinessSummary(t *testing.T) {
 	if err := writeTokenForTest(home, "tok-probe-summary"); err != nil {
 		t.Fatal(err)
 	}
+	var rawQuery string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawQuery = r.URL.RawQuery
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"ok":true,"summary":{"ready":true,"readiness":true,"checkedAccounts":2,"requiredAccounts":2,"missingAccounts":0,"freshQuotaAccounts":2,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteAccountId":"codex-a","autoRouteFresh":true,"routeDecisionOk":true,"routeCandidates":2,"secretBackend":"native","requiredSecretBackend":"native","secretBackendOk":true},"health":{"version":"test","protocolVersion":"0.1","secretBackend":"native"},"accountsCheck":{"provider":"codex","secretBackend":"native","checkedAccounts":2},"autoRoute":{"accountId":"codex-a","quotaState":"fresh","fresh":true},"checks":[{"name":"daemon health","ok":true,"evidence":"health ok"}]}`))
 	}))
@@ -76,11 +78,41 @@ func TestProbeDataTextPrintsReadinessSummary(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(rawQuery, "readiness=1") || !strings.Contains(rawQuery, "requireSecretBackend=native") {
+		t.Fatalf("query = %q", rawQuery)
+	}
 	text := out.String()
 	for _, want := range []string{"summary: ready=true accounts=2/2 missing=0 quota fresh=2 stale=0 missing=0 autoFresh=true routeDecision=true routeCandidates=2 secretOK=true", "secret backend: actual=native required=native ok=true", "auto route: codex-a fresh fresh=true"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("text missing %q: %s", want, text)
 		}
+	}
+}
+
+func TestProbeDataReadinessCanOverrideRequiredSecretBackend(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := writeTokenForTest(home, "tok-probe-file"); err != nil {
+		t.Fatal(err)
+	}
+	var rawQuery string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true,"summary":{"ready":true,"readiness":true,"checkedAccounts":2,"requiredAccounts":2,"missingAccounts":0,"freshQuotaAccounts":2,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteAccountId":"codex-a","autoRouteFresh":true,"routeDecisionOk":true,"routeCandidates":2,"secretBackend":"file","requiredSecretBackend":"file","secretBackendOk":true},"health":{"version":"test","protocolVersion":"0.1","secretBackend":"file"},"checks":[{"name":"daemon health","ok":true,"evidence":"health ok"}]}`))
+	}))
+	defer ts.Close()
+	host, port := splitTestURL(t, ts.URL)
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+
+	cmd := newProbeCmd()
+	cmd.SetArgs([]string{"data", "--readiness", "--require-secret-backend", "file"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(rawQuery, "readiness=1") || !strings.Contains(rawQuery, "requireSecretBackend=file") || strings.Contains(rawQuery, "requireSecretBackend=native") {
+		t.Fatalf("query = %q", rawQuery)
 	}
 }
 
