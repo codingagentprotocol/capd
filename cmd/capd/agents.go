@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -388,10 +389,23 @@ func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error
 		}
 	}
 	lines = append(lines,
-		"next: refresh and verify daemon-side readiness with: "+accountsCheckReadinessCommandFromEnv(),
+		"next: refresh and verify daemon-side readiness with: "+accountsCheckReadinessCommand(routeReadinessBackendHint(acc)),
 		"next: preview routing with: capd agents route --account auto --require-fresh-quota --json",
 	)
 	return fmt.Errorf("%s", strings.Join(lines, "\n"))
+}
+
+func routeReadinessBackendHint(acc account.Account) string {
+	if acc.SecretRef != "" {
+		if ref, err := secret.ParseRef(acc.SecretRef); err == nil {
+			return ref.Backend
+		}
+	}
+	backend, err := secret.NormalizeBackend(os.Getenv(secret.EnvBackend))
+	if err != nil {
+		return ""
+	}
+	return backend
 }
 
 func trimCLIStringList(items []string) []string {

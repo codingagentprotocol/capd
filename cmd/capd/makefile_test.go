@@ -124,6 +124,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"CodexSmokeCachedAccountRowReportsSecretBackendMetadata",
 		"RouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing",
 		"RouteCLIAccountAutoRequireFreshQuotaPreservesEnvBackendInNextStep",
+		"RouteCLIAccountAutoRequireFreshQuotaPrefersAccountSecretBackendInNextStep",
 		"RouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache",
 		"CodexAccountsQuotaAllRefreshesEveryAccountSafely",
 		"CodexAccountsQuotaAllFailurePrintsSafePartialEvidence",

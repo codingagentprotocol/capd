@@ -122,7 +122,7 @@ func TestRouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 		"route: quota stale fresh false primary 2.0% score 74.99 checked",
 		"route candidates: codex-test quota stale",
 		"codex-missing quota missing",
-		"next: refresh and verify daemon-side readiness with: capd accounts check --json --readiness --timeout 2m",
+		"next: refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend file --timeout 2m",
 		"next: preview routing with: capd agents route --account auto --require-fresh-quota --json",
 	} {
 		if !strings.Contains(err.Error(), want) {
@@ -158,6 +158,42 @@ func TestRouteCLIAccountAutoRequireFreshQuotaPreservesEnvBackendInNextStep(t *te
 	want := "next: refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend file --timeout 2m"
 	if !strings.Contains(err.Error(), want) {
 		t.Fatalf("error missing %q: %s", want, err.Error())
+	}
+}
+
+func TestRouteCLIAccountAutoRequireFreshQuotaPrefersAccountSecretBackendInNextStep(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv(secret.EnvBackend, secret.BackendFile)
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = secret.BackendNative + ":codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	staleAt := time.Now().Add(-account.QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 42, CheckedAt: staleAt}); err != nil {
+		t.Fatal(err)
+	}
+	infos := []protocol.AgentInfo{
+		{ID: "codex", Available: true, Capabilities: protocol.AgentCapabilities{Usage: true, Resume: true}},
+	}
+	_, err = routeCLI(infos, accounts, routeCLIParams{
+		AccountID:    protocol.AccountAuto,
+		RequireFresh: true,
+	})
+	if err == nil {
+		t.Fatal("expected fresh quota error")
+	}
+	want := "next: refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend native --timeout 2m"
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("error missing %q: %s", want, err.Error())
+	}
+	if strings.Contains(err.Error(), "--require-secret-backend file") {
+		t.Fatalf("error used env backend instead of account backend: %s", err.Error())
 	}
 }
 
