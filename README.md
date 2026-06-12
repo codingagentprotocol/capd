@@ -151,7 +151,7 @@ capd accounts codex quota    # refresh quota and print a safe summary
 capd accounts codex quota auto
 capd accounts codex quota all
 capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
-capd doctor --json           # local readiness preflight with safe next steps
+capd doctor --json --require-secret-backend native # local readiness preflight
 capd start                   # keep running in another terminal for CAP/WebSocket checks
 capd health --json           # confirm daemon /healthz before CAP checks
 capd accounts check --json   # daemon-side accounts/check smoke evidence

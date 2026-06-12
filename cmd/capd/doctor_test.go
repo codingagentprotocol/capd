@@ -72,6 +72,45 @@ func TestDoctorTextReturnsErrorWhenNotReady(t *testing.T) {
 	}
 }
 
+func TestDoctorRequiresSecretBackend(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+	var out bytes.Buffer
+	cmd := newDoctorCmd()
+	cmd.SetArgs([]string{"--json", "--require-secret-backend", "native"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var got doctorReport
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.OK {
+		t.Fatalf("doctor unexpectedly ok: %+v", got)
+	}
+	if !containsString(got.Issues, `secret backend is "file", want "native"`) {
+		t.Fatalf("missing secret backend issue: %+v", got.Issues)
+	}
+	if strings.Contains(out.String(), home) {
+		t.Fatalf("doctor JSON leaked home path: %s", out.String())
+	}
+}
+
+func TestDoctorRejectsInvalidRequiredSecretBackend(t *testing.T) {
+	cmd := newDoctorCmd()
+	cmd.SetArgs([]string{"--require-secret-backend", "bogus"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "secret backend") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -105,7 +144,7 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	report, err := buildDoctorReport(t.Context())
+	report, err := buildDoctorReport(t.Context(), doctorOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

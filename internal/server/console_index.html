@@ -266,7 +266,9 @@ async function refreshReadinessDiagnostic() {
   readinessEl.textContent = "诊断中…";
   try {
     await checkDaemonHealth(false);
-    const result = await call("accounts/check", { provider: "codex" });
+    const checkParams = { provider: "codex" };
+    if (document.getElementById("requireNativeSecret").checked) checkParams.requireSecretBackend = "native";
+    const result = await call("accounts/check", checkParams);
     let route = null;
     try {
       route = await call("agents/route", { accountId: "auto" });

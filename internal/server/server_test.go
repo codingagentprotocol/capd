@@ -108,6 +108,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"refreshDiagnostic",
 		"刷新诊断",
 		"refreshReadinessDiagnostic",
+		"checkParams.requireSecretBackend = \"native\"",
 		"诊断等待连接",
 		"诊断中",
 		"诊断不可用",

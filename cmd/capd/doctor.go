@@ -13,6 +13,7 @@ import (
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/config"
 	"github.com/codingagentprotocol/capd/internal/daemon"
 	"github.com/codingagentprotocol/capd/internal/discovery"
@@ -25,7 +26,14 @@ func newDoctorCmd() *cobra.Command {
 		Short: "Run a local readiness preflight for capd, Codex accounts, and routing",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			jsonOut, _ := cmd.Flags().GetBool("json")
-			report, err := buildDoctorReport(cmd.Context())
+			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
+			requireSecretBackend, err := secret.NormalizeBackend(requireSecretBackend)
+			if err != nil {
+				return err
+			}
+			report, err := buildDoctorReport(cmd.Context(), doctorOptions{
+				RequireSecretBackend: requireSecretBackend,
+			})
 			if err != nil {
 				return err
 			}
@@ -42,7 +50,12 @@ func newDoctorCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().Bool("json", false, "print machine-readable readiness evidence without token material")
+	cmd.Flags().String("require-secret-backend", "", "fail unless this SecretStore backend is active (file or native)")
 	return cmd
+}
+
+type doctorOptions struct {
+	RequireSecretBackend string
 }
 
 type doctorReport struct {
@@ -83,7 +96,7 @@ type doctorCodexReport struct {
 	AutoRoutePrimary     *float64 `json:"autoRoutePrimaryUsedPercent,omitempty"`
 }
 
-func buildDoctorReport(ctx context.Context) (doctorReport, error) {
+func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, error) {
 	cfg := config.Load()
 	report := doctorReport{
 		CheckedAt:  time.Now().Unix(),
@@ -128,6 +141,10 @@ func buildDoctorReport(ctx context.Context) (doctorReport, error) {
 	}
 	defer accounts.Close()
 	report.Codex.SecretBackend = secrets.Backend()
+	if opts.RequireSecretBackend != "" && opts.RequireSecretBackend != report.Codex.SecretBackend {
+		report.Issues = append(report.Issues, fmt.Sprintf("secret backend is %q, want %q", report.Codex.SecretBackend, opts.RequireSecretBackend))
+		report.NextSteps = append(report.NextSteps, fmt.Sprintf("set CAPD_SECRET_BACKEND=%s or pass --secret-backend %s for account commands", opts.RequireSecretBackend, opts.RequireSecretBackend))
+	}
 	current, err := accounts.CurrentAccount(codexauth.Provider)
 	if err != nil {
 		return doctorReport{}, err
