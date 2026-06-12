@@ -344,6 +344,17 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 	}
 	if params.RefreshQuota {
 		if _, perr := s.refreshAccountQuota(ctx, protocol.AccountsQuotaParams{Provider: provider, AccountID: protocol.AccountAll}); perr != nil {
+			if refreshedAccounts, err := s.opts.Accounts.ListAccounts(provider); err == nil {
+				sort.Slice(refreshedAccounts, func(i, j int) bool {
+					return refreshedAccounts[i].ID < refreshedAccounts[j].ID
+				})
+				accounts = refreshedAccounts
+				result.CheckedAccounts = len(accounts)
+				result.Accounts = nil
+				result.AutoRoute = nil
+				result.RouteCandidates = nil
+				result = s.withCachedAccountsCheckEvidence(result, accounts, current, provider)
+			}
 			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(protocol.NewError(perr.Code, "refresh quota: %s", perr.Message), result, params)
 		}
 		accounts, err = s.opts.Accounts.ListAccounts(provider)

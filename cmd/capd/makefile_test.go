@@ -90,6 +90,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"SessionCreateAutoAccountBindsLowestCachedQuota",
 		"AccountsCheckCanRefreshQuotaAndEnforceReadiness",
 		"AccountsCheckReadinessFailureIsDaemonSideAndSafe",
+		"AccountsCheckRefreshFailureKeepsSuccessfulQuotaEvidence",
 		"AccountsCheckAllFreshFailureReportsEveryStaleAccountSafely",
 		"AccountsQuotaAllRefreshesEveryCodexAccountSafely",
 		"AccountsQuotaAllFailureIsSafeAndCachesSuccessfulAccounts",

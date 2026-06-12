@@ -1639,6 +1639,83 @@ func TestAccountsCheckReadinessFailureIsDaemonSideAndSafe(t *testing.T) {
 	}
 }
 
+func TestAccountsCheckRefreshFailureKeepsSuccessfulQuotaEvidence(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	ref, err := s.opts.Secrets.Put(context.Background(), "codex-zlow", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "zlow-token",
+		AccountID:   "acct_zlow",
+		Email:       "zlow@example.com",
+		RawAuthJSON: []byte(`{"tokens":{"access_token":"zlow-token","account_id":"acct_zlow","secret":"backend-secret"}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-zlow",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "zlow@example.com",
+		AccountID: "acct_zlow",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("Authorization") {
+		case "Bearer test-token":
+			json.NewEncoder(w).Encode(map[string]any{
+				"planType": "pro",
+				"rateLimits": map[string]any{
+					"primary": map[string]any{"usedPercent": 14},
+				},
+			})
+		case "Bearer zlow-token":
+			http.Error(w, "backend-secret zlow-token secretRef=file:codex-zlow", http.StatusTooManyRequests)
+		default:
+			http.Error(w, "unexpected auth", http.StatusUnauthorized)
+		}
+	}))
+	defer backend.Close()
+	s.opts.CodexQuotaBaseURL = backend.URL
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider:             codexauth.Provider,
+		RefreshQuota:         true,
+		RequireMultiple:      true,
+		RequireFreshQuota:    true,
+		RequireAllFreshQuota: true,
+		RequireSecretBackend: secret.BackendFile,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeAgentUnavailable || !strings.Contains(resp.Error.Message, "refresh quota: codex-zlow") {
+		t.Fatalf("response = %+v", resp)
+	}
+	partial := accountsCheckErrorData(t, resp.Error)
+	if partial.CheckedAccounts != 2 || !partial.QuotaRefreshed || len(partial.Accounts) != 2 {
+		t.Fatalf("partial = %+v", partial)
+	}
+	if partial.Accounts[0].ID != "codex-test" || !partial.Accounts[0].QuotaFresh || partial.Accounts[0].PrimaryUsedPercent == nil || *partial.Accounts[0].PrimaryUsedPercent != 14 {
+		t.Fatalf("successful quota evidence missing: %+v", partial.Accounts)
+	}
+	if partial.Accounts[1].ID != "codex-zlow" || partial.Accounts[1].QuotaFresh || partial.Accounts[1].PrimaryUsedPercent != nil {
+		t.Fatalf("failed account should remain cached-missing: %+v", partial.Accounts)
+	}
+	if partial.AutoRoute == nil || partial.AutoRoute.AccountID != "codex-test" || !partial.AutoRoute.Fresh || len(partial.RouteCandidates) != 2 {
+		t.Fatalf("route evidence = auto:%+v candidates:%+v", partial.AutoRoute, partial.RouteCandidates)
+	}
+	if partial.Summary.Ready || partial.Summary.FreshQuotaAccounts != 1 || partial.Summary.MissingQuotaAccounts != 1 || !partial.Summary.AutoRouteFresh {
+		t.Fatalf("summary = %+v", partial.Summary)
+	}
+	data, _ := json.Marshal(partial)
+	for _, leaked := range []string{"test-token", "zlow-token", "backend-secret", "secretRef", ref.String(), "CODEX_HOME", s.opts.RuntimeRoot} {
+		if strings.Contains(string(data), leaked) || strings.Contains(resp.Error.Message, leaked) {
+			t.Fatalf("accounts/check refresh failure leaked %q: err=%s data=%s", leaked, resp.Error.Message, data)
+		}
+	}
+}
+
 func TestAccountsCheckAllFreshFailureReportsEveryStaleAccountSafely(t *testing.T) {
 	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
 	ref, err := s.opts.Secrets.Put(context.Background(), "codex-missing", secret.Bundle{

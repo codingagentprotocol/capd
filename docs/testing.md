@@ -253,6 +253,9 @@ Use `capd accounts check --json --readiness` when you want a single daemon-side
 readiness gate to refresh every imported Codex account through `accounts/quota`
 before checking cached freshness, without printing raw backend usage JSON. The
 JSON form preserves safe partial evidence when a gate fails.
+If quota refresh fails midway, the partial evidence reflects any quota snapshots
+successfully refreshed before the failing account, so readiness logs show which
+accounts are already fresh and which account blocked the run.
 It exits non-zero when too few accounts are imported, auto-route quota is stale
 or missing, any checked account lacks fresh cached quota, or the daemon is not
 using the expected native SecretStore backend. Override that backend with
