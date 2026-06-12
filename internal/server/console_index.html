@@ -262,6 +262,7 @@ function renderAccounts(accounts, currentAccountId) {
   accountsEl.textContent = "";
   const accountSel = document.getElementById("account");
   const selected = accountSel.value;
+  let codexAccounts = 0;
   accountSel.textContent = "";
   accountSel.appendChild(new Option("不用账号", ""));
   const autoOption = new Option("自动账号", "auto");
@@ -270,6 +271,7 @@ function renderAccounts(accounts, currentAccountId) {
   for (const a of accounts) {
     const isCodex = a.provider === "codex";
     if (isCodex) {
+      codexAccounts += 1;
       const option = new Option(accountLabel(a), a.id);
       if ((selected && a.id === selected) || (!selected && a.id === currentAccountId)) option.selected = true;
       accountSel.appendChild(option);
@@ -305,6 +307,17 @@ function renderAccounts(accounts, currentAccountId) {
       card.append(current, project, refresh, remove);
     }
     accountsEl.appendChild(card);
+  }
+  if (accounts.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "暂无账号，先导入 Codex";
+    accountsEl.appendChild(empty);
+  } else if (codexAccounts === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "暂无 Codex 账号，先导入 Codex";
+    accountsEl.appendChild(empty);
   }
   markActiveAccount();
   previewRoute();
