@@ -110,8 +110,9 @@ make verify-codex-readiness-sim
 ```
 
 It exercises multi-account quota refresh, conservative auto-route selection,
-fresh-quota enforcement, daemon-side `accounts/check` readiness, CLI shortcut
-parameters, and secret-leak guards with local test backends.
+fresh-quota enforcement, daemon-side `accounts/check` readiness, doctor
+CAP/WebSocket account checks, CLI shortcut parameters, and secret-leak guards
+with local test backends.
 
 The target first runs `capd doctor --json --fail`, then checks that at least
 two Codex accounts are imported and runs the quota/readiness chain. Override
