@@ -281,7 +281,10 @@ Codex only, because imported account runtimes are Codex-specific. Use
 scoring: fresh cached primary quota uses the actual usage percent, while missing
 quota or rows older than 30 minutes receive a conservative unknown score until
 `accounts/quota` or `agents/usage` refreshes them. Set `requireFreshQuota:true`
-with `accountId:"auto"` to fail instead of routing on missing or stale quota.
+with `accountId:"auto"` to fail instead of routing on missing or stale quota;
+that fresh-quota error includes safe `data.accountRoute` and
+`data.routeCandidates` evidence so clients can show the stale or missing quota
+state without exposing token material.
 When account routing is in play, `accountRoute` reports the selected
 `accountId`, score, `quotaState` (`fresh`, `stale`, or `missing`), freshness,
 optional primary usage percent, and optional checked timestamp without exposing

@@ -71,7 +71,7 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 			}
 			if params.RequireFreshQuota {
 				if q, err := s.opts.Accounts.LoadQuota(acc.ID); err != nil || !account.QuotaSnapshotFresh(q, time.Now()) {
-					return protocol.AgentRouteResult{}, protocol.NewError(protocol.CodeInvalidParams, freshQuotaRefreshHint)
+					return protocol.AgentRouteResult{}, s.routeFreshQuotaError(acc)
 				}
 			}
 			selectedAccountID = acc.ID
@@ -148,6 +148,20 @@ func (s *Server) selectCodexAccountForRoute() (account.Account, string, *protoco
 		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
 	}
 	return best, account.QuotaRouteReason(s.opts.Accounts, best), nil
+}
+
+func (s *Server) routeFreshQuotaError(acc account.Account) *protocol.Error {
+	perr := protocol.NewError(protocol.CodeInvalidParams, freshQuotaRefreshHint)
+	if s.opts.Accounts == nil || acc.ID == "" {
+		return perr
+	}
+	evidence := account.QuotaRouteEvidence(s.opts.Accounts, acc)
+	data := protocol.AgentRouteErrorData{AccountRoute: &evidence}
+	if candidates, err := account.QuotaRouteCandidates(s.opts.Accounts, codexauth.Provider); err == nil {
+		data.RouteCandidates = candidates
+	}
+	perr.Data = data
+	return perr
 }
 
 func routeRequirements(params protocol.AgentRouteParams) protocol.AgentCapabilities {

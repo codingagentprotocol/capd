@@ -118,6 +118,11 @@ type AgentRouteResult struct {
 	Reason          string                 `json:"reason"`
 }
 
+type AgentRouteErrorData struct {
+	AccountRoute    *AccountRouteEvidence  `json:"accountRoute,omitempty"`
+	RouteCandidates []AccountRouteEvidence `json:"routeCandidates,omitempty"`
+}
+
 type AccountRouteEvidence struct {
 	AccountID          string   `json:"accountId,omitempty"`
 	Score              float64  `json:"score"`

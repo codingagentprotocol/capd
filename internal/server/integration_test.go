@@ -726,6 +726,22 @@ func TestAgentsRouteAutoAccountRequireFreshQuota(t *testing.T) {
 	if !isFreshQuotaHint(resp.Error) {
 		t.Fatalf("response = %+v", resp)
 	}
+	data := agentRouteErrorData(t, resp.Error)
+	if data.AccountRoute == nil || data.AccountRoute.AccountID != "codex-test" || data.AccountRoute.QuotaState != protocol.AccountQuotaStateMissing || data.AccountRoute.Fresh {
+		t.Fatalf("fresh quota error data accountRoute = %+v", data.AccountRoute)
+	}
+	if len(data.RouteCandidates) != 1 || data.RouteCandidates[0].AccountID != "codex-test" || data.RouteCandidates[0].QuotaState != protocol.AccountQuotaStateMissing {
+		t.Fatalf("fresh quota error data routeCandidates = %+v", data.RouteCandidates)
+	}
+	raw, err := json.Marshal(resp.Error.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leaked := range []string{"test-token", "secretRef", "rawAuthJson", "CODEX_HOME"} {
+		if strings.Contains(string(raw), leaked) {
+			t.Fatalf("fresh quota error data leaked %q: %s", leaked, raw)
+		}
+	}
 
 	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 7}); err != nil {
 		t.Fatal(err)
@@ -738,6 +754,22 @@ func TestAgentsRouteAutoAccountRequireFreshQuota(t *testing.T) {
 	if routed.AccountID != "codex-test" || routed.AccountRoute == nil || routed.AccountRoute.AccountID != "codex-test" || !routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 7 {
 		t.Fatalf("route = %+v", routed)
 	}
+}
+
+func agentRouteErrorData(t *testing.T, perr *protocol.Error) protocol.AgentRouteErrorData {
+	t.Helper()
+	if perr == nil || perr.Data == nil {
+		t.Fatalf("missing route error data: %+v", perr)
+	}
+	data, err := json.Marshal(perr.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out protocol.AgentRouteErrorData
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 func TestAgentsRouteRejectsFreshQuotaGateWithoutAutoAccount(t *testing.T) {
