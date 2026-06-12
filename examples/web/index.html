@@ -841,6 +841,7 @@ function routeCandidateSummary(candidates) {
 function routeEvidenceSummary(route) {
   const parts = [`quota ${route.quotaState || "missing"}`];
   if (typeof route.fresh === "boolean") parts.push(route.fresh ? "fresh" : "not-fresh");
+  if (route.secretBackend) parts.push(`secret ${route.secretBackend}`);
   if (hasNumber(route.primaryUsedPercent)) parts.push(`primary ${route.primaryUsedPercent}%`);
   if (hasNumber(route.score)) parts.push(`score ${route.score}`);
   if (route.checkedAt) parts.push(`checked ${new Date(route.checkedAt * 1000).toLocaleString()}`);

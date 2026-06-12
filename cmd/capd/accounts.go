@@ -950,6 +950,9 @@ func codexLocalImportNextStep(secretBackend string, second bool) string {
 
 func smokeRouteEvidenceText(route codexSmokeAutoRoute) string {
 	parts := []string{"quota " + route.QuotaState, fmt.Sprintf("fresh %t", route.Fresh)}
+	if route.SecretBackend != "" {
+		parts = append(parts, "secret "+route.SecretBackend)
+	}
 	if route.Primary != nil {
 		parts = append(parts, "primary "+formatPercent(*route.Primary))
 	}
@@ -1147,13 +1150,14 @@ func secretRefBackendLabel(ref secret.Ref) string {
 }
 
 type codexSmokeAutoRoute struct {
-	AccountID  string   `json:"accountId"`
-	Reason     string   `json:"reason"`
-	Score      float64  `json:"score"`
-	QuotaState string   `json:"quotaState"`
-	Fresh      bool     `json:"fresh"`
-	CheckedAt  int64    `json:"checkedAt,omitempty"`
-	Primary    *float64 `json:"primaryUsedPercent,omitempty"`
+	AccountID     string   `json:"accountId"`
+	SecretBackend string   `json:"secretBackend,omitempty"`
+	Reason        string   `json:"reason"`
+	Score         float64  `json:"score"`
+	QuotaState    string   `json:"quotaState"`
+	Fresh         bool     `json:"fresh"`
+	CheckedAt     int64    `json:"checkedAt,omitempty"`
+	Primary       *float64 `json:"primaryUsedPercent,omitempty"`
 }
 
 type codexSmokeAccount struct {
@@ -1613,13 +1617,14 @@ func codexSmokeAutoRouteEvidence(accounts *account.Store) (*codexSmokeAutoRoute,
 	}
 	evidence := account.QuotaRouteEvidence(accounts, acc)
 	route := &codexSmokeAutoRoute{
-		AccountID:  evidence.AccountID,
-		Reason:     evidence.Reason,
-		Score:      evidence.Score,
-		QuotaState: evidence.QuotaState,
-		Fresh:      evidence.Fresh,
-		CheckedAt:  evidence.CheckedAt,
-		Primary:    evidence.PrimaryUsedPercent,
+		AccountID:     evidence.AccountID,
+		SecretBackend: evidence.SecretBackend,
+		Reason:        evidence.Reason,
+		Score:         evidence.Score,
+		QuotaState:    evidence.QuotaState,
+		Fresh:         evidence.Fresh,
+		CheckedAt:     evidence.CheckedAt,
+		Primary:       evidence.PrimaryUsedPercent,
 	}
 	return route, nil
 }

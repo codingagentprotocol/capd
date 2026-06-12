@@ -620,7 +620,7 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if !strings.Contains(out.String(), "quota refreshed: false") {
 		t.Fatalf("text output missing quota refresh evidence: %s", out.String())
 	}
-	for _, want := range []string{"summary: ready=true accounts=1/2 missing=1 quota fresh=1 stale=0 missing=0 autoFresh=true secretOK=true", "auto route: codex-test quota fresh fresh true primary 12.0% score ", "SECRET_STATE", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountSecretStateReadable, protocol.AccountQuotaStateFresh, "true", "12.0%"} {
+	for _, want := range []string{"summary: ready=true accounts=1/2 missing=1 quota fresh=1 stale=0 missing=0 autoFresh=true secretOK=true", "auto route: codex-test quota fresh fresh true secret file primary 12.0% score ", "SECRET_STATE", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountSecretStateReadable, protocol.AccountQuotaStateFresh, "true", "12.0%"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("text output missing %q: %s", want, out.String())
 		}
@@ -685,7 +685,7 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if !strings.Contains(out.String(), "quota refreshed: true") {
 		t.Fatalf("text output missing refreshed evidence: %s", out.String())
 	}
-	for _, want := range []string{"auto route: codex-test quota fresh fresh true primary 6.0% score ", "SECRET_STATE", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountSecretStateReadable, protocol.AccountQuotaStateFresh, "true", "6.0%"} {
+	for _, want := range []string{"auto route: codex-test quota fresh fresh true secret file primary 6.0% score ", "SECRET_STATE", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountSecretStateReadable, protocol.AccountQuotaStateFresh, "true", "6.0%"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("text refresh output missing %q: %s", want, out.String())
 		}
@@ -2301,9 +2301,9 @@ func TestCodexAccountsSmokeTextIncludesAutoRouteEvidence(t *testing.T) {
 		protocol.AccountQuotaStateFresh,
 		"true",
 		"9.0%",
-		"auto route: codex-test quota fresh fresh true primary 9.0% score ",
+		"auto route: codex-test quota fresh fresh true secret file primary 9.0% score ",
 		"route candidates:",
-		"codex-test quota fresh fresh true primary 9.0% score ",
+		"codex-test quota fresh fresh true secret file primary 9.0% score ",
 		"checked ",
 		"secret backend: file",
 	} {

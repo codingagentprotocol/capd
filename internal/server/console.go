@@ -493,6 +493,9 @@ func routeEvidenceTextPtr(route *protocol.AccountRouteEvidence) string {
 	} else {
 		parts = append(parts, "not-fresh")
 	}
+	if route.SecretBackend != "" {
+		parts = append(parts, "secret "+route.SecretBackend)
+	}
 	if route.PrimaryUsedPercent != nil {
 		parts = append(parts, "primary "+strconv.FormatFloat(*route.PrimaryUsedPercent, 'f', -1, 64)+"%")
 	}

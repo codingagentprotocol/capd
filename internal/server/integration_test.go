@@ -759,13 +759,13 @@ func TestAgentsRouteAutoAccountRequireFreshQuota(t *testing.T) {
 		t.Fatalf("response = %+v", resp)
 	}
 	data := agentRouteErrorData(t, resp.Error)
-	if data.AccountRoute == nil || data.AccountRoute.AccountID != "codex-test" || data.AccountRoute.QuotaState != protocol.AccountQuotaStateMissing || data.AccountRoute.Fresh {
+	if data.AccountRoute == nil || data.AccountRoute.AccountID != "codex-test" || data.AccountRoute.SecretBackend != secret.BackendFile || data.AccountRoute.QuotaState != protocol.AccountQuotaStateMissing || data.AccountRoute.Fresh {
 		t.Fatalf("fresh quota error data accountRoute = %+v", data.AccountRoute)
 	}
 	if data.SecretBackend != secret.BackendFile {
 		t.Fatalf("fresh quota error data secretBackend = %q", data.SecretBackend)
 	}
-	if len(data.RouteCandidates) != 1 || data.RouteCandidates[0].AccountID != "codex-test" || data.RouteCandidates[0].QuotaState != protocol.AccountQuotaStateMissing {
+	if len(data.RouteCandidates) != 1 || data.RouteCandidates[0].AccountID != "codex-test" || data.RouteCandidates[0].SecretBackend != secret.BackendFile || data.RouteCandidates[0].QuotaState != protocol.AccountQuotaStateMissing {
 		t.Fatalf("fresh quota error data routeCandidates = %+v", data.RouteCandidates)
 	}
 	raw, err := json.Marshal(resp.Error.Data)
@@ -786,7 +786,7 @@ func TestAgentsRouteAutoAccountRequireFreshQuota(t *testing.T) {
 		AccountID:         protocol.AccountAuto,
 		RequireFreshQuota: true,
 	}), &routed)
-	if routed.AccountID != "codex-test" || routed.AccountRoute == nil || routed.AccountRoute.AccountID != "codex-test" || !routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 7 {
+	if routed.AccountID != "codex-test" || routed.AccountRoute == nil || routed.AccountRoute.AccountID != "codex-test" || routed.AccountRoute.SecretBackend != secret.BackendFile || !routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 7 {
 		t.Fatalf("route = %+v", routed)
 	}
 }

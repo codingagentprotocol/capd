@@ -285,10 +285,10 @@ func TestProbeDataReturnsSafeAccountRouteEvidence(t *testing.T) {
 	if got.RouteDecision == nil || got.RouteDecision.AccountID != "codex-test" {
 		t.Fatalf("routeDecision = %+v", got.RouteDecision)
 	}
-	if got.AutoRoute == nil || got.AutoRoute.AccountID != "codex-test" || !got.AutoRoute.Fresh || got.AutoRoute.Reason != "auto account codex-test primary 12%; current account tie-break" {
+	if got.AutoRoute == nil || got.AutoRoute.AccountID != "codex-test" || got.AutoRoute.SecretBackend != secret.BackendFile || !got.AutoRoute.Fresh || got.AutoRoute.Reason != "auto account codex-test primary 12%; current account tie-break" {
 		t.Fatalf("autoRoute = %+v", got.AutoRoute)
 	}
-	if len(got.RouteCandidates) != 1 || got.RouteCandidates[0].AccountID != "codex-test" || got.RouteCandidates[0].Reason != "auto account codex-test primary 12%; current account tie-break" {
+	if len(got.RouteCandidates) != 1 || got.RouteCandidates[0].AccountID != "codex-test" || got.RouteCandidates[0].SecretBackend != secret.BackendFile || got.RouteCandidates[0].Reason != "auto account codex-test primary 12%; current account tie-break" {
 		t.Fatalf("routeCandidates = %+v", got.RouteCandidates)
 	}
 	if !got.Summary.Ready || got.Summary.Readiness || got.Summary.CheckedAccounts != 1 || got.Summary.RequiredAccounts != 2 || got.Summary.MissingAccounts != 1 || got.Summary.FreshQuotaAccounts != 1 || got.Summary.AutoRouteAccountID != "codex-test" || !got.Summary.AutoRouteFresh || !got.Summary.RouteDecisionOK || got.Summary.RouteCandidates != 1 || !got.Summary.SecretBackendOK {
@@ -540,6 +540,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"route ${routeDecisionSummary(route)}",
 		"routeCandidateSummary",
 		"routeCandidates",
+		"route.secretBackend",
 		"route candidates",
 		"routeError",
 		"route error ${routeError}",

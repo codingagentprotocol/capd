@@ -161,6 +161,9 @@ func routeCLIText(result protocol.AgentRouteResult) string {
 func routeEvidenceText(route protocol.AccountRouteEvidence) string {
 	parts := []string{"quota " + route.QuotaState}
 	parts = append(parts, fmt.Sprintf("fresh %t", route.Fresh))
+	if route.SecretBackend != "" {
+		parts = append(parts, "secret "+route.SecretBackend)
+	}
 	if route.PrimaryUsedPercent != nil {
 		parts = append(parts, "primary "+formatPercent(*route.PrimaryUsedPercent))
 	}

@@ -126,6 +126,7 @@ type AgentRouteErrorData struct {
 
 type AccountRouteEvidence struct {
 	AccountID          string   `json:"accountId,omitempty"`
+	SecretBackend      string   `json:"secretBackend,omitempty"`
 	Score              float64  `json:"score"`
 	QuotaState         string   `json:"quotaState"`
 	Fresh              bool     `json:"fresh"`

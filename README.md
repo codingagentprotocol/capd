@@ -238,7 +238,9 @@ freshness, auto-route freshness, route-decision status, and SecretStore backend
 status.
 Both `agents/route --account auto --json` and daemon-side `accounts/check`
 include `routeCandidates`, sorted by the same conservative quota score used for
-auto routing, so clients can verify why one account was selected. The
+auto routing, with each parseable candidate carrying the safe `secretBackend`
+enum (`file` or `native`) so clients can verify why one account was selected
+and which readiness backend applies. The
 `capd probe data --readiness` text view also prints the same safe route
 candidate summary when the Web diagnostics path has partial evidence. The
 `accounts/check.summary` object is the shared machine-readable readiness view
@@ -417,7 +419,8 @@ flowchart TB
   stale low-usage snapshots do not dominate routing. The daemon projects that
   account into a dedicated `CODEX_HOME`. `agents/route` and `accounts/check`
   return `routeCandidates` sorted by the same score rule with a safe `reason`
-  for each candidate, and `session/create` returns the resolved `accountId` so
+  and safe `secretBackend` enum for each parseable candidate, and
+  `session/create` returns the resolved `accountId` so
   clients can audit auto-route choices without another lookup. The Codex app-server profile pool
   keeps it isolated from other accounts.
 

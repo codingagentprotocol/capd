@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
@@ -61,10 +62,11 @@ func QuotaRouteScore(st *Store, acc Account, current string) float64 {
 // quota freshness, and state labels cannot drift between surfaces.
 func QuotaRouteEvidence(st *Store, acc Account) protocol.AccountRouteEvidence {
 	evidence := protocol.AccountRouteEvidence{
-		AccountID:  acc.ID,
-		Score:      quotaUnknownScore,
-		QuotaState: protocol.AccountQuotaStateMissing,
-		Reason:     "missing cached quota",
+		AccountID:     acc.ID,
+		SecretBackend: routeSecretBackend(acc),
+		Score:         quotaUnknownScore,
+		QuotaState:    protocol.AccountQuotaStateMissing,
+		Reason:        "missing cached quota",
 	}
 	if st == nil {
 		return evidence
@@ -131,10 +133,11 @@ func QuotaRouteReason(st *Store, acc Account) string {
 
 func quotaRouteEvidenceAt(st *Store, acc Account, current string, now time.Time) protocol.AccountRouteEvidence {
 	evidence := protocol.AccountRouteEvidence{
-		AccountID:  acc.ID,
-		Score:      quotaRouteScoreAt(st, acc, current, now),
-		QuotaState: protocol.AccountQuotaStateMissing,
-		Reason:     quotaRouteReasonAt(st, acc, current, now),
+		AccountID:     acc.ID,
+		SecretBackend: routeSecretBackend(acc),
+		Score:         quotaRouteScoreAt(st, acc, current, now),
+		QuotaState:    protocol.AccountQuotaStateMissing,
+		Reason:        quotaRouteReasonAt(st, acc, current, now),
 	}
 	if q, err := st.LoadQuota(acc.ID); err == nil {
 		evidence.CheckedAt = q.CheckedAt
@@ -149,6 +152,17 @@ func quotaRouteEvidenceAt(st *Store, acc Account, current string, now time.Time)
 		}
 	}
 	return evidence
+}
+
+func routeSecretBackend(acc Account) string {
+	if acc.SecretRef == "" {
+		return ""
+	}
+	ref, err := secret.ParseRef(acc.SecretRef)
+	if err != nil {
+		return ""
+	}
+	return ref.Backend
 }
 
 func quotaRouteReasonAt(st *Store, acc Account, current string, now time.Time) string {

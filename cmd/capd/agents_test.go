@@ -119,9 +119,9 @@ func TestRouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	for _, want := range []string{
-		"route: quota stale fresh false primary 2.0% score 74.99 checked",
-		"route candidates: codex-test quota stale",
-		"codex-missing quota missing",
+		"route: quota stale fresh false secret file primary 2.0% score 74.99 checked",
+		"route candidates: codex-test quota stale fresh false secret file",
+		"codex-missing quota missing fresh false secret file",
 		"secret backend: file",
 		"next: refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend file --timeout 2m",
 		"next: preview routing with: capd agents route --account auto --require-fresh-quota --json",
@@ -236,6 +236,7 @@ func TestRouteCLITextIncludesAccountRouteEvidence(t *testing.T) {
 		AccountID: "codex-test",
 		AccountRoute: &protocol.AccountRouteEvidence{
 			AccountID:          "codex-test",
+			SecretBackend:      secret.BackendFile,
 			QuotaState:         protocol.AccountQuotaStateFresh,
 			Fresh:              true,
 			PrimaryUsedPercent: &primary,
@@ -245,7 +246,7 @@ func TestRouteCLITextIncludesAccountRouteEvidence(t *testing.T) {
 		Reason: "matched capabilities; auto account codex-test primary 8%",
 	})
 	for _, want := range []string{
-		"codex\tcodex-test\tquota fresh fresh true primary 8.0% score 8.00 checked ",
+		"codex\tcodex-test\tquota fresh fresh true secret file primary 8.0% score 8.00 checked ",
 		"matched capabilities",
 	} {
 		if !strings.Contains(text, want) {
