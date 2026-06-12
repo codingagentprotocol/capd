@@ -61,6 +61,9 @@ func TestQuotaFromUsageRedactsSensitiveRawJSON(t *testing.T) {
 		"debug": []any{
 			map[string]any{"authorization": "Bearer auth-secret"},
 			map[string]any{"apiKey": "api-key-secret"},
+			map[string]any{"cookie": "cookie-secret"},
+			map[string]any{"credential": "credential-secret"},
+			map[string]any{"password": "password-secret"},
 			map[string]any{"ordinary": "kept"},
 		},
 		"rateLimits": map[string]any{
@@ -72,7 +75,7 @@ func TestQuotaFromUsageRedactsSensitiveRawJSON(t *testing.T) {
 	if q.RawJSON == "" {
 		t.Fatal("RawJSON was empty")
 	}
-	for _, leaked := range []string{"access-secret", "refresh-secret", "auth-secret", "api-key-secret"} {
+	for _, leaked := range []string{"access-secret", "refresh-secret", "auth-secret", "api-key-secret", "cookie-secret", "credential-secret", "password-secret"} {
 		if strings.Contains(q.RawJSON, leaked) {
 			t.Fatalf("RawJSON leaked %q: %s", leaked, q.RawJSON)
 		}
@@ -90,12 +93,15 @@ func TestQuotaFromUsageRedactsSensitiveRawJSON(t *testing.T) {
 		t.Fatalf("tokens not redacted: %+v", raw["tokens"])
 	}
 	debug, ok := raw["debug"].([]any)
-	if !ok || len(debug) != 3 {
+	if !ok || len(debug) != 6 {
 		t.Fatalf("debug raw = %+v", raw["debug"])
 	}
 	auth, _ := debug[0].(map[string]any)
 	apiKey, _ := debug[1].(map[string]any)
-	if auth["authorization"] != "<redacted>" || apiKey["apiKey"] != "<redacted>" {
+	cookie, _ := debug[2].(map[string]any)
+	credential, _ := debug[3].(map[string]any)
+	password, _ := debug[4].(map[string]any)
+	if auth["authorization"] != "<redacted>" || apiKey["apiKey"] != "<redacted>" || cookie["cookie"] != "<redacted>" || credential["credential"] != "<redacted>" || password["password"] != "<redacted>" {
 		t.Fatalf("nested secrets not redacted: %+v", debug)
 	}
 	if q.Plan != "pro" || q.PrimaryUsedPercent != 42.5 {

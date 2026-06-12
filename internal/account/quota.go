@@ -123,7 +123,7 @@ func redactQuotaRawValue(v any) any {
 
 func quotaRawKeySensitive(key string) bool {
 	key = strings.ToLower(strings.ReplaceAll(key, "-", "_"))
-	for _, marker := range []string{"token", "secret", "authorization", "api_key", "apikey"} {
+	for _, marker := range []string{"token", "secret", "authorization", "api_key", "apikey", "cookie", "credential", "password"} {
 		if strings.Contains(key, marker) {
 			return true
 		}
