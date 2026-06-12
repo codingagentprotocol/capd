@@ -1725,14 +1725,26 @@ func TestAccountsCheckReadinessBackendMismatchAvoidsQuotaCalls(t *testing.T) {
 		t.Fatalf("response = %+v", resp)
 	}
 	partial := accountsCheckErrorData(t, resp.Error)
-	if partial.CheckedAccounts != 1 || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 0 {
+	if partial.CheckedAccounts != 1 || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 1 || partial.AutoRoute == nil || len(partial.RouteCandidates) != 1 {
 		t.Fatalf("partial evidence = %+v", partial)
 	}
-	if partial.Summary.Ready || partial.Summary.CheckedAccounts != 1 || partial.Summary.SecretBackendOK || partial.Summary.RequiredSecretBackend != secret.BackendNative {
+	if partial.Accounts[0].ID != "codex-test" || partial.Accounts[0].SecretBackendOK || partial.Accounts[0].CredentialReadable || partial.Accounts[0].RuntimeReady {
+		t.Fatalf("cached account evidence should not read secret or project runtime: %+v", partial.Accounts[0])
+	}
+	if partial.AutoRoute.AccountID != "codex-test" || partial.AutoRoute.Fresh || partial.RouteCandidates[0].Reason != "auto account codex-test without fresh cached quota; current account tie-break" {
+		t.Fatalf("cached route evidence = auto:%+v candidates:%+v", partial.AutoRoute, partial.RouteCandidates)
+	}
+	if partial.Summary.Ready || partial.Summary.CheckedAccounts != 1 || partial.Summary.SecretBackendOK || partial.Summary.RequiredSecretBackend != secret.BackendNative || partial.Summary.RouteCandidates != 1 {
 		t.Fatalf("partial summary = %+v", partial.Summary)
 	}
 	if quotaCalls.Load() != 0 {
 		t.Fatalf("quota calls = %d", quotaCalls.Load())
+	}
+	data, _ := json.Marshal(partial)
+	for _, leaked := range []string{"test-token", "secretRef", "file:codex-test", "CODEX_HOME", s.opts.RuntimeRoot} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("backend mismatch partial evidence leaked %q: %s", leaked, data)
+		}
 	}
 }
 

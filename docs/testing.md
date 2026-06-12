@@ -253,6 +253,9 @@ or missing, any checked account lacks fresh cached quota, or the daemon is not
 using the expected native SecretStore backend. Override that backend with
 `--require-secret-backend file` only when intentionally testing the file
 backend.
+Early preflight failures, such as SecretStore backend mismatch, still return
+cached account, quota, `autoRoute`, and `routeCandidates` evidence without
+reading SecretStore credentials or projecting runtimes.
 The Web Console's `就绪门禁` button applies the same daemon-side
 `accounts/check` readiness gate, with an optional native SecretStore
 requirement. It asks the daemon to refresh every imported Codex account before

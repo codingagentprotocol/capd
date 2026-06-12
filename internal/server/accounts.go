@@ -337,9 +337,7 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		Accounts:         make([]protocol.AccountCheckEvidence, 0, len(accounts)),
 	}
 	if len(accounts) > 0 {
-		if candidates, err := account.QuotaRouteCandidates(s.opts.Accounts, provider); err == nil {
-			result.RouteCandidates = candidates
-		}
+		result = s.withCachedAccountsCheckEvidence(result, accounts, current, provider)
 	}
 	if perr := validateAccountsCheckPreflight(s.opts.Secrets.Backend(), len(accounts), params); perr != nil {
 		return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result, params)
@@ -357,7 +355,11 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		})
 		result.CheckedAccounts = len(accounts)
 		result.Accounts = make([]protocol.AccountCheckEvidence, 0, len(accounts))
+		result.AutoRoute = nil
+		result.RouteCandidates = nil
+		result = s.withCachedAccountsCheckEvidence(result, accounts, current, provider)
 	}
+	result.Accounts = result.Accounts[:0]
 	for _, acc := range accounts {
 		row, perr := s.checkAccount(ctx, acc, current)
 		if row.ID != "" {
@@ -383,6 +385,30 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 	}
 	result.Summary = accountsCheckSummary(result, params)
 	return result, nil
+}
+
+func (s *Server) withCachedAccountsCheckEvidence(result protocol.AccountsCheckResult, accounts []account.Account, current, provider string) protocol.AccountsCheckResult {
+	if len(accounts) == 0 || s.opts.Accounts == nil {
+		return result
+	}
+	if len(result.Accounts) == 0 {
+		result.Accounts = make([]protocol.AccountCheckEvidence, 0, len(accounts))
+		for _, acc := range accounts {
+			result.Accounts = append(result.Accounts, s.baseAccountCheckEvidence(acc, current))
+		}
+	}
+	if result.AutoRoute == nil {
+		if selected, err := account.SelectQuotaRouteAccount(s.opts.Accounts, provider); err == nil {
+			evidence := account.QuotaRouteEvidence(s.opts.Accounts, selected)
+			result.AutoRoute = &evidence
+		}
+	}
+	if len(result.RouteCandidates) == 0 {
+		if candidates, err := account.QuotaRouteCandidates(s.opts.Accounts, provider); err == nil {
+			result.RouteCandidates = candidates
+		}
+	}
+	return result
 }
 
 func accountsCheckErrorWithEvidence(perr *protocol.Error, result protocol.AccountsCheckResult, params protocol.AccountsCheckParams) *protocol.Error {

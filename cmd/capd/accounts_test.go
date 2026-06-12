@@ -744,8 +744,14 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(failure.Data, &partial); unmarshalErr != nil {
 		t.Fatal(unmarshalErr)
 	}
-	if partial.CheckedAccounts != 1 || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 0 {
+	if partial.CheckedAccounts != 1 || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 1 || partial.AutoRoute == nil || len(partial.RouteCandidates) != 1 {
 		t.Fatalf("partial = %+v", partial)
+	}
+	if partial.Accounts[0].ID != "codex-test" || partial.Accounts[0].SecretBackendOK || partial.Accounts[0].CredentialReadable || partial.Accounts[0].RuntimeReady {
+		t.Fatalf("partial cached account should not read secret or project runtime: %+v", partial.Accounts[0])
+	}
+	if partial.AutoRoute.AccountID != "codex-test" || partial.RouteCandidates[0].Reason != "auto account codex-test primary 6%; current account tie-break" {
+		t.Fatalf("partial route evidence = auto:%+v candidates:%+v", partial.AutoRoute, partial.RouteCandidates)
 	}
 	for _, leaked := range []string{token, "access-secret", "refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
 		if strings.Contains(out.String(), leaked) {
