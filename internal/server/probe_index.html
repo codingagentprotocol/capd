@@ -304,6 +304,10 @@ async function refresh(readiness = false) {
       route = routed.accountRoute || route;
     } catch (e) {
       routeError = e.message || String(e);
+      if (e.data) {
+        routeDecision = e.data;
+        route = e.data.accountRoute || route;
+      }
     }
     const accounts = result.accounts || [];
     const fresh = accounts.filter(a => a.quotaFresh).length;

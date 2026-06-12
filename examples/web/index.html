@@ -351,6 +351,7 @@ async function refreshReadinessDiagnostic() {
       route = await call("agents/route", { accountId: "auto" });
     } catch (e) {
       routeError = e.message || JSON.stringify(e);
+      if (e.data) route = e.data;
     }
     renderReadinessDiagnosticResult({ result, route, routeError, requiredSecretBackend: requiredBackend });
   } catch (e) {
@@ -361,6 +362,7 @@ async function refreshReadinessDiagnostic() {
         route = await call("agents/route", { accountId: "auto" });
       } catch (routeErr) {
         routeError = routeErr.message || JSON.stringify(routeErr);
+        if (routeErr.data) route = routeErr.data;
       }
       renderReadinessDiagnosticResult({ result: e.data, route, routeError, readinessError: e.message || JSON.stringify(e), requiredSecretBackend: requiredSecretBackend() });
       return;
@@ -661,7 +663,8 @@ async function previewRoute() {
     const routed = await call("agents/route", params);
     routePreviewEl.textContent = routeDecisionSummary(routed);
   } catch (e) {
-    routePreviewEl.textContent = "路由不可用: " + (e.message || JSON.stringify(e));
+    const partial = e.data ? ` · ${routeDecisionSummary(e.data)}` : "";
+    routePreviewEl.textContent = "路由不可用: " + (e.message || JSON.stringify(e)) + partial;
   }
 }
 
