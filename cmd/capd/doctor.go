@@ -179,6 +179,7 @@ const (
 	doctorSecretStateMalformedRef    = "malformed-ref"
 	doctorSecretStateMissing         = "missing"
 	doctorSecretStateTimeout         = "timeout"
+	doctorSecretStateAccessDenied    = "access-denied"
 	doctorSecretStateUnreadable      = "unreadable"
 )
 
@@ -521,6 +522,8 @@ func doctorSecretErrorState(err error) string {
 		return doctorSecretStateMissing
 	case strings.Contains(err.Error(), "macOS keychain status -25300"):
 		return doctorSecretStateMissing
+	case strings.Contains(err.Error(), "macOS keychain status -128"):
+		return doctorSecretStateAccessDenied
 	default:
 		return doctorSecretStateUnreadable
 	}
@@ -596,6 +599,7 @@ func doctorSecretStateSummary(states map[string]int) string {
 		doctorSecretStateBackendMismatch,
 		doctorSecretStateMissing,
 		doctorSecretStateMalformedRef,
+		doctorSecretStateAccessDenied,
 		doctorSecretStateUnreadable,
 	}
 	parts := []string{}
@@ -611,6 +615,8 @@ func doctorSecretReadinessNextStep(daemonOK bool, states map[string]int) string 
 	switch {
 	case states[doctorSecretStateTimeout] > 0:
 		return "unlock or approve OS SecretStore access, then rerun: capd doctor --json --fail --verify-secretstore --timeout 2m"
+	case states[doctorSecretStateAccessDenied] > 0:
+		return "approve macOS Keychain access, or avoid native prompts by restarting with: capd start --secret-backend file and re-importing accounts with: capd accounts --secret-backend file codex import --auth /path/to/auth.json"
 	case states[doctorSecretStateBackendMismatch] > 0:
 		if daemonOK {
 			return "re-import affected Codex accounts through CAP with the active SecretStore backend: capd accounts import --auth /path/to/auth.json"

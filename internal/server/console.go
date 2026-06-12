@@ -455,6 +455,7 @@ func accountSecretStatesEvidence(accounts []protocol.AccountCheckEvidence) strin
 		protocol.AccountSecretStateBackendMismatch,
 		protocol.AccountSecretStateMissing,
 		protocol.AccountSecretStateMalformedRef,
+		protocol.AccountSecretStateAccessDenied,
 		protocol.AccountSecretStateUnreadable,
 	}
 	parts := []string{}

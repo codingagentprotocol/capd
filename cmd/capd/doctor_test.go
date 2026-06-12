@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -649,6 +650,12 @@ func TestDoctorReportsMalformedSecretRefsSafely(t *testing.T) {
 func TestDoctorSecretReadinessNextStepUsesSecretState(t *testing.T) {
 	if got := doctorSecretReadinessNextStep(false, map[string]int{doctorSecretStateTimeout: 1}); !strings.Contains(got, "unlock or approve OS SecretStore access") || !strings.Contains(got, "--timeout 2m") {
 		t.Fatalf("timeout next step = %q", got)
+	}
+	if got := doctorSecretErrorState(errors.New("load account secret: macOS keychain status -128")); got != doctorSecretStateAccessDenied {
+		t.Fatalf("access denied state = %q", got)
+	}
+	if got := doctorSecretReadinessNextStep(true, map[string]int{doctorSecretStateAccessDenied: 1}); !strings.Contains(got, "macOS Keychain access") || !strings.Contains(got, "capd start --secret-backend file") {
+		t.Fatalf("access denied next step = %q", got)
 	}
 	if got := doctorSecretReadinessEvidence(0, 2, 2, map[string]int{doctorSecretStateTimeout: 1, doctorSecretStateMissing: 1}); got != "readable 0/2, unreadable 2 (timeout 1, missing 1)" {
 		t.Fatalf("evidence = %q", got)

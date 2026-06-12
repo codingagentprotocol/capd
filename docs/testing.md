@@ -199,7 +199,8 @@ is the recommended preflight before the live chain. It does not refresh quota or
 read token material into the output; it reports daemon health, Codex CLI
 availability, imported account count, cached quota freshness, auto-route
 freshness, SecretStore backend, per-account SecretStore credential readability
-with safe `secretState` categories such as `backend-mismatch` or `timeout`,
+with safe `secretState` categories such as `backend-mismatch`, `timeout`, or
+`access-denied`,
 an explicit SecretStore write/read/delete roundtrip, daemon-side CAP
 `accounts/check` reachability, readiness issues, and concrete next steps. Its
 JSON also includes the same `routeCandidates` ordering used by

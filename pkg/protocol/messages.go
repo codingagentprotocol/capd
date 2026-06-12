@@ -234,6 +234,7 @@ const (
 	AccountSecretStateMalformedRef    = "malformed-ref"
 	AccountSecretStateMissing         = "missing"
 	AccountSecretStateTimeout         = "timeout"
+	AccountSecretStateAccessDenied    = "access-denied"
 	AccountSecretStateUnreadable      = "unreadable"
 )
 

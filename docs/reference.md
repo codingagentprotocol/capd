@@ -94,7 +94,7 @@ routing score, checked time, and the same human-readable reason used by routing 
 `secretState`, quota state, freshness, primary usage, checked time) and never
 includes SecretStore refs, token material, runtime paths, or raw auth JSON.
 `secretState` is a safe enum such as `readable`, `backend-mismatch`, `missing`,
-`timeout`, `malformed-ref`, or `unreadable`; `codex.secretStates` aggregates
+`timeout`, `access-denied`, `malformed-ref`, or `unreadable`; `codex.secretStates` aggregates
 those categories by count for CI and Web clients.
 The top-level `summary` object gives CI and Web clients a compact readiness
 view: required/missing account counts, readable/unreadable SecretStore credential

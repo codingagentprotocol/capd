@@ -271,6 +271,7 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
 
 function credentialAccessNextStep(accounts) {
   if (accounts.some(a => a.secretState === "timeout")) return "unlock or approve OS SecretStore access, then rerun Readiness";
+  if (accounts.some(a => a.secretState === "access-denied")) return "macOS Keychain access was denied; approve the prompt, or restart with file SecretStore and re-import accounts";
   if (accounts.some(a => a.secretState === "unreadable")) return "approve macOS Keychain access, or restart with file SecretStore and re-import accounts";
   return "fix SecretStore access or re-import failing accounts";
 }

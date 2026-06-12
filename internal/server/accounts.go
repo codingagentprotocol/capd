@@ -541,6 +541,8 @@ func accountSecretErrorState(err error) string {
 		return protocol.AccountSecretStateMissing
 	case strings.Contains(err.Error(), "macOS keychain status -25300"):
 		return protocol.AccountSecretStateMissing
+	case strings.Contains(err.Error(), "macOS keychain status -128"):
+		return protocol.AccountSecretStateAccessDenied
 	default:
 		return protocol.AccountSecretStateUnreadable
 	}

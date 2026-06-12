@@ -183,8 +183,10 @@ availability, imported account count, per-account SecretStore credential
 readability, quota freshness, auto-route freshness, the active SecretStore
 backend, and daemon-side CAP `accounts/check` reachability without printing
 token material. Add `--verify-secretstore` before native live runs to write,
-read, and delete a diagnostic secret in the active backend. When
-accounts are missing, use
+read, and delete a diagnostic secret in the active backend. When `secretState`
+is `access-denied`, macOS denied or canceled Keychain access; approve the prompt,
+or use the file SecretStore for local no-prompt testing. When accounts are
+missing, use
 `capd accounts import --auth ...` to exercise the same daemon-side CAP path as
 the Web Console. Use `capd accounts check --json --readiness` for the
 daemon-side refresh-and-verify gate after fixing quota or account issues. After

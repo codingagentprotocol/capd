@@ -627,6 +627,7 @@ function accountDiagnosticIssue(account) {
 
 function secretAccessNextStep(state) {
   if (state === "timeout") return "unlock or approve OS SecretStore access, then rerun readiness";
+  if (state === "access-denied") return "macOS Keychain access was denied; approve the prompt, or restart with file SecretStore and re-import";
   if (state === "unreadable") return "credential unreadable; approve macOS Keychain access, or restart with file SecretStore and re-import";
   return `credential ${state || "unreadable"}; unlock SecretStore or re-import account`;
 }
