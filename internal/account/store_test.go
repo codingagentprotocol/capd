@@ -331,6 +331,36 @@ func TestSelectQuotaRouteAccountIgnoresStaleQuota(t *testing.T) {
 	}
 }
 
+func TestSelectQuotaRouteAccountTreatsInvalidQuotaAsUnknown(t *testing.T) {
+	st := newStore(t)
+	for _, acc := range []Account{
+		{ID: "invalid-negative", Provider: "codex", AuthMode: "oauth"},
+		{ID: "fresh-mid", Provider: "codex", AuthMode: "oauth"},
+	} {
+		if err := st.UpsertAccount(acc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "invalid-negative", PrimaryUsedPercent: -1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "fresh-mid", PrimaryUsedPercent: 20}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := SelectQuotaRouteAccount(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "fresh-mid" {
+		t.Fatalf("selected = %+v", got)
+	}
+	evidence := QuotaRouteEvidence(st, Account{ID: "invalid-negative", Provider: "codex"})
+	if evidence.Fresh || evidence.Score != quotaUnknownScore || evidence.PrimaryUsedPercent != nil {
+		t.Fatalf("invalid evidence = %+v", evidence)
+	}
+}
+
 func TestSelectQuotaRouteAccountTiePrefersCurrent(t *testing.T) {
 	st := newStore(t)
 	for _, id := range []string{"a", "b"} {

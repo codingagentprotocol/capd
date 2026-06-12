@@ -72,7 +72,9 @@ func QuotaRouteEvidence(st *Store, acc Account) protocol.AccountRouteEvidence {
 	evidence.Score = QuotaRouteScore(st, acc, current)
 	if q, err := st.LoadQuota(acc.ID); err == nil {
 		evidence.CheckedAt = q.CheckedAt
-		evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
+		if quotaPercentUsable(q.PrimaryUsedPercent) {
+			evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
+		}
 		if QuotaSnapshotFresh(q, time.Now()) {
 			evidence.QuotaState = protocol.AccountQuotaStateFresh
 			evidence.Fresh = true
@@ -133,7 +135,9 @@ func quotaRouteEvidenceAt(st *Store, acc Account, current string, now time.Time)
 	}
 	if q, err := st.LoadQuota(acc.ID); err == nil {
 		evidence.CheckedAt = q.CheckedAt
-		evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
+		if quotaPercentUsable(q.PrimaryUsedPercent) {
+			evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
+		}
 		if QuotaSnapshotFresh(q, now) {
 			evidence.QuotaState = protocol.AccountQuotaStateFresh
 			evidence.Fresh = true
@@ -167,6 +171,9 @@ func routeTieBeats(candidate, incumbent Account, current string) bool {
 
 func QuotaSnapshotFresh(q QuotaSnapshot, now time.Time) bool {
 	if q.CheckedAt <= 0 {
+		return false
+	}
+	if !quotaPercentUsable(q.PrimaryUsedPercent) {
 		return false
 	}
 	age := now.Unix() - q.CheckedAt

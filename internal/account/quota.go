@@ -2,6 +2,7 @@ package account
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 )
 
@@ -45,7 +46,7 @@ func readWindow(v any, used *float64, reset *string) {
 		return
 	}
 	if n, ok := numberFrom(m, "usedPercent", "used_percent"); ok {
-		*used = n
+		*used = conservativePercent(n)
 	}
 	if s := stringFrom(m, "resetsAt", "resetAt", "reset_at"); s != "" {
 		*reset = s
@@ -58,7 +59,7 @@ func readCodeReview(v any, used *float64) {
 		return
 	}
 	if n, ok := numberFrom(m, "usedPercent", "used_percent"); ok {
-		*used = n
+		*used = conservativePercent(n)
 	}
 }
 
@@ -83,4 +84,15 @@ func numberFrom(m map[string]any, keys ...string) (float64, bool) {
 		}
 	}
 	return 0, false
+}
+
+func conservativePercent(n float64) float64 {
+	if math.IsNaN(n) || math.IsInf(n, 0) || n < 0 || n > 100 {
+		return 100
+	}
+	return n
+}
+
+func quotaPercentUsable(n float64) bool {
+	return !math.IsNaN(n) && !math.IsInf(n, 0) && n >= 0 && n <= 100
 }

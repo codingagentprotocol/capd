@@ -1,8 +1,10 @@
 package account
 
 import (
+	"math"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestQuotaFromUsageParsesCodexShapes(t *testing.T) {
@@ -45,5 +47,40 @@ func TestQuotaFromUsageDropsOversizedRawJSON(t *testing.T) {
 	}
 	if q.RawJSON != "" {
 		t.Fatalf("RawJSON length = %d, want dropped", len(q.RawJSON))
+	}
+}
+
+func TestQuotaFromUsageNormalizesOutOfRangePercentsConservatively(t *testing.T) {
+	q := QuotaFromUsage("codex-a", map[string]any{
+		"rateLimits": map[string]any{
+			"primary": map[string]any{
+				"usedPercent": -4.0,
+			},
+			"secondary": map[string]any{
+				"usedPercent": 140.0,
+			},
+			"codeReview": map[string]any{
+				"usedPercent": math.NaN(),
+			},
+		},
+	})
+	if q.PrimaryUsedPercent != 100 || q.SecondaryUsedPercent != 100 || q.CodeReviewUsedPercent != 100 {
+		t.Fatalf("quota percent bounds = %+v", q)
+	}
+}
+
+func TestQuotaSnapshotFreshRejectsInvalidPrimaryPercent(t *testing.T) {
+	now := time.Now()
+	for _, percent := range []float64{-0.1, 100.1, math.NaN(), math.Inf(1)} {
+		q := QuotaSnapshot{AccountID: "codex-a", PrimaryUsedPercent: percent, CheckedAt: now.Unix()}
+		if QuotaSnapshotFresh(q, now) {
+			t.Fatalf("percent %v unexpectedly fresh", percent)
+		}
+	}
+	for _, percent := range []float64{0, 100} {
+		q := QuotaSnapshot{AccountID: "codex-a", PrimaryUsedPercent: percent, CheckedAt: now.Unix()}
+		if !QuotaSnapshotFresh(q, now) {
+			t.Fatalf("percent %v unexpectedly not fresh", percent)
+		}
 	}
 }
