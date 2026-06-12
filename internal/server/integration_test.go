@@ -32,6 +32,15 @@ import (
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
+func isFreshQuotaHint(perr *protocol.Error) bool {
+	if perr == nil || perr.Code != protocol.CodeInvalidParams {
+		return false
+	}
+	return strings.Contains(perr.Message, "fresh cached quota") &&
+		strings.Contains(perr.Message, "accounts/quota") &&
+		strings.Contains(perr.Message, "accounts/check refreshQuota=true")
+}
+
 // ---- scripted fake adapter ----
 
 type scriptedAdapter struct {
@@ -711,7 +720,7 @@ func TestAgentsRouteAutoAccountRequireFreshQuota(t *testing.T) {
 		AccountID:         protocol.AccountAuto,
 		RequireFreshQuota: true,
 	})
-	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "fresh cached quota") {
+	if !isFreshQuotaHint(resp.Error) {
 		t.Fatalf("response = %+v", resp)
 	}
 
@@ -847,7 +856,7 @@ func TestSessionCreateAutoAccountRequireFreshQuota(t *testing.T) {
 		AccountID:         protocol.AccountAuto,
 		RequireFreshQuota: true,
 	})
-	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "fresh cached quota") {
+	if !isFreshQuotaHint(resp.Error) {
 		t.Fatalf("response = %+v", resp)
 	}
 
@@ -899,7 +908,7 @@ func TestSessionCreateCodexWithAutoAccountRequireFreshQuota(t *testing.T) {
 		AccountID:         protocol.AccountAuto,
 		RequireFreshQuota: true,
 	})
-	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "fresh cached quota") {
+	if !isFreshQuotaHint(resp.Error) {
 		t.Fatalf("response = %+v", resp)
 	}
 

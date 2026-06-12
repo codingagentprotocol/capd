@@ -16,6 +16,7 @@ import (
 )
 
 const codexAgentID = "codex"
+const freshQuotaRefreshHint = "auto route does not have fresh cached quota; refresh quota first with accounts/quota accountId=\"all\" or accounts/check refreshQuota=true"
 
 func (s *Server) runtimeEnvForAccount(ctx context.Context, agentID, accountID string) ([]string, *protocol.Error) {
 	if agentID != codexAgentID {
@@ -359,7 +360,7 @@ func validateAccountsCheckResult(result protocol.AccountsCheckResult, params pro
 		return protocol.NewError(protocol.CodeInvalidParams, "no Codex accounts checked; import accounts first")
 	}
 	if params.RequireFreshQuota && (result.AutoRoute == nil || !result.AutoRoute.Fresh) {
-		return protocol.NewError(protocol.CodeInvalidParams, "auto route does not have fresh cached quota; refresh quota first")
+		return protocol.NewError(protocol.CodeInvalidParams, freshQuotaRefreshHint)
 	}
 	if params.RequireAllFreshQuota {
 		for _, row := range result.Accounts {

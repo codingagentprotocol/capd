@@ -71,7 +71,7 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 			}
 			if params.RequireFreshQuota {
 				if q, err := s.opts.Accounts.LoadQuota(acc.ID); err != nil || !account.QuotaSnapshotFresh(q, time.Now()) {
-					return protocol.AgentRouteResult{}, protocol.NewError(protocol.CodeInvalidParams, "auto route does not have fresh cached quota; refresh quota first")
+					return protocol.AgentRouteResult{}, protocol.NewError(protocol.CodeInvalidParams, freshQuotaRefreshHint)
 				}
 			}
 			selectedAccountID = acc.ID
