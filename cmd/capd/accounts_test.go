@@ -446,6 +446,9 @@ func TestCodexAccountsQuotaAllRefreshesEveryAccountSafely(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("rows = %+v", rows)
 	}
+	if rows[0].ID != "codex-low" || rows[1].ID != "codex-test" {
+		t.Fatalf("rows not sorted by account id: %+v", rows)
+	}
 	byID := map[string]codexQuotaSummary{}
 	for _, row := range rows {
 		byID[row.ID] = row

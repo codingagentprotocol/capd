@@ -710,12 +710,12 @@ func TestAccountAllIsReservedOutsideQuotaBatchRefresh(t *testing.T) {
 		method string
 		params any
 	}{
-		{protocol.MethodAgentsRoute, protocol.AgentRouteParams{AccountID: protocol.AccountAll}},
-		{protocol.MethodAgentsUsage, protocol.AgentsUsageParams{AgentID: codexAgentID, AccountID: protocol.AccountAll}},
-		{protocol.MethodAccountsCurrent, protocol.AccountsCurrentParams{Provider: codexauth.Provider, AccountID: protocol.AccountAll}},
-		{protocol.MethodAccountsProject, protocol.AccountsProjectParams{Provider: codexauth.Provider, AccountID: protocol.AccountAll}},
-		{protocol.MethodAccountsRemove, protocol.AccountsRemoveParams{Provider: codexauth.Provider, AccountID: protocol.AccountAll}},
-		{protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: codexAgentID, AccountID: protocol.AccountAll}},
+		{protocol.MethodAgentsRoute, protocol.AgentRouteParams{AccountID: " " + protocol.AccountAll + " "}},
+		{protocol.MethodAgentsUsage, protocol.AgentsUsageParams{AgentID: codexAgentID, AccountID: " " + protocol.AccountAll + " "}},
+		{protocol.MethodAccountsCurrent, protocol.AccountsCurrentParams{Provider: codexauth.Provider, AccountID: " " + protocol.AccountAll + " "}},
+		{protocol.MethodAccountsProject, protocol.AccountsProjectParams{Provider: codexauth.Provider, AccountID: " " + protocol.AccountAll + " "}},
+		{protocol.MethodAccountsRemove, protocol.AccountsRemoveParams{Provider: codexauth.Provider, AccountID: " " + protocol.AccountAll + " "}},
+		{protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: codexAgentID, AccountID: " " + protocol.AccountAll + " "}},
 	}
 	for _, tc := range cases {
 		resp := c.call(tc.method, tc.params)
@@ -733,9 +733,9 @@ func TestAccountAutoIsRejectedForConcreteAccountOperations(t *testing.T) {
 		method string
 		params any
 	}{
-		{protocol.MethodAccountsCurrent, protocol.AccountsCurrentParams{Provider: codexauth.Provider, AccountID: protocol.AccountAuto}},
-		{protocol.MethodAccountsProject, protocol.AccountsProjectParams{Provider: codexauth.Provider, AccountID: protocol.AccountAuto}},
-		{protocol.MethodAccountsRemove, protocol.AccountsRemoveParams{Provider: codexauth.Provider, AccountID: protocol.AccountAuto}},
+		{protocol.MethodAccountsCurrent, protocol.AccountsCurrentParams{Provider: codexauth.Provider, AccountID: " " + protocol.AccountAuto + " "}},
+		{protocol.MethodAccountsProject, protocol.AccountsProjectParams{Provider: codexauth.Provider, AccountID: " " + protocol.AccountAuto + " "}},
+		{protocol.MethodAccountsRemove, protocol.AccountsRemoveParams{Provider: codexauth.Provider, AccountID: " " + protocol.AccountAuto + " "}},
 	}
 	for _, tc := range cases {
 		resp := c.call(tc.method, tc.params)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -399,6 +400,9 @@ func newCodexAccountsCmd() *cobra.Command {
 				if len(list) == 0 {
 					return fmt.Errorf("no imported Codex accounts; run capd accounts codex import first")
 				}
+				sort.Slice(list, func(i, j int) bool {
+					return list[i].ID < list[j].ID
+				})
 				rows := make([]codexQuotaSummary, 0, len(list))
 				for _, acc := range list {
 					row, err := refreshCodexQuota(cmd.Context(), accounts, secrets, baseURL, acc)
