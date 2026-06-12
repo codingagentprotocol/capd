@@ -650,7 +650,8 @@ document.getElementById("send").onclick = async () => {
       if (accountId === "auto" && document.getElementById("requireFreshQuota").checked) create.requireFreshQuota = true;
       const res = await call("session/create", create);
       sessionId = res.sessionId;
-      line("ev-sys", `· 新会话 ${sessionId} @ ${cwd || "~"}`);
+      const accountEvidence = res.accountId ? ` · account ${res.accountId}` : "";
+      line("ev-sys", `· 新会话 ${sessionId}${accountEvidence} @ ${cwd || "~"}`);
       await loadSessions();
     }
     line("ev-sys", `» ${prompt}`);

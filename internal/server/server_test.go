@@ -168,6 +168,8 @@ func TestConsoleStaticContract(t *testing.T) {
 		"session/attach",
 		"session/create",
 		`create.requireFreshQuota = true`,
+		"res.accountId",
+		"account ${res.accountId}",
 		"发送失败",
 		`a.provider === "codex"`,
 		`provider.textContent = a.provider`,
