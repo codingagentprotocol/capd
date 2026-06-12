@@ -3,6 +3,8 @@ package account
 import (
 	"fmt"
 	"time"
+
+	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
 const (
@@ -51,6 +53,43 @@ func SelectLowestQuotaAccount(st *Store, provider string) (Account, error) {
 // QuotaRouteScore is intentionally small and stable: lower is better.
 func QuotaRouteScore(st *Store, acc Account, current string) float64 {
 	return quotaRouteScoreAt(st, acc, current, time.Now())
+}
+
+// QuotaRouteEvidence returns the protocol-safe route evidence for an account.
+// It is the shared source for CLI and JSON-RPC routing responses so score,
+// quota freshness, and state labels cannot drift between surfaces.
+func QuotaRouteEvidence(st *Store, acc Account) protocol.AccountRouteEvidence {
+	evidence := protocol.AccountRouteEvidence{
+		Score:      quotaUnknownScore,
+		QuotaState: protocol.AccountQuotaStateMissing,
+	}
+	if st == nil {
+		return evidence
+	}
+	current, _ := st.CurrentAccount(acc.Provider)
+	evidence.Score = QuotaRouteScore(st, acc, current)
+	if q, err := st.LoadQuota(acc.ID); err == nil {
+		evidence.CheckedAt = q.CheckedAt
+		evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
+		if QuotaSnapshotFresh(q, time.Now()) {
+			evidence.QuotaState = protocol.AccountQuotaStateFresh
+			evidence.Fresh = true
+		} else {
+			evidence.QuotaState = protocol.AccountQuotaStateStale
+		}
+	}
+	return evidence
+}
+
+// QuotaRouteReason gives a short human-readable explanation for auto account
+// routing. It intentionally mirrors QuotaRouteEvidence's freshness semantics.
+func QuotaRouteReason(st *Store, acc Account) string {
+	if st != nil {
+		if q, err := st.LoadQuota(acc.ID); err == nil && QuotaSnapshotFresh(q, time.Now()) {
+			return fmt.Sprintf("auto account %s primary %.0f%%", acc.ID, q.PrimaryUsedPercent)
+		}
+	}
+	return fmt.Sprintf("auto account %s without fresh cached quota", acc.ID)
 }
 
 func quotaRouteScoreAt(st *Store, acc Account, current string, now time.Time) float64 {

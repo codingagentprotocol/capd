@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
 func newStore(t *testing.T) *Store {
@@ -289,5 +291,45 @@ func TestSelectQuotaRouteAccountTiePrefersCurrent(t *testing.T) {
 	}
 	if got.ID != "b" {
 		t.Fatalf("selected = %+v", got)
+	}
+}
+
+func TestQuotaRouteEvidenceAndReason(t *testing.T) {
+	st := newStore(t)
+	for _, id := range []string{"fresh", "stale", "missing"} {
+		if err := st.UpsertAccount(Account{ID: id, Provider: "codex", AuthMode: "oauth"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SetCurrentAccount("codex", "missing"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "fresh", PrimaryUsedPercent: 12}); err != nil {
+		t.Fatal(err)
+	}
+	staleAt := time.Now().Add(-QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "stale", PrimaryUsedPercent: 3, CheckedAt: staleAt}); err != nil {
+		t.Fatal(err)
+	}
+
+	fresh := QuotaRouteEvidence(st, Account{ID: "fresh", Provider: "codex"})
+	if fresh.QuotaState != protocol.AccountQuotaStateFresh || !fresh.Fresh || fresh.PrimaryUsedPercent == nil || *fresh.PrimaryUsedPercent != 12 || fresh.Score != 12 {
+		t.Fatalf("fresh evidence = %+v", fresh)
+	}
+	if got := QuotaRouteReason(st, Account{ID: "fresh", Provider: "codex"}); got != "auto account fresh primary 12%" {
+		t.Fatalf("fresh reason = %q", got)
+	}
+
+	stale := QuotaRouteEvidence(st, Account{ID: "stale", Provider: "codex"})
+	if stale.QuotaState != protocol.AccountQuotaStateStale || stale.Fresh || stale.CheckedAt != staleAt || stale.PrimaryUsedPercent == nil || *stale.PrimaryUsedPercent != 3 || stale.Score != quotaUnknownScore {
+		t.Fatalf("stale evidence = %+v", stale)
+	}
+
+	missing := QuotaRouteEvidence(st, Account{ID: "missing", Provider: "codex"})
+	if missing.QuotaState != protocol.AccountQuotaStateMissing || missing.Fresh || missing.PrimaryUsedPercent != nil || missing.Score != quotaUnknownScore-0.01 {
+		t.Fatalf("missing evidence = %+v", missing)
+	}
+	if got := QuotaRouteReason(st, Account{ID: "missing", Provider: "codex"}); got != "auto account missing without fresh cached quota" {
+		t.Fatalf("missing reason = %q", got)
 	}
 }

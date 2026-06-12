@@ -263,7 +263,7 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 					return protocol.AgentRouteResult{}, fmt.Errorf("auto route does not have fresh cached quota; run capd accounts codex smoke --quota --require-fresh-quota or refresh quota first")
 				}
 			}
-			accountReason = autoRouteReason(accounts, acc)
+			accountReason = account.QuotaRouteReason(accounts, acc)
 		} else {
 			acc, err := resolveUsageAccount(accounts, accountID)
 			if err != nil {
@@ -302,36 +302,10 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 	}
 	result := protocol.AgentRouteResult{Agent: best, AccountID: selectedAccountID, Reason: reason}
 	if selectedAccount.ID != "" && accounts != nil {
-		evidence := accountRouteEvidence(accounts, selectedAccount)
+		evidence := account.QuotaRouteEvidence(accounts, selectedAccount)
 		result.AccountRoute = &evidence
 	}
 	return result, nil
-}
-
-func accountRouteEvidence(accounts *account.Store, acc account.Account) protocol.AccountRouteEvidence {
-	current, _ := accounts.CurrentAccount(acc.Provider)
-	evidence := protocol.AccountRouteEvidence{
-		Score:      account.QuotaRouteScore(accounts, acc, current),
-		QuotaState: protocol.AccountQuotaStateMissing,
-	}
-	if q, err := accounts.LoadQuota(acc.ID); err == nil {
-		evidence.CheckedAt = q.CheckedAt
-		evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
-		if account.QuotaSnapshotFresh(q, time.Now()) {
-			evidence.QuotaState = protocol.AccountQuotaStateFresh
-			evidence.Fresh = true
-		} else {
-			evidence.QuotaState = protocol.AccountQuotaStateStale
-		}
-	}
-	return evidence
-}
-
-func autoRouteReason(accounts *account.Store, acc account.Account) string {
-	if q, err := accounts.LoadQuota(acc.ID); err == nil && account.QuotaSnapshotFresh(q, time.Now()) {
-		return fmt.Sprintf("auto account %s primary %.0f%%", acc.ID, q.PrimaryUsedPercent)
-	}
-	return fmt.Sprintf("auto account %s without fresh cached quota", acc.ID)
 }
 
 func hasCLICapabilities(got, want protocol.AgentCapabilities) bool {

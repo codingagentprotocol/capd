@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
@@ -98,7 +97,7 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 	}
 	result := protocol.AgentRouteResult{Agent: best, AccountID: selectedAccountID, Reason: reason}
 	if selectedAccount.ID != "" && s.opts.Accounts != nil {
-		evidence := accountRouteEvidence(s.opts.Accounts, selectedAccount)
+		evidence := account.QuotaRouteEvidence(s.opts.Accounts, selectedAccount)
 		result.AccountRoute = &evidence
 	}
 	return result, nil
@@ -126,33 +125,7 @@ func (s *Server) selectCodexAccountForRoute() (account.Account, string, *protoco
 	if err != nil {
 		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
 	}
-	if q, err := s.opts.Accounts.LoadQuota(best.ID); err == nil && account.QuotaSnapshotFresh(q, time.Now()) {
-		return best, fmt.Sprintf("auto account %s primary %.0f%%", best.ID, q.PrimaryUsedPercent), nil
-	}
-	return best, fmt.Sprintf("auto account %s without fresh cached quota", best.ID), nil
-}
-
-func accountRouteEvidence(accounts *account.Store, acc account.Account) protocol.AccountRouteEvidence {
-	evidence := protocol.AccountRouteEvidence{
-		Score:      account.QuotaRouteScore(accounts, acc, currentAccount(accounts, acc.Provider)),
-		QuotaState: protocol.AccountQuotaStateMissing,
-	}
-	if q, err := accounts.LoadQuota(acc.ID); err == nil {
-		evidence.CheckedAt = q.CheckedAt
-		evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
-		if account.QuotaSnapshotFresh(q, time.Now()) {
-			evidence.QuotaState = protocol.AccountQuotaStateFresh
-			evidence.Fresh = true
-		} else {
-			evidence.QuotaState = protocol.AccountQuotaStateStale
-		}
-	}
-	return evidence
-}
-
-func currentAccount(accounts *account.Store, provider string) string {
-	current, _ := accounts.CurrentAccount(provider)
-	return current
+	return best, account.QuotaRouteReason(s.opts.Accounts, best), nil
 }
 
 func routeRequirements(params protocol.AgentRouteParams) protocol.AgentCapabilities {
