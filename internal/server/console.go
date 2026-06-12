@@ -45,6 +45,7 @@ type probeDataResult struct {
 	AutoRoute       *protocol.AccountRouteEvidence  `json:"autoRoute,omitempty"`
 	RouteCandidates []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
 	Checks          []probeDataCheck                `json:"checks"`
+	NextSteps       []string                        `json:"nextSteps,omitempty"`
 	Errors          []probeDataError                `json:"errors,omitempty"`
 }
 
@@ -181,6 +182,7 @@ func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBac
 		}
 	}
 	result.Checks = probeDataChecks(result, readiness, requireSecretBackend)
+	result.NextSteps = probeDataNextSteps(result.Checks)
 	result.OK = len(result.Errors) == 0 && allProbeChecksOK(result.Checks)
 	result.Summary = probeDataSummaryFor(result, readiness, requireSecretBackend)
 	return result
@@ -323,6 +325,20 @@ func allProbeChecksOK(checks []probeDataCheck) bool {
 		}
 	}
 	return true
+}
+
+func probeDataNextSteps(checks []probeDataCheck) []string {
+	seen := map[string]bool{}
+	steps := []string{}
+	for _, check := range checks {
+		step := strings.TrimSpace(check.NextStep)
+		if step == "" || seen[step] {
+			continue
+		}
+		seen[step] = true
+		steps = append(steps, step)
+	}
+	return steps
 }
 
 func probeError(source string, perr *protocol.Error) probeDataError {

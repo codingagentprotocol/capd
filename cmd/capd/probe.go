@@ -136,7 +136,8 @@ type probeDataResponse struct {
 		Evidence string `json:"evidence"`
 		NextStep string `json:"nextStep"`
 	} `json:"checks"`
-	Errors []struct {
+	NextSteps []string `json:"nextSteps"`
+	Errors    []struct {
 		Source  string `json:"source"`
 		Code    int    `json:"code"`
 		Message string `json:"message"`
@@ -251,6 +252,9 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 	_ = w.Flush()
 	for _, probeErr := range result.Errors {
 		fmt.Fprintf(cmd.OutOrStdout(), "error: %s code=%d %s\n", probeErr.Source, probeErr.Code, probeErr.Message)
+	}
+	for _, next := range result.NextSteps {
+		fmt.Fprintf(cmd.OutOrStdout(), "next: %s\n", next)
 	}
 	if result.Error != "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "error: probe data %s\n", result.Error)

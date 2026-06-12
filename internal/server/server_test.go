@@ -160,7 +160,7 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 		t.Fatalf("csp = %q", got)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"CAPD Probe", "accounts/check", "accounts/quota", "agents/usage", "agents/route", "/healthz?format=json", "/probe/data", "Authorization:`Bearer ${TOKEN}`", "fetchProbeData", "httpProbe", "fallbackResult", "fallbackHealth", "http probe error", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "health: fallbackHealth", "protocolVersion", "secretBackend", "secretState", "credentialReadable", "runtimeReady", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "checks", "validationRows", "showTests", "daemon health", "account credentials", "account runtime", "fix SecretStore access or re-import failing accounts", "project account runtimes with accounts/project", "multi-account readiness", "quota freshness", "auto route fresh", "native secret backend", "readiness gate", "rpcError", "e.data", "routeDecision = e.data", "e.data.accountRoute || route", "capd accounts check --readiness", "capd agents route --account auto", "capd start --secret-backend native", "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", "readinessSummaryText", "http summary", "summary.ready", "summary.checkedAccounts", "summary.secretBackendOk", "RPC_TIMEOUT_MS = 12000", "LONG_RPC_TIMEOUT_MS = 120000", "rpcTimeoutFor", `method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)`, `timeout after ${timeoutMS}ms`, "clearTimeout(pending.timer)", `call("accounts/check", { provider:"codex" })`} {
+	for _, want := range []string{"CAPD Probe", "accounts/check", "accounts/quota", "agents/usage", "agents/route", "/healthz?format=json", "/probe/data", "Authorization:`Bearer ${TOKEN}`", "fetchProbeData", "httpProbe", "fallbackResult", "fallbackHealth", "http probe error", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "health: fallbackHealth", "protocolVersion", "secretBackend", "secretState", "credentialReadable", "runtimeReady", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "nextSteps", "checks", "validationRows", "showTests", "daemon health", "account credentials", "account runtime", "fix SecretStore access or re-import failing accounts", "project account runtimes with accounts/project", "multi-account readiness", "quota freshness", "auto route fresh", "native secret backend", "readiness gate", "rpcError", "e.data", "routeDecision = e.data", "e.data.accountRoute || route", "capd accounts check --readiness", "capd agents route --account auto", "capd start --secret-backend native", "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", "readinessSummaryText", "http summary", "summary.ready", "summary.checkedAccounts", "summary.secretBackendOk", "RPC_TIMEOUT_MS = 12000", "LONG_RPC_TIMEOUT_MS = 120000", "rpcTimeoutFor", `method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)`, `timeout after ${timeoutMS}ms`, "clearTimeout(pending.timer)", `call("accounts/check", { provider:"codex" })`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("probe HTML missing %q", want)
 		}
@@ -344,6 +344,19 @@ func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "multi-account readiness") {
 		t.Fatalf("body missing readiness checks: %s", rec.Body.String())
 	}
+	wantNext := "import at least two accounts with: capd accounts import --auth /path/a --auth /path/b"
+	if !probeNextStepsContain(got.NextSteps, wantNext) {
+		t.Fatalf("nextSteps missing %q: %+v", wantNext, got.NextSteps)
+	}
+}
+
+func probeNextStepsContain(steps []string, want string) bool {
+	for _, step := range steps {
+		if step == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestProbeDataReadinessDefaultsToNativeAndAvoidsQuotaOnBackendMismatch(t *testing.T) {
@@ -513,6 +526,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		`url.searchParams.set("requireSecretBackend", requireSecretBackend)`,
 		"renderProbeDataResult",
 		"probe summary ready=",
+		"data.nextSteps",
 		"probeErrorSummary",
 		"missing daemon token for /probe/data",
 		"refreshReadinessDiagnostic",

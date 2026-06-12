@@ -435,6 +435,9 @@ function renderProbeDataResult(data) {
   for (const check of data.checks || []) {
     line(check.ok ? "ev-done" : "ev-err", `${check.ok ? "✓" : "✗"} ${check.name}: ${check.evidence || ""}${check.nextStep ? ` · next ${check.nextStep}` : ""}`);
   }
+  for (const next of data.nextSteps || []) {
+    line("ev-sys", `· next ${next}`);
+  }
   for (const err of data.errors || []) {
     line("ev-err", `✗ ${err.source || "probe"} code=${err.code || 0} ${err.message || ""}`);
   }
