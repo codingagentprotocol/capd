@@ -84,7 +84,7 @@ capd console --probe
 capd health --json
 capd accounts import --auth /tmp/acct-a/auth.json --auth /tmp/acct-b/auth.json
 capd accounts check --json
-capd accounts check --readiness
+capd accounts check --json --readiness
 capd agents usage codex --account auto
 capd agents route --account auto --require-fresh-quota
 capd run --agent codex --account auto --require-fresh-quota "say ready"
@@ -96,6 +96,11 @@ the same live chain is available as:
 ```bash
 make live-codex-readiness
 ```
+
+The live target runs the daemon-side readiness gate as JSON. If a gate fails,
+the command still exits non-zero, but the JSON output may include safe partial
+`accounts/check` evidence under `data` so you can see which account, quota, or
+SecretStore check failed without exposing tokens or local runtime paths.
 
 Without real Codex accounts, run the deterministic simulated gate:
 
