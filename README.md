@@ -163,7 +163,9 @@ capd agents route --account auto --require-fresh-quota
 ```
 
 For deterministic local regression, run `make verify`; for native SecretStore
-coverage, run `make verify-secretstore`. `capd doctor --json --fail` is the safe
+coverage, run `make verify-secretstore`; for a no-real-account Codex
+multi-account quota/routing/readiness regression, run
+`make verify-codex-readiness-sim`. `capd doctor --json --fail` is the safe
 preflight to run before live Codex work: it checks daemon health, Codex CLI
 availability, imported account count, quota freshness, auto-route freshness,
 and the active SecretStore backend without printing token material. Use

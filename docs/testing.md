@@ -96,6 +96,16 @@ the same live chain is available as:
 make live-codex-readiness
 ```
 
+Without real Codex accounts, run the deterministic simulated gate:
+
+```bash
+make verify-codex-readiness-sim
+```
+
+It exercises multi-account quota refresh, conservative auto-route selection,
+fresh-quota enforcement, daemon-side `accounts/check` readiness, CLI shortcut
+parameters, and secret-leak guards with local test backends.
+
 The target first runs `capd doctor --json --fail`, then checks that at least
 two Codex accounts are imported and runs the quota/readiness chain. Override
 the final live prompt with `LIVE_PROMPT="..." make live-codex-readiness`.

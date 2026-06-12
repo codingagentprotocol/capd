@@ -37,3 +37,32 @@ func TestLiveCodexReadinessUsesOneSecretBackend(t *testing.T) {
 		}
 	}
 }
+
+func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
+	data, err := os.ReadFile("../../Makefile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	makefile := string(data)
+	for _, want := range []string{
+		"verify-codex-readiness-sim:",
+		"running deterministic simulated Codex multi-account quota/routing/readiness gates",
+		"AgentsRouteAutoAccountChoosesLowestCachedQuota",
+		"AgentsRouteAutoAccountRequireFreshQuota",
+		"AgentsRouteAutoAccountIgnoresStaleLowQuota",
+		"SessionCreateAutoAccountBindsLowestCachedQuota",
+		"AccountsCheckCanRefreshQuotaAndEnforceReadiness",
+		"AccountsCheckReadinessFailureIsDaemonSideAndSafe",
+		"AccountsCheckAllFreshFailureReportsEveryStaleAccountSafely",
+		"AccountsQuotaAllRefreshesEveryCodexAccountSafely",
+		"AccountsCheckReadinessShortcutSetsDaemonGateParams",
+		"DoctorReportsMultiAccountQuotaAndAutoRoute",
+		"CodexAccountsSmokeRequireAllFreshQuota",
+		"RouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache",
+		"CodexAccountsQuotaAllRefreshesEveryAccountSafely",
+	} {
+		if !strings.Contains(makefile, want) {
+			t.Fatalf("Makefile simulated readiness target missing %q", want)
+		}
+	}
+}

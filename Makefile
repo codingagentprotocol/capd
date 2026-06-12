@@ -3,7 +3,7 @@ LIVE_PROMPT ?= say ready
 LIVE_SECRET_BACKEND ?= native
 LDFLAGS := -X github.com/codingagentprotocol/capd/internal/daemon.Version=$(VERSION)
 
-.PHONY: build run test vet tidy verify verify-secretstore live-codex-readiness
+.PHONY: build run test vet tidy verify verify-secretstore verify-codex-readiness-sim live-codex-readiness
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o capd ./cmd/capd
@@ -31,6 +31,11 @@ verify-secretstore:
 	GOOS=linux GOARCH=amd64 go test -c ./internal/account/secret -o /tmp/capd-secret-linux.test
 	GOOS=windows GOARCH=amd64 go test -c ./internal/account/secret -o /tmp/capd-secret-windows.test.exe
 	CGO_ENABLED=0 go test ./internal/account/secret
+
+verify-codex-readiness-sim:
+	@echo "running deterministic simulated Codex multi-account quota/routing/readiness gates"
+	go test ./internal/server -run 'Test(AgentsRouteAutoAccountChoosesLowestCachedQuota|AgentsRouteAutoAccountRequireFreshQuota|AgentsRouteAutoAccountIgnoresStaleLowQuota|SessionCreateAutoAccountBindsLowestCachedQuota|AccountsCheckCanRefreshQuotaAndEnforceReadiness|AccountsCheckReadinessFailureIsDaemonSideAndSafe|AccountsCheckAllFreshFailureReportsEveryStaleAccountSafely|AccountsQuotaAllRefreshesEveryCodexAccountSafely)$$' -count=1
+	go test ./cmd/capd -run 'Test(AccountsCheckReadinessShortcutSetsDaemonGateParams|DoctorReportsMultiAccountQuotaAndAutoRoute|CodexAccountsSmokeRequireAllFreshQuota|RouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache|CodexAccountsQuotaAllRefreshesEveryAccountSafely)$$' -count=1
 
 live-codex-readiness:
 	@echo "live-codex-readiness requires >=2 imported Codex accounts, CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND), and a running daemon from: CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) capd start"
