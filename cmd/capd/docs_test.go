@@ -48,3 +48,24 @@ func TestReferenceDocsCoverProbeReadinessBackendDefaults(t *testing.T) {
 		}
 	}
 }
+
+func TestReferenceDocsCoverSecretMigrationReadbackSafety(t *testing.T) {
+	data, err := os.ReadFile("../../docs/reference.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := string(data)
+
+	for _, want := range []string{
+		"`capd accounts codex migrate-secrets [account-id\\|all]",
+		"The target secret is read back before account metadata is updated",
+		"if target readback fails, capd removes the attempted target secret",
+		"keeps the source ref",
+		"reports safe partial evidence",
+		"add `--delete-source` only after native readiness passes",
+	} {
+		if !strings.Contains(reference, want) {
+			t.Fatalf("reference docs missing secret migration readback contract %q", want)
+		}
+	}
+}
