@@ -276,6 +276,92 @@ func verifyRuntimeProjection(codexHome, accountID string) error {
 	return nil
 }
 
+func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsCheckParams) (protocol.AccountsCheckResult, *protocol.Error) {
+	if s.opts.Accounts == nil || s.opts.Secrets == nil || s.opts.RuntimeRoot == "" {
+		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
+	}
+	provider := strings.TrimSpace(params.Provider)
+	if provider == "" {
+		provider = codexauth.Provider
+	}
+	if provider != codexauth.Provider {
+		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInvalidParams, "account check is currently supported only for provider %q", codexauth.Provider)
+	}
+	current, err := s.opts.Accounts.CurrentAccount(provider)
+	if err != nil {
+		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
+	}
+	accounts, err := s.opts.Accounts.ListAccounts(provider)
+	if err != nil {
+		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "list accounts: %v", err)
+	}
+	result := protocol.AccountsCheckResult{
+		Provider:         provider,
+		CurrentAccountID: current,
+		SecretBackend:    s.opts.Secrets.Backend(),
+		CheckedAccounts:  len(accounts),
+		Accounts:         make([]protocol.AccountCheckEvidence, 0, len(accounts)),
+	}
+	for _, acc := range accounts {
+		row, perr := s.checkAccount(ctx, acc, current)
+		if perr != nil {
+			return protocol.AccountsCheckResult{}, perr
+		}
+		result.Accounts = append(result.Accounts, row)
+	}
+	if len(accounts) > 0 {
+		selected, _, perr := s.selectCodexAccountForRoute()
+		if perr != nil {
+			return protocol.AccountsCheckResult{}, perr
+		}
+		evidence := account.QuotaRouteEvidence(s.opts.Accounts, selected)
+		result.AutoRoute = &evidence
+	}
+	return result, nil
+}
+
+func (s *Server) checkAccount(ctx context.Context, acc account.Account, current string) (protocol.AccountCheckEvidence, *protocol.Error) {
+	ref, err := secret.ParseRef(acc.SecretRef)
+	if err != nil {
+		return protocol.AccountCheckEvidence{}, protocol.NewError(protocol.CodeInternalError, "parse secret ref: %v", err)
+	}
+	if err := secret.EnsureRefBackend(s.opts.Secrets, ref); err != nil {
+		return protocol.AccountCheckEvidence{}, protocol.NewError(protocol.CodeInternalError, "%v", err)
+	}
+	if _, err := s.opts.Secrets.Get(ctx, ref); err != nil {
+		return protocol.AccountCheckEvidence{}, protocol.NewError(protocol.CodeInternalError, "load account credentials: %v", err)
+	}
+	env, perr := s.runtimeEnvForAccount(ctx, codexAgentID, acc.ID)
+	if perr != nil {
+		return protocol.AccountCheckEvidence{}, perr
+	}
+	codexHome := codexHomeFromEnv(env)
+	if codexHome == "" {
+		return protocol.AccountCheckEvidence{}, protocol.NewError(protocol.CodeInternalError, "project account runtime: CODEX_HOME missing")
+	}
+	if err := verifyRuntimeProjection(codexHome, acc.ID); err != nil {
+		return protocol.AccountCheckEvidence{}, protocol.NewError(protocol.CodeInternalError, "verify account runtime: %v", err)
+	}
+	row := protocol.AccountCheckEvidence{
+		ID:                 acc.ID,
+		Email:              acc.Email,
+		Current:            acc.ID == current,
+		SecretBackendOK:    true,
+		CredentialReadable: true,
+		RuntimeReady:       true,
+		AuthJSONPrivate:    true,
+		ProjectionMarkerOK: true,
+		QuotaState:         protocol.AccountQuotaStateMissing,
+	}
+	if q, err := s.opts.Accounts.LoadQuota(acc.ID); err == nil {
+		row.QuotaState = accountQuotaState(q)
+		row.QuotaCheckedAt = q.CheckedAt
+		row.PrimaryUsedPercent = &q.PrimaryUsedPercent
+		row.QuotaFresh = row.QuotaState == protocol.AccountQuotaStateFresh
+	}
+	return row, nil
+}
+
 func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.AccountsQuotaParams) (protocol.AccountsQuotaResult, *protocol.Error) {
 	if s.opts.Accounts == nil || s.opts.Secrets == nil {
 		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")

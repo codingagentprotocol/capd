@@ -222,6 +222,17 @@ verifies private `auth.json` and marker permissions. Omit `accountId` to use the
 current Codex account. The response never returns token material, `secret_ref`,
 or local filesystem paths.
 
+### `accounts/check`
+
+`{"provider": "codex"}` →
+`{"provider", "currentAccountId", "secretBackend", "checkedAccounts", "autoRoute", "accounts"}`.
+
+Runs a safe local smoke check for imported Codex accounts: verifies SecretStore
+backend matching, credential readability, per-account runtime projection,
+private `auth.json`, projection marker integrity, cached quota freshness, and
+auto-route evidence. It does not refresh remote quota. The response never
+returns token material, `secret_ref`, raw auth JSON, or local filesystem paths.
+
 ### `accounts/quota`
 
 `{"provider": "codex", "accountId": "codex-acct"}` → `{"account": {...}}`.

@@ -10,6 +10,7 @@ const (
 	MethodAccountsImport  = "accounts/import"  // import a local account auth file into the daemon
 	MethodAccountsCurrent = "accounts/current" // show or set provider-scoped current account, without secrets
 	MethodAccountsProject = "accounts/project" // create/verify account runtime projection, without paths or secrets
+	MethodAccountsCheck   = "accounts/check"   // safe local account smoke evidence, without paths or secrets
 	MethodAccountsQuota   = "accounts/quota"   // refresh one imported account quota, without secrets
 	MethodAccountsRemove  = "accounts/remove"  // remove an imported account and local token material
 	MethodSessionCreate   = "session/create"   // start an agent session
@@ -174,6 +175,34 @@ type AccountsProjectResult struct {
 	RuntimeReady       bool   `json:"runtimeReady"`
 	AuthJSONPrivate    bool   `json:"authJsonPrivate"`
 	ProjectionMarkerOK bool   `json:"projectionMarkerOk"`
+}
+
+type AccountsCheckParams struct {
+	Provider string `json:"provider,omitempty"` // empty = codex
+}
+
+type AccountsCheckResult struct {
+	Provider         string                 `json:"provider"`
+	CurrentAccountID string                 `json:"currentAccountId,omitempty"`
+	SecretBackend    string                 `json:"secretBackend"`
+	CheckedAccounts  int                    `json:"checkedAccounts"`
+	AutoRoute        *AccountRouteEvidence  `json:"autoRoute,omitempty"`
+	Accounts         []AccountCheckEvidence `json:"accounts"`
+}
+
+type AccountCheckEvidence struct {
+	ID                 string   `json:"id"`
+	Email              string   `json:"email,omitempty"`
+	Current            bool     `json:"current,omitempty"`
+	SecretBackendOK    bool     `json:"secretBackendOk"`
+	CredentialReadable bool     `json:"credentialReadable"`
+	RuntimeReady       bool     `json:"runtimeReady"`
+	AuthJSONPrivate    bool     `json:"authJsonPrivate"`
+	ProjectionMarkerOK bool     `json:"projectionMarkerOk"`
+	QuotaState         string   `json:"quotaState"`
+	QuotaFresh         bool     `json:"quotaFresh"`
+	QuotaCheckedAt     int64    `json:"quotaCheckedAt,omitempty"`
+	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
 }
 
 type AccountsQuotaParams struct {

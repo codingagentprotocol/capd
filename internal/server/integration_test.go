@@ -1126,6 +1126,89 @@ func TestAccountsProjectRejectsUnsupportedProviderAndMissingAccount(t *testing.T
 	}
 }
 
+func TestAccountsCheckReturnsSafeSmokeEvidence(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 14}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var result protocol.AccountsCheckResult
+	c.mustResult(c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider: codexauth.Provider,
+	}), &result)
+	if result.Provider != codexauth.Provider || result.CurrentAccountID != "codex-test" || result.SecretBackend != secret.BackendFile || result.CheckedAccounts != 1 || len(result.Accounts) != 1 {
+		t.Fatalf("result = %+v", result)
+	}
+	row := result.Accounts[0]
+	if row.ID != "codex-test" || !row.Current || !row.SecretBackendOK || !row.CredentialReadable || !row.RuntimeReady || !row.AuthJSONPrivate || !row.ProjectionMarkerOK || row.QuotaState != protocol.AccountQuotaStateFresh || !row.QuotaFresh || row.PrimaryUsedPercent == nil || *row.PrimaryUsedPercent != 14 {
+		t.Fatalf("row = %+v", row)
+	}
+	if result.AutoRoute == nil || result.AutoRoute.QuotaState != protocol.AccountQuotaStateFresh || !result.AutoRoute.Fresh {
+		t.Fatalf("auto route = %+v", result.AutoRoute)
+	}
+	profileHome := filepath.Join(s.opts.RuntimeRoot, codexauth.Provider, "codex-test")
+	if _, err := os.Stat(filepath.Join(profileHome, "auth.json")); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(result)
+	for _, leaked := range []string{"test-token", profileHome, "CODEX_HOME", "secretRef", "secret_ref"} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("accounts/check leaked %q: %s", leaked, data)
+		}
+	}
+}
+
+func TestAccountsCheckHandlesEmptyAndRejectsBackendMismatch(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	c := initialized(t, ts)
+	if err := accounts.DeleteAccount("codex-test"); err != nil {
+		t.Fatal(err)
+	}
+	var empty protocol.AccountsCheckResult
+	c.mustResult(c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider: codexauth.Provider,
+	}), &empty)
+	if empty.CheckedAccounts != 0 || len(empty.Accounts) != 0 || empty.AutoRoute != nil {
+		t.Fatalf("empty = %+v", empty)
+	}
+
+	ref, err := s.opts.Secrets.Put(context.Background(), "codex-test", secret.Bundle{
+		Provider:    codexauth.Provider,
+		AuthMode:    "oauth",
+		AccessToken: "test-token",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-test",
+		Provider:  codexauth.Provider,
+		AuthMode:  "oauth",
+		Email:     "codex@example.com",
+		SecretRef: ref.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = secret.BackendNative + ":codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	resp := c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider: codexauth.Provider,
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInternalError || !strings.Contains(resp.Error.Message, `secret backend = "native", active backend = "file"`) {
+		t.Fatalf("response = %+v", resp)
+	}
+	if strings.Contains(resp.Error.Message, "test-token") {
+		t.Fatalf("check error leaked token: %v", resp.Error)
+	}
+}
+
 func TestAccountsRemoveDeletesSecretProjectionAndMetadata(t *testing.T) {
 	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
 	acc, err := accounts.LoadAccount("codex-test")

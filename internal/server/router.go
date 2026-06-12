@@ -132,6 +132,13 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		}
 		return s.projectAccountRuntime(ctx, params)
 
+	case protocol.MethodAccountsCheck:
+		var params protocol.AccountsCheckParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		return s.checkAccounts(ctx, params)
+
 	case protocol.MethodAccountsQuota:
 		var params protocol.AccountsQuotaParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {

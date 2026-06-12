@@ -52,6 +52,7 @@
   <label><input id="requireFreshQuota" type="checkbox" /> fresh quota</label>
   <button id="previewRoute">预览路由</button>
   <button id="importCodex">导入 Codex</button>
+  <button id="checkAccounts">检查账号</button>
   <button id="refreshSelectedQuota">刷新所选 quota</button>
   <button id="send">发送</button>
   <button id="cancel">中断</button>
@@ -183,6 +184,21 @@ async function importCodexAccount() {
     await loadAccounts();
   } catch (e) {
     line("ev-err", `✗ 导入 Codex 失败: ${e.message || JSON.stringify(e)}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function checkAccounts() {
+  const button = document.getElementById("checkAccounts");
+  button.disabled = true;
+  try {
+    const result = await call("accounts/check", { provider: "codex" });
+    const route = result.autoRoute ? ` · auto ${result.autoRoute.quotaState}` : "";
+    line("ev-sys", `· 账号检查完成 ${result.checkedAccounts} 个${route}`);
+    await loadAccounts();
+  } catch (e) {
+    line("ev-err", `✗ 账号检查失败: ${e.message || JSON.stringify(e)}`);
   } finally {
     button.disabled = false;
   }
@@ -479,6 +495,7 @@ document.getElementById("cancel").onclick = () => sessionId && call("task/cancel
 document.getElementById("refreshSessions").onclick = loadSessions;
 document.getElementById("previewRoute").onclick = previewRoute;
 document.getElementById("importCodex").onclick = importCodexAccount;
+document.getElementById("checkAccounts").onclick = checkAccounts;
 document.getElementById("refreshSelectedQuota").onclick = refreshSelectedQuota;
 document.getElementById("account").onchange = () => { markActiveAccount(); previewRoute(); };
 document.getElementById("requireFreshQuota").onchange = previewRoute;
