@@ -904,7 +904,7 @@ func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 
 	var result protocol.AccountsListResult
 	c.mustResult(c.call(protocol.MethodAccountsList, protocol.AccountsListParams{
-		Provider: codexauth.Provider,
+		Provider: " " + codexauth.Provider + " ",
 	}), &result)
 	if result.CurrentAccountID != "codex-test" || len(result.Accounts) != 1 {
 		t.Fatalf("accounts = %+v", result)
@@ -1598,7 +1598,7 @@ func TestAccountsQuotaRefreshesBackendQuotaSafely(t *testing.T) {
 
 	var result protocol.AccountsQuotaResult
 	c.mustResult(c.call(protocol.MethodAccountsQuota, protocol.AccountsQuotaParams{
-		Provider:  codexauth.Provider,
+		Provider:  " " + codexauth.Provider + " ",
 		AccountID: "codex-test",
 	}), &result)
 	if sawAuth != "Bearer test-token" || sawAccount != "acct_test" || sawReferer != "https://chatgpt.com/" {

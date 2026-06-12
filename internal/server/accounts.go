@@ -86,7 +86,7 @@ func (s *Server) listAccounts(params protocol.AccountsListParams) (protocol.Acco
 	if s.opts.Accounts == nil {
 		return protocol.AccountsListResult{Accounts: []protocol.AccountSummary{}}, nil
 	}
-	provider := params.Provider
+	provider := strings.TrimSpace(params.Provider)
 	var current string
 	if provider != "" {
 		var err error
@@ -417,7 +417,7 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 	if s.opts.Accounts == nil || s.opts.Secrets == nil {
 		return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
 	}
-	provider := params.Provider
+	provider := strings.TrimSpace(params.Provider)
 	if provider == "" {
 		provider = codexauth.Provider
 	}
