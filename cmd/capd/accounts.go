@@ -148,7 +148,7 @@ SecretStore smoke check that does not require the daemon, use
 			fmt.Fprintf(cmd.OutOrStdout(), "secret backend: %s\n", result.SecretBackend)
 			fmt.Fprintf(cmd.OutOrStdout(), "quota refreshed: %t\n", result.QuotaRefreshed)
 			if result.AutoRoute != nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s score %.2f quota %s\n", result.AutoRoute.AccountID, result.AutoRoute.Score, result.AutoRoute.QuotaState)
+				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s\n", result.AutoRoute.AccountID, routeEvidenceText(*result.AutoRoute))
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
 			fmt.Fprintln(w, "CURRENT\tID\tEMAIL\tSECRET\tCREDENTIAL\tRUNTIME\tAUTH_JSON\tMARKER\tQUOTA\tFRESH\tPRIMARY\tCHECKED_AT")

@@ -166,7 +166,7 @@ No params. → `{"agents": [{"id", "name", "bin", "version", "available", "capab
 Ask capd to pick an installed agent. Params mirror route signals:
 `{"prompt", "attachments", "accountId", "model", "effort", "capabilities", "prefer", "requireFreshQuota"}`.
 
-→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"accountId": "codex-acct", "quotaState": "fresh", "score": 12}, "reason": "matched capabilities: effort, review"}`
+→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"accountId": "codex-acct", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "score": 12, "checkedAt": 1781170000}, "reason": "matched capabilities: effort, review"}`
 
 When `accountId` is present, routing is account-aware and currently selects
 Codex only, because imported account runtimes are Codex-specific. Use
@@ -176,8 +176,9 @@ quota or rows older than 30 minutes receive a conservative unknown score until
 `accounts/quota` or `agents/usage` refreshes them. Set `requireFreshQuota:true`
 with `accountId:"auto"` to fail instead of routing on missing or stale quota.
 When account routing is in play, `accountRoute` reports the selected
-`accountId`, score, and `quotaState` (`fresh`, `stale`, or `missing`) without
-exposing token material.
+`accountId`, score, `quotaState` (`fresh`, `stale`, or `missing`), freshness,
+optional primary usage percent, and optional checked timestamp without exposing
+token material.
 
 ### `agents/usage`
 

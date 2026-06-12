@@ -226,7 +226,7 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if !strings.Contains(out.String(), "quota refreshed: false") {
 		t.Fatalf("text output missing quota refresh evidence: %s", out.String())
 	}
-	for _, want := range []string{"FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountQuotaStateFresh, "true", "12.0%"} {
+	for _, want := range []string{"auto route: codex-test quota fresh fresh true primary 12.0% score ", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountQuotaStateFresh, "true", "12.0%"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("text output missing %q: %s", want, out.String())
 		}
@@ -285,7 +285,7 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if !strings.Contains(out.String(), "quota refreshed: true") {
 		t.Fatalf("text output missing refreshed evidence: %s", out.String())
 	}
-	for _, want := range []string{"FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountQuotaStateFresh, "true", "6.0%"} {
+	for _, want := range []string{"auto route: codex-test quota fresh fresh true primary 6.0% score ", "FRESH", "PRIMARY", "CHECKED_AT", protocol.AccountQuotaStateFresh, "true", "6.0%"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("text refresh output missing %q: %s", want, out.String())
 		}
