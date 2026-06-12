@@ -109,6 +109,15 @@ function routeText(route) {
   if (typeof route.primaryUsedPercent === "number") bits.push(`primary ${route.primaryUsedPercent}%`);
   return bits.join(" ");
 }
+function routeDecisionText(decision, route) {
+  if (!decision) return routeText(route);
+  const bits = [];
+  if (decision.agent && decision.agent.id) bits.push(`agent ${decision.agent.id}`);
+  if (decision.accountId) bits.push(`account ${decision.accountId}`);
+  if (route) bits.push(routeText(route));
+  if (decision.reason) bits.push(decision.reason);
+  return bits.join(" · ") || routeText(route);
+}
 async function refresh(readiness = false) {
   $("refresh").disabled = true;
   $("readiness").disabled = true;
@@ -136,9 +145,11 @@ async function refresh(readiness = false) {
       result = await call("accounts/check", { provider:"codex" });
     }
     let route = result.autoRoute || null;
+    let routeDecision = null;
     let routeError = "";
     try {
       const routed = await call("agents/route", { accountId:"auto", requireFreshQuota:readiness });
+      routeDecision = routed;
       route = routed.accountRoute || route;
     } catch (e) {
       routeError = e.message || String(e);
@@ -152,12 +163,13 @@ async function refresh(readiness = false) {
       `secret backend: ${result.secretBackend || "unknown"}`,
       `quota refreshed: ${!!result.quotaRefreshed}`,
       `auto route: ${routeText(route)}`,
+      `route decision: ${routeDecisionText(routeDecision, route)}`,
       ...accountEvidence(accounts)
     ];
     if (readinessError) summary.push(`readiness error: ${readinessError}`);
     if (routeError) summary.push(`route error: ${routeError}`);
     showSummary(summary);
-    showJSON({ accountsCheck: result, autoRoute: route, readinessError, routeError });
+    showJSON({ accountsCheck: result, routeDecision, autoRoute: route, readinessError, routeError });
   } catch (e) {
     setMetric("daemon", "attention", "bad");
     showSummary([e.message || String(e)]);
