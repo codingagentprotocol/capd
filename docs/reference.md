@@ -25,7 +25,9 @@ environment variable and file. For a guided tour, read the [README](../README.md
 
 The daemon also serves the local web console at `/console/`; it still connects
 back to `/ws` with the daemon token, so opening the page does not bypass CAP
-authentication.
+authentication. Console responses are `no-store` and include CSP, referrer,
+permissions, and frame-deny headers because the token may be supplied once in
+the URL.
 
 ### `capd run <prompt>` — send one task and stream it
 

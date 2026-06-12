@@ -60,6 +60,18 @@ func TestConsoleServedWithSecurityHeaders(t *testing.T) {
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 		t.Fatalf("cache = %q", got)
 	}
+	if got := rec.Header().Get("Content-Security-Policy"); !strings.Contains(got, "default-src 'none'") || !strings.Contains(got, "connect-src 'self' ws:") || !strings.Contains(got, "frame-ancestors 'none'") {
+		t.Fatalf("csp = %q", got)
+	}
+	if got := rec.Header().Get("Permissions-Policy"); got != "camera=(), microphone=(), geolocation=()" {
+		t.Fatalf("permissions policy = %q", got)
+	}
+	if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Fatalf("referrer policy = %q", got)
+	}
+	if got := rec.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Fatalf("x-frame-options = %q", got)
+	}
 	if !strings.Contains(rec.Body.String(), "accounts/list") {
 		t.Fatal("console HTML missing accounts/list integration")
 	}
