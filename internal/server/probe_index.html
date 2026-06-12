@@ -270,9 +270,11 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
 async function refresh(readiness = false) {
   $("refresh").disabled = true;
   $("readiness").disabled = true;
+  let healthInfo = null;
+  let daemonLabel = "";
   try {
-    const healthInfo = await fetchHealthInfo();
-    const daemonLabel = [healthInfo.version, healthInfo.protocolVersion ? `p ${healthInfo.protocolVersion}` : "", healthInfo.secretBackend ? `secret ${healthInfo.secretBackend}` : ""].filter(Boolean).join(" · ");
+    healthInfo = await fetchHealthInfo();
+    daemonLabel = [healthInfo.version, healthInfo.protocolVersion ? `p ${healthInfo.protocolVersion}` : "", healthInfo.secretBackend ? `secret ${healthInfo.secretBackend}` : ""].filter(Boolean).join(" · ");
     setMetric("daemon", daemonLabel || "ok", "ok");
     await connect();
     await call("initialize", { protocolVersion:"0.1", client:{ name:"capd-probe" } });
@@ -333,11 +335,46 @@ async function refresh(readiness = false) {
     showTests(checks);
     showJSON({ checks, health: healthInfo, accountsCheck: result, routeDecision, autoRoute: route, routeCandidates: (routeDecision && routeDecision.routeCandidates) || result.routeCandidates, httpProbe, readinessError, routeError });
   } catch (e) {
-    setMetric("daemon", "attention", "bad");
-    showSummary([e.message || String(e)]);
-    const checks = validationRows({ healthOK:false, result:null, route:null, routeDecision:null, readiness, requireNative:requiredSecretBackend() === "native", readinessError:e.message || String(e), routeError:"" });
+    if (healthInfo) {
+      setMetric("daemon", daemonLabel || "ok", "ok");
+    } else {
+      setMetric("daemon", "attention", "bad");
+    }
+    let httpProbe = null;
+    try {
+      httpProbe = await fetchProbeData(readiness);
+    } catch (probeErr) {
+      httpProbe = { error: probeErr.message || String(probeErr) };
+    }
+    const fallbackResult = httpProbe && httpProbe.accountsCheck ? httpProbe.accountsCheck : null;
+    const fallbackRoute = httpProbe && httpProbe.autoRoute ? httpProbe.autoRoute : null;
+    const fallbackRouteDecision = httpProbe && httpProbe.routeDecision ? httpProbe.routeDecision : null;
+    const fallbackHealth = (httpProbe && httpProbe.health) || healthInfo;
+    if (fallbackResult) {
+      const summary = httpProbe.summary || {};
+      setMetric("accounts", String(summary.checkedAccounts || fallbackResult.checkedAccounts || 0), (summary.checkedAccounts || fallbackResult.checkedAccounts || 0) >= 2 ? "ok" : "warn");
+      setMetric("quota", `${summary.freshQuotaAccounts || 0}/${summary.checkedAccounts || fallbackResult.checkedAccounts || 0}`, summary.checkedAccounts && summary.freshQuotaAccounts === summary.checkedAccounts ? "ok" : "warn");
+      setMetric("route", routeText(fallbackRoute), fallbackRoute && fallbackRoute.fresh ? "ok" : "warn");
+    }
+    const fallbackChecks = httpProbe && Array.isArray(httpProbe.checks) && httpProbe.checks.length
+      ? httpProbe.checks
+      : validationRows({ healthOK:fallbackHealth, result:fallbackResult, route:fallbackRoute, routeDecision:fallbackRouteDecision, readiness, requireNative:requiredSecretBackend() === "native", readinessError:e.message || String(e), routeError:"" });
+    const summaryLines = [
+      `error: ${e.message || String(e)}`,
+      `daemon: ${healthInfo ? daemonLabel || "ok" : "attention"}`,
+    ];
+    if (httpProbe && httpProbe.error) {
+      summaryLines.push(`http probe error: ${httpProbe.error}`);
+    } else if (httpProbe) {
+      summaryLines.push(`http probe: ${httpProbe.ok ? "ok" : "attention"} (${(httpProbe.checks || []).length} checks)`);
+      const httpSummary = readinessSummaryText(httpProbe.summary);
+      if (httpSummary) summaryLines.push(`http summary: ${httpSummary}`);
+      if (httpProbe.errors && httpProbe.errors.length) summaryLines.push(...httpProbe.errors.map(err => `${err.source}: ${err.message || err.code || "error"}`));
+    }
+    showSummary(summaryLines);
+    const checks = fallbackChecks;
     showTests(checks);
-    showJSON({ checks, error: e.message || String(e) });
+    showJSON({ checks, health: fallbackHealth, accountsCheck: fallbackResult, routeDecision: fallbackRouteDecision, autoRoute: fallbackRoute, httpProbe, error: e.message || String(e) });
   } finally {
     $("refresh").disabled = false;
     $("readiness").disabled = false;
