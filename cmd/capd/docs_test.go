@@ -88,3 +88,22 @@ func TestReferenceDocsCoverRunFreshQuotaRecovery(t *testing.T) {
 		}
 	}
 }
+
+func TestTestingDocsCoverLinuxSecretStoreStdinSafety(t *testing.T) {
+	data, err := os.ReadFile("../../docs/testing.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testingDoc := string(data)
+
+	for _, want := range []string{
+		"Linux native storage requires `secret-tool`",
+		"token bundles go through stdin",
+		"failing `secret-tool store`\ncommands omit command output",
+		"cannot\nleak access or refresh tokens into capd errors",
+	} {
+		if !strings.Contains(testingDoc, want) {
+			t.Fatalf("testing docs missing Linux SecretStore stdin safety contract %q", want)
+		}
+	}
+}

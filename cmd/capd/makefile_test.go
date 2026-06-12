@@ -106,3 +106,22 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		}
 	}
 }
+
+func TestVerifySecretStoreTargetCoversNativeBackends(t *testing.T) {
+	data, err := os.ReadFile("../../Makefile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	makefile := string(data)
+	for _, want := range []string{
+		"verify-secretstore:",
+		"CAPD_TEST_NATIVE_SECRET=1 go test ./internal/account/secret -run TestNativeStoreRoundTrip -count=1",
+		"GOOS=linux GOARCH=amd64 go test -c ./internal/account/secret -o /tmp/capd-secret-linux.test",
+		"GOOS=windows GOARCH=amd64 go test -c ./internal/account/secret -o /tmp/capd-secret-windows.test.exe",
+		"CGO_ENABLED=0 go test ./internal/account/secret",
+	} {
+		if !strings.Contains(makefile, want) {
+			t.Fatalf("Makefile verify-secretstore target missing %q", want)
+		}
+	}
+}

@@ -39,7 +39,10 @@ make verify-secretstore
 ```
 
 Linux native storage requires `secret-tool` from libsecret and an unlocked
-Secret Service session.
+Secret Service session. The Linux native tests also lock the safety contract
+that token bundles go through stdin and that failing `secret-tool store`
+commands omit command output, so a helper that echoes stdin to stderr cannot
+leak access or refresh tokens into capd errors.
 
 To verify Codex account smoke is actually using the native backend:
 
