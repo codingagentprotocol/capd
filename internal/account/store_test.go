@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -358,6 +359,73 @@ func TestSelectQuotaRouteAccountTreatsInvalidQuotaAsUnknown(t *testing.T) {
 	evidence := QuotaRouteEvidence(st, Account{ID: "invalid-negative", Provider: "codex"})
 	if evidence.Fresh || evidence.Score != quotaUnknownScore || evidence.PrimaryUsedPercent != nil {
 		t.Fatalf("invalid evidence = %+v", evidence)
+	}
+}
+
+func TestConcurrentQuotaRefreshAndRouting(t *testing.T) {
+	st := newStore(t)
+	ids := []string{"codex-a", "codex-b", "codex-c"}
+	for _, id := range ids {
+		if err := st.UpsertAccount(Account{ID: id, Provider: "codex", AuthMode: "oauth"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SetCurrentAccount("codex", "codex-c"); err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, len(ids)*40+80)
+	for i, id := range ids {
+		i, id := i, id
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for n := 0; n < 40; n++ {
+				if err := st.SaveQuota(QuotaSnapshot{AccountID: id, PrimaryUsedPercent: float64(i*10 + n%10)}); err != nil {
+					errs <- err
+					return
+				}
+			}
+		}()
+	}
+	for n := 0; n < 80; n++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := SelectQuotaRouteAccount(st, "codex"); err != nil {
+				errs <- err
+				return
+			}
+			candidates, err := QuotaRouteCandidates(st, "codex")
+			if err != nil {
+				errs <- err
+				return
+			}
+			if len(candidates) != len(ids) {
+				errs <- errors.New("missing route candidate during concurrent quota refresh")
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	candidates, err := QuotaRouteCandidates(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != len(ids) {
+		t.Fatalf("candidates = %+v", candidates)
+	}
+	for _, candidate := range candidates {
+		if !candidate.Fresh || candidate.QuotaState != protocol.AccountQuotaStateFresh || candidate.PrimaryUsedPercent == nil {
+			t.Fatalf("candidate after concurrent refresh = %+v", candidate)
+		}
 	}
 }
 
