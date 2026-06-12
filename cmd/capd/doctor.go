@@ -344,17 +344,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		Evidence: doctorSecretReadinessEvidence(report.Codex.SecretReadableAccounts, len(list), report.Codex.SecretUnreadableAccounts, report.Codex.SecretStates),
 		NextStep: doctorCheckNextStep(!allSecretsReadable, doctorSecretReadinessNextStep(report.Daemon.OK, report.Codex.SecretStates, opts.RequireSecretBackend)),
 	})
-	if len(list) > 0 && report.Codex.FreshQuotaAccounts < len(list) {
-		report.Issues = append(report.Issues, "not every imported Codex account has fresh quota evidence")
-		report.NextSteps = append(report.NextSteps, doctorReadinessNextStep(report.Daemon.OK, opts.RequireSecretBackend))
-	}
-	allQuotaFresh := len(list) > 0 && report.Codex.FreshQuotaAccounts == len(list)
-	report.Checks = append(report.Checks, doctorCheckReport{
-		Name:     "Codex quota freshness",
-		OK:       allQuotaFresh,
-		Evidence: fmt.Sprintf("fresh %d/%d, stale %d, missing %d", report.Codex.FreshQuotaAccounts, len(list), report.Codex.StaleQuotaAccounts, report.Codex.MissingQuotaAccounts),
-		NextStep: doctorCheckNextStep(!allQuotaFresh, doctorQuotaCheckNextStep(len(list), report.Daemon.OK, opts.RequireSecretBackend)),
-	})
+	autoRouteFreshIssue := false
 	if len(list) > 0 {
 		route, err := account.SelectQuotaRouteAccount(accounts, codexauth.Provider)
 		if err != nil {
@@ -369,13 +359,28 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			report.Codex.AutoRoutePrimary = evidence.PrimaryUsedPercent
 			report.Codex.AutoRouteReason = account.QuotaRouteReason(accounts, route)
 			if !report.Codex.AutoRouteFresh {
-				report.Issues = append(report.Issues, "auto account route is not backed by fresh quota")
-				report.NextSteps = append(report.NextSteps, doctorRouteReadinessNextStep(report.Daemon.OK, opts.RequireSecretBackend))
+				autoRouteFreshIssue = true
 			}
 		}
 		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil {
 			report.Codex.RouteCandidates = candidates
 		}
+	}
+	routeSecretBackend := doctorRouteBackendHint(report.Codex.RouteCandidates, report.Codex.AutoRouteAccountID, opts.RequireSecretBackend)
+	if len(list) > 0 && report.Codex.FreshQuotaAccounts < len(list) {
+		report.Issues = append(report.Issues, "not every imported Codex account has fresh quota evidence")
+		report.NextSteps = append(report.NextSteps, doctorReadinessNextStep(report.Daemon.OK, routeSecretBackend))
+	}
+	allQuotaFresh := len(list) > 0 && report.Codex.FreshQuotaAccounts == len(list)
+	report.Checks = append(report.Checks, doctorCheckReport{
+		Name:     "Codex quota freshness",
+		OK:       allQuotaFresh,
+		Evidence: fmt.Sprintf("fresh %d/%d, stale %d, missing %d", report.Codex.FreshQuotaAccounts, len(list), report.Codex.StaleQuotaAccounts, report.Codex.MissingQuotaAccounts),
+		NextStep: doctorCheckNextStep(!allQuotaFresh, doctorQuotaCheckNextStep(len(list), report.Daemon.OK, routeSecretBackend)),
+	})
+	if autoRouteFreshIssue {
+		report.Issues = append(report.Issues, "auto account route is not backed by fresh quota")
+		report.NextSteps = append(report.NextSteps, doctorRouteReadinessNextStep(report.Daemon.OK, routeSecretBackend))
 	}
 	autoRouteOK := report.Codex.AutoRouteAccountID != "" && report.Codex.AutoRouteFresh
 	autoRouteEvidence := "auto route missing"
@@ -386,14 +391,14 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		Name:     "Codex auto route freshness",
 		OK:       autoRouteOK,
 		Evidence: autoRouteEvidence,
-		NextStep: doctorCheckNextStep(!autoRouteOK, doctorRouteCheckNextStep(len(list), report.Daemon.OK, opts.RequireSecretBackend)),
+		NextStep: doctorCheckNextStep(!autoRouteOK, doctorRouteCheckNextStep(len(list), report.Daemon.OK, routeSecretBackend)),
 	})
 	if report.Daemon.OK {
 		capResult, capErr := doctorDaemonAccountsCheck(ctx, opts.RequireSecretBackend)
 		if capErr != "" {
 			report.Codex.DaemonCheckError = capErr
 			report.Issues = append(report.Issues, "daemon-side accounts/check failed")
-			report.NextSteps = append(report.NextSteps, "inspect daemon-side account evidence with: "+doctorAccountsCheckReadinessCommand(opts.RequireSecretBackend))
+			report.NextSteps = append(report.NextSteps, "inspect daemon-side account evidence with: "+doctorAccountsCheckReadinessCommand(routeSecretBackend))
 		} else {
 			report.Codex.DaemonCheckOK = true
 			report.Codex.DaemonCheckedAccounts = capResult.CheckedAccounts
@@ -409,7 +414,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			Name:     "CAP accounts/check",
 			OK:       capErr == "",
 			Evidence: evidence,
-			NextStep: doctorCheckNextStep(capErr != "", "inspect daemon-side account evidence with: "+doctorAccountsCheckReadinessCommand(opts.RequireSecretBackend)),
+			NextStep: doctorCheckNextStep(capErr != "", "inspect daemon-side account evidence with: "+doctorAccountsCheckReadinessCommand(routeSecretBackend)),
 		})
 	}
 	report.NextSteps = compactStrings(report.NextSteps)
@@ -640,6 +645,22 @@ func doctorRouteCheckNextStep(imported int, daemonOK bool, requireSecretBackend 
 		return doctorImportNextStep(daemonOK, requireSecretBackend)
 	}
 	return doctorRouteReadinessNextStep(daemonOK, requireSecretBackend)
+}
+
+func doctorRouteBackendHint(candidates []protocol.AccountRouteEvidence, autoRouteAccountID, fallback string) string {
+	if autoRouteAccountID != "" {
+		for _, candidate := range candidates {
+			if candidate.AccountID == autoRouteAccountID && candidate.SecretBackend != "" {
+				return candidate.SecretBackend
+			}
+		}
+	}
+	for _, candidate := range candidates {
+		if candidate.SecretBackend != "" {
+			return candidate.SecretBackend
+		}
+	}
+	return fallback
 }
 
 func doctorReadinessNextStep(daemonOK bool, requireSecretBackend string) string {

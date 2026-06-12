@@ -473,7 +473,7 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 		Name:     "CAP accounts/check",
 		OK:       false,
 		Evidence: report.Codex.DaemonCheckError,
-		NextStep: "inspect daemon-side account evidence with: capd accounts check --json --readiness --timeout 2m",
+		NextStep: "inspect daemon-side account evidence with: capd accounts check --json --readiness --require-secret-backend file --timeout 2m",
 	}) {
 		t.Fatalf("missing CAP accounts/check failure: %+v", report.Checks)
 	}
@@ -549,16 +549,85 @@ func TestDoctorReportsStaleAndMissingAccountQuota(t *testing.T) {
 	if !containsString(report.Issues, "not every imported Codex account has fresh quota evidence") {
 		t.Fatalf("missing quota freshness issue: %+v", report.Issues)
 	}
-	if !containsString(report.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --timeout 2m") {
+	if !containsString(report.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend file --timeout 2m") {
 		t.Fatalf("missing readiness next step: %+v", report.NextSteps)
 	}
 	if !containsDoctorCheck(report.Checks, doctorCheckReport{
 		Name:     "Codex quota freshness",
 		OK:       false,
 		Evidence: "fresh 1/3, stale 1, missing 1",
-		NextStep: "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --timeout 2m",
+		NextStep: "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend file --timeout 2m",
 	}) {
 		t.Fatalf("missing quota freshness check: %+v", report.Checks)
+	}
+}
+
+func TestDoctorQuotaNextStepsPreferRouteSecretBackend(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/healthz" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		w.Write([]byte("ok\n"))
+	}))
+	defer ts.Close()
+	host, port := splitTestURL(t, ts.URL)
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = secret.BackendNative + ":codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	staleAt := time.Now().Add(-account.QuotaRouteCacheTTL - time.Minute).Unix()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 9, CheckedAt: staleAt}); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := buildDoctorReport(t.Context(), doctorOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Codex.AutoRouteAccountID != "codex-test" || report.Codex.AutoRouteFresh {
+		t.Fatalf("auto route = %+v", report.Codex)
+	}
+	if len(report.Codex.RouteCandidates) != 1 || report.Codex.RouteCandidates[0].SecretBackend != secret.BackendNative {
+		t.Fatalf("route candidates = %+v", report.Codex.RouteCandidates)
+	}
+	want := "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend native --timeout 2m"
+	if !containsString(report.NextSteps, want) {
+		t.Fatalf("next steps missing route backend hint %q: %+v", want, report.NextSteps)
+	}
+	if !containsDoctorCheck(report.Checks, doctorCheckReport{
+		Name:     "Codex quota freshness",
+		OK:       false,
+		Evidence: "fresh 0/1, stale 1, missing 0",
+		NextStep: want,
+	}) {
+		t.Fatalf("quota freshness check did not use route backend: %+v", report.Checks)
+	}
+	if !containsDoctorCheck(report.Checks, doctorCheckReport{
+		Name:     "Codex auto route freshness",
+		OK:       false,
+		Evidence: "auto route codex-test quota=stale fresh=false",
+		NextStep: "refresh quota and verify routing with: capd accounts check --json --readiness --require-secret-backend native --timeout 2m",
+	}) {
+		t.Fatalf("auto route check did not use route backend: %+v", report.Checks)
+	}
+	if !containsDoctorCheck(report.Checks, doctorCheckReport{
+		Name:     "CAP accounts/check",
+		OK:       false,
+		Evidence: report.Codex.DaemonCheckError,
+		NextStep: "inspect daemon-side account evidence with: capd accounts check --json --readiness --require-secret-backend native --timeout 2m",
+	}) {
+		t.Fatalf("CAP accounts/check did not use route backend: %+v", report.Checks)
 	}
 }
 
