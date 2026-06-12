@@ -9,6 +9,7 @@ const (
 	MethodAccountsList    = "accounts/list"    // list imported agent accounts, without secrets
 	MethodAccountsImport  = "accounts/import"  // import a local account auth file into the daemon
 	MethodAccountsCurrent = "accounts/current" // show or set provider-scoped current account, without secrets
+	MethodAccountsProject = "accounts/project" // create/verify account runtime projection, without paths or secrets
 	MethodAccountsQuota   = "accounts/quota"   // refresh one imported account quota, without secrets
 	MethodAccountsRemove  = "accounts/remove"  // remove an imported account and local token material
 	MethodSessionCreate   = "session/create"   // start an agent session
@@ -161,6 +162,18 @@ type AccountsCurrentParams struct {
 type AccountsCurrentResult struct {
 	CurrentAccountID string          `json:"currentAccountId,omitempty"`
 	Account          *AccountSummary `json:"account,omitempty"`
+}
+
+type AccountsProjectParams struct {
+	Provider  string `json:"provider,omitempty"`  // empty = codex
+	AccountID string `json:"accountId,omitempty"` // empty = provider's current account
+}
+
+type AccountsProjectResult struct {
+	AccountID          string `json:"accountId"`
+	RuntimeReady       bool   `json:"runtimeReady"`
+	AuthJSONPrivate    bool   `json:"authJsonPrivate"`
+	ProjectionMarkerOK bool   `json:"projectionMarkerOk"`
 }
 
 type AccountsQuotaParams struct {

@@ -2,7 +2,10 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -187,6 +190,90 @@ func (s *Server) currentAccount(params protocol.AccountsCurrentParams) (protocol
 		summary = accountSummary(acc, q)
 	}
 	return protocol.AccountsCurrentResult{CurrentAccountID: current, Account: &summary}, nil
+}
+
+func (s *Server) projectAccountRuntime(ctx context.Context, params protocol.AccountsProjectParams) (protocol.AccountsProjectResult, *protocol.Error) {
+	provider := strings.TrimSpace(params.Provider)
+	if provider == "" {
+		provider = codexauth.Provider
+	}
+	if provider != codexauth.Provider {
+		return protocol.AccountsProjectResult{}, protocol.NewError(protocol.CodeInvalidParams, "account projection is currently supported only for provider %q", codexauth.Provider)
+	}
+	accountID := strings.TrimSpace(params.AccountID)
+	var err error
+	if accountID == "" {
+		if s.opts.Accounts == nil {
+			return protocol.AccountsProjectResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
+		}
+		accountID, err = s.opts.Accounts.CurrentAccount(provider)
+		if err != nil {
+			return protocol.AccountsProjectResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
+		}
+	}
+	if accountID == "" {
+		return protocol.AccountsProjectResult{}, protocol.NewError(protocol.CodeInvalidParams, "accountId is required")
+	}
+	env, perr := s.runtimeEnvForAccount(ctx, codexAgentID, accountID)
+	if perr != nil {
+		return protocol.AccountsProjectResult{}, perr
+	}
+	codexHome := codexHomeFromEnv(env)
+	if codexHome == "" {
+		return protocol.AccountsProjectResult{}, protocol.NewError(protocol.CodeInternalError, "project account runtime: CODEX_HOME missing")
+	}
+	if err := verifyRuntimeProjection(codexHome, accountID); err != nil {
+		return protocol.AccountsProjectResult{}, protocol.NewError(protocol.CodeInternalError, "verify account runtime: %v", err)
+	}
+	return protocol.AccountsProjectResult{
+		AccountID:          accountID,
+		RuntimeReady:       true,
+		AuthJSONPrivate:    true,
+		ProjectionMarkerOK: true,
+	}, nil
+}
+
+func codexHomeFromEnv(env []string) string {
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "CODEX_HOME=") {
+			return strings.TrimPrefix(entry, "CODEX_HOME=")
+		}
+	}
+	return ""
+}
+
+func verifyRuntimeProjection(codexHome, accountID string) error {
+	authInfo, err := os.Stat(filepath.Join(codexHome, "auth.json"))
+	if err != nil {
+		return err
+	}
+	if authInfo.Mode().Perm() != 0o600 {
+		return fmt.Errorf("auth.json mode = %o, want 600", authInfo.Mode().Perm())
+	}
+	markerPath := filepath.Join(codexHome, ".capd_projection.json")
+	markerInfo, err := os.Stat(markerPath)
+	if err != nil {
+		return err
+	}
+	if markerInfo.Mode().Perm() != 0o600 {
+		return fmt.Errorf(".capd_projection.json mode = %o, want 600", markerInfo.Mode().Perm())
+	}
+	data, err := os.ReadFile(markerPath)
+	if err != nil {
+		return err
+	}
+	var marker struct {
+		ManagedBy string `json:"managedBy"`
+		Provider  string `json:"provider"`
+		Account   string `json:"account"`
+	}
+	if err := json.Unmarshal(data, &marker); err != nil {
+		return err
+	}
+	if marker.ManagedBy != "capd" || marker.Provider != codexauth.Provider || marker.Account != accountID {
+		return fmt.Errorf("projection marker mismatch")
+	}
+	return nil
 }
 
 func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.AccountsQuotaParams) (protocol.AccountsQuotaResult, *protocol.Error) {

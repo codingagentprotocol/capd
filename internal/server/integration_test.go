@@ -1064,6 +1064,68 @@ func TestAccountsCurrentRejectsUnknownAndProviderMismatch(t *testing.T) {
 	}
 }
 
+func TestAccountsProjectPreparesRuntimeWithoutLeakingPaths(t *testing.T) {
+	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
+	c := initialized(t, ts)
+
+	var result protocol.AccountsProjectResult
+	c.mustResult(c.call(protocol.MethodAccountsProject, protocol.AccountsProjectParams{
+		Provider: codexauth.Provider,
+	}), &result)
+	if result.AccountID != "codex-test" || !result.RuntimeReady || !result.AuthJSONPrivate || !result.ProjectionMarkerOK {
+		t.Fatalf("result = %+v", result)
+	}
+	profileHome := filepath.Join(s.opts.RuntimeRoot, codexauth.Provider, "codex-test")
+	if _, err := os.Stat(filepath.Join(profileHome, "auth.json")); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(result)
+	for _, leaked := range []string{"test-token", profileHome, "CODEX_HOME", "secretRef"} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("accounts/project leaked %q: %s", leaked, data)
+		}
+	}
+
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = secret.BackendNative + ":codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+	resp := c.call(protocol.MethodAccountsProject, protocol.AccountsProjectParams{
+		Provider:  codexauth.Provider,
+		AccountID: "codex-test",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInternalError || !strings.Contains(resp.Error.Message, `secret backend = "native", active backend = "file"`) {
+		t.Fatalf("response = %+v", resp)
+	}
+	if strings.Contains(resp.Error.Message, "test-token") || strings.Contains(resp.Error.Message, profileHome) {
+		t.Fatalf("accounts/project error leaked sensitive data: %v", resp.Error)
+	}
+}
+
+func TestAccountsProjectRejectsUnsupportedProviderAndMissingAccount(t *testing.T) {
+	_, ts, _, _ := newCodexAccountIntegrationServer(t)
+	c := initialized(t, ts)
+
+	resp := c.call(protocol.MethodAccountsProject, protocol.AccountsProjectParams{
+		Provider:  "gemini",
+		AccountID: "codex-test",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "supported only for provider") {
+		t.Fatalf("provider response = %+v", resp)
+	}
+	resp = c.call(protocol.MethodAccountsProject, protocol.AccountsProjectParams{
+		Provider:  codexauth.Provider,
+		AccountID: "missing",
+	})
+	if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, "unknown accountId") {
+		t.Fatalf("missing response = %+v", resp)
+	}
+}
+
 func TestAccountsRemoveDeletesSecretProjectionAndMetadata(t *testing.T) {
 	s, ts, _, accounts := newCodexAccountIntegrationServer(t)
 	acc, err := accounts.LoadAccount("codex-test")

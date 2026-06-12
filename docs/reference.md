@@ -212,6 +212,16 @@ Read or set the provider-scoped current account without exposing secrets.
 `{"provider": "codex", "accountId": "codex-acct"}` sets the current Codex
 account, then returns the same safe account summary shape as `accounts/list`.
 
+### `accounts/project`
+
+`{"provider": "codex", "accountId": "codex-acct"}` →
+`{"accountId", "runtimeReady", "authJsonPrivate", "projectionMarkerOk"}`.
+
+Creates or refreshes the capd-managed per-account `CODEX_HOME` projection and
+verifies private `auth.json` and marker permissions. Omit `accountId` to use the
+current Codex account. The response never returns token material, `secret_ref`,
+or local filesystem paths.
+
 ### `accounts/quota`
 
 `{"provider": "codex", "accountId": "codex-acct"}` → `{"account": {...}}`.

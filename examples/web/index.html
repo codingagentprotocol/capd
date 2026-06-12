@@ -223,13 +223,16 @@ function renderAccounts(accounts, currentAccountId) {
       current.textContent = "设为当前";
       current.disabled = a.id === currentAccountId;
       current.onclick = () => setCurrentAccount(a.id, current);
+      const project = document.createElement("button");
+      project.textContent = "准备运行";
+      project.onclick = () => projectAccount(a.id, project);
       const refresh = document.createElement("button");
       refresh.textContent = "刷新 quota";
       refresh.onclick = () => refreshQuota(a.id, refresh);
       const remove = document.createElement("button");
       remove.textContent = "移除";
       remove.onclick = () => removeAccount(a.id, remove);
-      card.append(current, refresh, remove);
+      card.append(current, project, refresh, remove);
     }
     accountsEl.appendChild(card);
   }
@@ -326,6 +329,18 @@ async function setCurrentAccount(accountId, button) {
     await loadAccounts();
   } catch (e) {
     line("ev-err", `✗ 设置当前账号失败: ${e.message || JSON.stringify(e)}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function projectAccount(accountId, button) {
+  button.disabled = true;
+  try {
+    const result = await call("accounts/project", { provider: "codex", accountId });
+    line("ev-sys", `· 运行环境已准备 ${result.accountId}`);
+  } catch (e) {
+    line("ev-err", `✗ 准备运行环境失败: ${e.message || JSON.stringify(e)}`);
   } finally {
     button.disabled = false;
   }
