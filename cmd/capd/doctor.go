@@ -218,7 +218,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	}
 	if len(list) > 0 && report.Codex.FreshQuotaAccounts < len(list) {
 		report.Issues = append(report.Issues, "not every imported Codex account has fresh quota evidence")
-		report.NextSteps = append(report.NextSteps, "refresh quota for every Codex account with: capd accounts codex quota all")
+		report.NextSteps = append(report.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --readiness")
 	}
 	if len(list) > 0 {
 		route, err := account.SelectQuotaRouteAccount(accounts, codexauth.Provider)
@@ -235,7 +235,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			report.Codex.AutoRouteReason = account.QuotaRouteReason(accounts, route)
 			if !report.Codex.AutoRouteFresh {
 				report.Issues = append(report.Issues, "auto account route is not backed by fresh quota")
-				report.NextSteps = append(report.NextSteps, "refresh quota and verify routing with: capd agents route --account auto --require-fresh-quota")
+				report.NextSteps = append(report.NextSteps, "refresh quota and verify routing with: capd accounts check --readiness")
 			}
 		}
 	}

@@ -163,7 +163,9 @@ For deterministic local regression, run `make verify`; for native SecretStore
 coverage, run `make verify-secretstore`. `capd doctor --json --fail` is the safe
 preflight to run before live Codex work: it checks daemon health, Codex CLI
 availability, imported account count, quota freshness, auto-route freshness,
-and the active SecretStore backend without printing token material. After
+and the active SecretStore backend without printing token material. Use
+`capd accounts check --readiness` for the daemon-side refresh-and-verify gate
+after fixing quota or account issues. After
 importing multiple Codex accounts and starting `capd start` with the same
 backend in another terminal, `make live-codex-readiness` runs the live
 quota/routing/readiness chain. Override the final prompt with

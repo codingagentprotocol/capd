@@ -99,7 +99,9 @@ testing the file SecretStore path; the default live backend is `native`.
 preflight before the live chain. It does not refresh quota or read token
 material into the output; it reports daemon health, Codex CLI availability,
 imported account count, cached quota freshness, auto-route freshness,
-SecretStore backend, readiness issues, and concrete next steps.
+SecretStore backend, readiness issues, and concrete next steps. After fixing
+account or quota issues, use `capd accounts check --readiness` to refresh and
+verify the daemon-side readiness gate before the final live run.
 
 The smoke command verifies imported account metadata, SecretStore readability,
 per-account `CODEX_HOME` projection, runtime `CODEX_HOME` env, private
