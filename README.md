@@ -151,7 +151,7 @@ capd accounts codex quota    # refresh quota and print a safe summary
 capd accounts codex quota auto
 capd accounts codex quota all
 capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
-capd doctor --json --require-secret-backend native # local readiness preflight
+capd doctor --json --fail --require-secret-backend native # readiness gate
 capd start                   # keep running in another terminal for CAP/WebSocket checks
 capd health --json           # confirm daemon /healthz before CAP checks
 capd accounts check --json   # daemon-side accounts/check smoke evidence
@@ -160,7 +160,7 @@ capd agents route --account auto --require-fresh-quota
 ```
 
 For deterministic local regression, run `make verify`; for native SecretStore
-coverage, run `make verify-secretstore`. `capd doctor --json` is the safe
+coverage, run `make verify-secretstore`. `capd doctor --json --fail` is the safe
 preflight to run before live Codex work: it checks daemon health, Codex CLI
 availability, imported account count, quota freshness, auto-route freshness,
 and the active SecretStore backend without printing token material. After

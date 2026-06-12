@@ -45,7 +45,8 @@ freshness, and the active SecretStore backend. Use
 `--require-secret-backend native` to turn native SecretStore into an explicit
 readiness issue. Text output returns a non-zero exit code when readiness issues
 are found. `--json` prints safe machine-readable evidence and next steps without
-token material or local secret paths.
+token material or local secret paths; add `--fail` when JSON output should also
+return non-zero on readiness issues.
 
 ### `capd run <prompt>` — send one task and stream it
 
@@ -83,7 +84,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 | Command | Output |
 |---------|--------|
 | `capd health [--json]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok` and `addr` |
-| `capd doctor [--json] [--require-secret-backend <file\|native>]` | local readiness preflight for daemon health, Codex CLI availability, imported account count, quota freshness, auto-route freshness, and SecretStore backend; text mode fails when issues are found |
+| `capd doctor [--json] [--fail] [--require-secret-backend <file\|native>]` | local readiness preflight for daemon health, Codex CLI availability, imported account count, quota freshness, auto-route freshness, and SecretStore backend; text mode fails when issues are found, and `--fail` makes JSON mode fail too |
 | `capd agents list` | table: id, available/not installed, version, binary path |
 | `capd agents route [--account <id\|auto>] [--capability name] [--require-fresh-quota] [--json]` | preview local routing without starting a session; with `--account auto`, shows the Codex account selected by conservative quota scoring. `--require-fresh-quota` fails unless that auto selection is backed by fresh cached quota |
 | `capd agents usage <id>` | account snapshot JSON: plan, 5h/weekly window used %, reset timestamps, credits (codex) |

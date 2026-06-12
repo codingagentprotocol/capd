@@ -26,6 +26,7 @@ func newDoctorCmd() *cobra.Command {
 		Short: "Run a local readiness preflight for capd, Codex accounts, and routing",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			jsonOut, _ := cmd.Flags().GetBool("json")
+			failOnIssues, _ := cmd.Flags().GetBool("fail")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			requireSecretBackend, err := secret.NormalizeBackend(requireSecretBackend)
 			if err != nil {
@@ -40,6 +41,9 @@ func newDoctorCmd() *cobra.Command {
 			if jsonOut {
 				out, _ := json.MarshalIndent(report, "", "  ")
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+				if failOnIssues && !report.OK {
+					return fmt.Errorf("doctor found %d readiness issue(s)", len(report.Issues))
+				}
 				return nil
 			}
 			printDoctorReport(cmd, report)
@@ -50,6 +54,7 @@ func newDoctorCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().Bool("json", false, "print machine-readable readiness evidence without token material")
+	cmd.Flags().Bool("fail", false, "return a non-zero exit code when readiness issues are found, including with --json")
 	cmd.Flags().String("require-secret-backend", "", "fail unless this SecretStore backend is active (file or native)")
 	return cmd
 }

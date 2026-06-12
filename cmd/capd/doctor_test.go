@@ -72,6 +72,30 @@ func TestDoctorTextReturnsErrorWhenNotReady(t *testing.T) {
 	}
 }
 
+func TestDoctorJSONFailReturnsErrorAfterWritingReport(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	cmd := newDoctorCmd()
+	cmd.SetArgs([]string{"--json", "--fail"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "readiness issue") {
+		t.Fatalf("err = %v", err)
+	}
+	var got doctorReport
+	if err := json.NewDecoder(bytes.NewReader(out.Bytes())).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.OK || !containsString(got.Issues, "daemon health check failed") {
+		t.Fatalf("report = %+v", got)
+	}
+}
+
 func TestDoctorRequiresSecretBackend(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
