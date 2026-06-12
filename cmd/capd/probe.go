@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -28,12 +29,19 @@ func newProbeCmd() *cobra.Command {
 			jsonOut, _ := cmd.Flags().GetBool("json")
 			readiness, _ := cmd.Flags().GetBool("readiness")
 			fail, _ := cmd.Flags().GetBool("fail")
+			timeout, _ := cmd.Flags().GetDuration("timeout")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			requireSecretBackend, err := secret.NormalizeBackend(requireSecretBackend)
 			if err != nil {
 				return err
 			}
-			body, status, err := daemonProbeData(cmd.Context(), config.Load(), probeDataOptions{
+			callCtx := cmd.Context()
+			var cancel context.CancelFunc
+			if timeout > 0 {
+				callCtx, cancel = context.WithTimeout(callCtx, timeout)
+				defer cancel()
+			}
+			body, status, err := daemonProbeData(callCtx, config.Load(), probeDataOptions{
 				Readiness:            readiness,
 				RequireSecretBackend: requireSecretBackend,
 			})
@@ -64,6 +72,7 @@ func newProbeCmd() *cobra.Command {
 	dataCmd.Flags().Bool("json", false, "print /probe/data JSON")
 	dataCmd.Flags().Bool("readiness", false, "request the stronger readiness diagnostics view")
 	dataCmd.Flags().Bool("fail", false, "exit non-zero when /probe/data reports ok=false or an HTTP error status")
+	dataCmd.Flags().Duration("timeout", 2*time.Minute, "maximum time to wait for /probe/data")
 	dataCmd.Flags().String("require-secret-backend", "", "request a SecretStore backend requirement for readiness diagnostics (file or native)")
 	cmd.AddCommand(dataCmd)
 	return cmd

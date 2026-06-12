@@ -32,7 +32,7 @@ func TestProbeDataCmdUsesAuthorizationHeader(t *testing.T) {
 
 	var out bytes.Buffer
 	cmd := newProbeCmd()
-	cmd.SetArgs([]string{"data", "--json", "--readiness", "--require-secret-backend", "native", "--fail"})
+	cmd.SetArgs([]string{"data", "--json", "--readiness", "--require-secret-backend", "native", "--timeout", "5s", "--fail"})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	if err := cmd.Execute(); err != nil {

@@ -159,7 +159,7 @@ CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-b
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native # readiness gate
 CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
 capd console --probe         # simple web data probe; opens with daemon token without printing it
-capd probe data --json --readiness --require-secret-backend native --fail # same probe diagnostics for automation
+capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail # same probe diagnostics for automation
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe/data # safe JSON diagnostics
 capd health --json --require-secret-backend native # confirm daemon /healthz plus version/protocol/secret backend
 capd accounts import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # daemon-side CAP import
@@ -201,7 +201,7 @@ wrong backend.
 smallest direct SecretStore gate: it opens the selected backend, optionally
 writes/reads/deletes a diagnostic secret, prints no token material, and fails
 before account checks when native storage is unavailable or mismatched.
-`capd probe data --json --readiness --fail` calls the same authenticated
+`capd probe data --json --readiness --timeout 2m --fail` calls the same authenticated
 `/probe/data` endpoint used by the lightweight web probe, so live preflight also
 verifies the Web diagnostics path with header auth and safe partial evidence.
 Both `agents/route --account auto --json` and daemon-side `accounts/check`
