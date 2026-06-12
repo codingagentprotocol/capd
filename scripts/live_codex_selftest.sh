@@ -8,6 +8,7 @@ host="${CAPD_HOST:-127.0.0.1}"
 port="${CAPD_PORT:-7777}"
 log="${CAPD_LIVE_DAEMON_LOG:-${TMPDIR:-/tmp}/capd-live-daemon-$$.log}"
 bin="${CAPD_LIVE_DAEMON_BIN:-${TMPDIR:-/tmp}/capd-live-daemon-$$}"
+bin_owned=0
 
 export CAPD_HOST="$host"
 export CAPD_PORT="$port"
@@ -20,21 +21,34 @@ cleanup() {
 		kill "$daemon_pid" >/dev/null 2>&1 || true
 		wait "$daemon_pid" >/dev/null 2>&1 || true
 	fi
-	if [ -z "${CAPD_LIVE_DAEMON_BIN:-}" ]; then
+	if [ "$bin_owned" -eq 1 ]; then
 		rm -f "$bin"
 	fi
 }
 trap cleanup EXIT INT TERM
 
+if [ -z "${CAPD_LIVE_DAEMON_BIN:-}" ]; then
+	go build -o "$bin" ./cmd/capd
+	bin_owned=1
+fi
+
 health() {
-	go run ./cmd/capd health --json --require-secret-backend "$backend" >/dev/null 2>&1
+	"$bin" health --json --require-secret-backend "$backend" >/dev/null 2>&1
+}
+
+health_any_backend() {
+	"$bin" health --json >/dev/null 2>&1
 }
 
 if health; then
 	echo "using existing capd daemon at ${host}:${port} with ${backend} SecretStore"
+elif health_any_backend; then
+	echo "capd daemon is running at ${host}:${port}, but not with ${backend} SecretStore" >&2
+	"$bin" health --json >&2 || true
+	echo "restart it with: capd start --secret-backend $backend" >&2
+	exit 1
 else
 	echo "starting temporary capd daemon at ${host}:${port} with ${backend} SecretStore"
-	go build -o "$bin" ./cmd/capd
 	"$bin" start --host "$host" --port "$port" --secret-backend "$backend" >"$log" 2>&1 &
 	daemon_pid="$!"
 	i=0

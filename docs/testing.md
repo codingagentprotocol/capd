@@ -172,6 +172,9 @@ checks that should not depend on a second terminal. It reuses an already healthy
 daemon when one is listening on `CAPD_HOST`/`CAPD_PORT`; otherwise it starts a
 temporary foreground daemon in the background, waits for health with the
 requested SecretStore backend, and cleans up that temporary process on exit.
+If a daemon is already healthy on the target port but reports a different
+SecretStore backend, the selftest fails immediately and asks you to restart
+that daemon instead of trying to start a second process on the same port.
 When doctor reports missing accounts and the daemon is running, prefer
 `capd accounts import --auth ...` so the import uses the same CAP/WebSocket path
 as the Web Console. `capd accounts codex import` remains available for direct
