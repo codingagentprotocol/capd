@@ -57,9 +57,15 @@ For multi-account routing readiness:
 ```bash
 capd accounts codex quota all
 capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
+
+# In another terminal, keep the daemon running for CAP/WebSocket checks:
+capd start
+
 capd accounts check --json
 capd accounts check --refresh-quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
 capd agents usage codex --account auto
+capd agents route --account auto --require-fresh-quota
+capd run --agent codex --account auto --require-fresh-quota "say ready"
 ```
 
 The smoke command verifies imported account metadata, SecretStore readability,
@@ -81,11 +87,12 @@ points at a different backend than the active SecretStore. Use `--json` to
 capture machine-readable smoke evidence in long tasks or CI logs.
 
 Use `capd accounts check --json` when you want the same safe evidence through
-the running daemon and CAP WebSocket path used by web clients; start the daemon
-first with `capd start`. Unlike `capd accounts codex smoke --quota`, it does
-not refresh remote quota unless `--refresh-quota` is set; it checks cached quota
-freshness, SecretStore readability, runtime projection, and auto-route evidence
-without returning runtime paths or token material.
+the running daemon and CAP WebSocket path used by web clients; keep the daemon
+running with `capd start` in another terminal before invoking it. Unlike
+`capd accounts codex smoke --quota`, it does not refresh remote quota unless
+`--refresh-quota` is set; it checks cached quota freshness, SecretStore
+readability, runtime projection, and auto-route evidence without returning
+runtime paths or token material.
 Use `capd accounts check --refresh-quota` when you want a single daemon-side
 readiness gate to refresh every imported Codex account through `accounts/quota`
 before checking cached freshness, without printing raw backend usage JSON.

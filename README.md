@@ -151,8 +151,10 @@ capd accounts codex quota    # refresh quota and print a safe summary
 capd accounts codex quota auto
 capd accounts codex quota all
 capd accounts codex smoke --quota --require-multiple --require-fresh-quota --require-all-fresh-quota
+capd start                   # keep running in another terminal for CAP/WebSocket checks
 capd accounts check --json   # daemon-side accounts/check smoke evidence
 capd accounts check --refresh-quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native
+capd agents route --account auto --require-fresh-quota
 ```
 
 Every flag, protocol field, and event is documented in
