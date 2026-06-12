@@ -310,6 +310,7 @@ type SessionCreateParams struct {
 
 type SessionCreateResult struct {
 	SessionID string `json:"sessionId"`
+	AccountID string `json:"accountId,omitempty"`
 }
 
 // Session states reported by session/list.

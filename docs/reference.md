@@ -313,7 +313,9 @@ material, `secret_ref`, or filesystem paths.
 | `effort` | string | agent default | reasoning effort (codex) |
 | `resume` | string | — | agent-native session id to resume |
 
-→ `{"sessionId": "s_..."}`; the connection is auto-subscribed to its events.
+→ `{"sessionId": "s_...", "accountId": "codex-..."}`; `accountId` is present
+when the created session is bound to an imported account, including an
+`accountId:"auto"` selection. The connection is auto-subscribed to its events.
 
 `task/send` rejects empty work items, non-image attachments, non-absolute local
 attachment paths, non-HTTP(S) attachment URLs, and more than 16 attachments.

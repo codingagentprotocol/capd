@@ -169,7 +169,11 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 		var created protocol.SessionCreateResult
 		json.Unmarshal(res, &created)
 		sessionID = created.SessionID
-		fmt.Fprintf(out, "session %s (%s)\n", sessionID, agentID)
+		if created.AccountID != "" {
+			fmt.Fprintf(out, "session %s (%s · %s)\n", sessionID, agentID, created.AccountID)
+		} else {
+			fmt.Fprintf(out, "session %s (%s)\n", sessionID, agentID)
+		}
 	} else {
 		if accountID != "" {
 			return fmt.Errorf("--account is only valid when creating a new session")

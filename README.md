@@ -335,7 +335,9 @@ flowchart TB
   quota scoring. Fresh cached primary quota uses the actual usage percent, while
   rows older than 30 minutes or missing quota are treated like unknown usage so
   stale low-usage snapshots do not dominate routing. The daemon projects that
-  account into a dedicated `CODEX_HOME` and the Codex app-server profile pool
+  account into a dedicated `CODEX_HOME` and returns the resolved `accountId` in
+  `session/create` so clients can audit auto-route choices without another
+  lookup. The Codex app-server profile pool
   keeps it isolated from other accounts.
 
 ## Repository layout

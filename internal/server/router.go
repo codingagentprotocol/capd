@@ -226,7 +226,7 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 			}
 		}
 		s.subscribe(ctx, client, sess, 0)
-		return protocol.SessionCreateResult{SessionID: sess.ID}, nil
+		return protocol.SessionCreateResult{SessionID: sess.ID, AccountID: params.AccountID}, nil
 
 	case protocol.MethodSessionList:
 		return s.listSessions()

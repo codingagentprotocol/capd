@@ -537,6 +537,9 @@ func TestSessionCreateWithCodexAccountProjectsRuntime(t *testing.T) {
 		AgentID:   "codex",
 		AccountID: "codex-test",
 	}), &created)
+	if created.AccountID != "codex-test" {
+		t.Fatalf("created account = %q", created.AccountID)
+	}
 
 	opts := fake.lastOpts()
 	if len(opts.Env) != 1 || !strings.HasPrefix(opts.Env[0], "CODEX_HOME=") {

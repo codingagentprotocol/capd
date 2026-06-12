@@ -180,7 +180,7 @@ func TestRunTaskSendsRequireFreshQuotaForAutoAccount(t *testing.T) {
 				writeWSJSON(t, r.Context(), conn, map[string]any{
 					"jsonrpc": "2.0",
 					"id":      req.ID,
-					"result":  protocol.SessionCreateResult{SessionID: "s_test"},
+					"result":  protocol.SessionCreateResult{SessionID: "s_test", AccountID: "codex-low"},
 				})
 			case protocol.MethodTaskSend:
 				writeWSJSON(t, r.Context(), conn, map[string]any{
@@ -216,7 +216,8 @@ func TestRunTaskSendsRequireFreshQuotaForAutoAccount(t *testing.T) {
 	defer cancel()
 	cmd := newRunCmd()
 	cmd.SetContext(ctx)
-	cmd.SetOut(&bytes.Buffer{})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
 	if err := runTask(cmd, runOpts{
 		agent:             " codex ",
 		account:           " " + protocol.AccountAuto + " ",
@@ -224,6 +225,9 @@ func TestRunTaskSendsRequireFreshQuotaForAutoAccount(t *testing.T) {
 		prompt:            "hello",
 	}); err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "session s_test (codex · codex-low)") {
+		t.Fatalf("output missing account evidence: %s", out.String())
 	}
 	select {
 	case params := <-seenCreate:
