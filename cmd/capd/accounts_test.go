@@ -1225,6 +1225,39 @@ func TestCodexAccountsSmokeRequireFreshQuotaPassesWithFreshCache(t *testing.T) {
 	}
 }
 
+func TestCodexAccountsSmokeTextIncludesAutoRouteEvidence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 9}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"codex", "smoke", "--require-fresh-quota"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{
+		"auto route: codex-test quota fresh fresh true primary 9.0% score ",
+		"checked ",
+		"secret backend: file",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("smoke text missing %q: %s", want, text)
+		}
+	}
+	for _, leaked := range []string{"access-secret", "refresh-secret", "secretRef"} {
+		if strings.Contains(text, leaked) {
+			t.Fatalf("smoke text leaked %q: %s", leaked, text)
+		}
+	}
+}
+
 func TestCodexAccountsSmokeRequireAllFreshQuota(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, secrets := seedCodexAccount(t)

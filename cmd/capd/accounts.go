@@ -595,7 +595,7 @@ func newCodexAccountsCmd() *cobra.Command {
 				return err
 			}
 			if result.AutoRoute != nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s (%s)\n", result.AutoRoute.AccountID, result.AutoRoute.Reason)
+				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s (%s)\n", result.AutoRoute.AccountID, smokeRouteEvidenceText(*result.AutoRoute), result.AutoRoute.Reason)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "secret backend: %s\n", result.SecretBackend)
 			return nil
@@ -611,6 +611,18 @@ func newCodexAccountsCmd() *cobra.Command {
 
 	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, removeCmd, quotaCmd, smokeCmd)
 	return cmd
+}
+
+func smokeRouteEvidenceText(route codexSmokeAutoRoute) string {
+	parts := []string{"quota " + route.QuotaState, fmt.Sprintf("fresh %t", route.Fresh)}
+	if route.Primary != nil {
+		parts = append(parts, "primary "+formatPercent(*route.Primary))
+	}
+	parts = append(parts, fmt.Sprintf("score %.2f", route.Score))
+	if route.CheckedAt > 0 {
+		parts = append(parts, "checked "+time.Unix(route.CheckedAt, 0).Format(time.RFC3339))
+	}
+	return strings.Join(parts, " ")
 }
 
 func verifyProjectedAuth(codexHome string) error {
