@@ -681,7 +681,7 @@ the native OS backend and keeps the source secret as a rollback path. Add
 				for _, acc := range list {
 					row, err := refreshCodexQuota(callCtx, accounts, secrets, baseURL, acc)
 					if err != nil {
-						printCodexQuotaAllPartialFailure(cmd, rows, acc.ID, err)
+						printCodexQuotaAllPartialFailure(cmd, rows, acc.ID, err, secrets.Backend())
 						return fmt.Errorf("%s: %w", acc.ID, err)
 					}
 					rows = append(rows, row)
@@ -1359,7 +1359,7 @@ type codexQuotaAllFailure struct {
 	NextSteps     []string            `json:"nextSteps,omitempty"`
 }
 
-func printCodexQuotaAllPartialFailure(cmd *cobra.Command, refreshed []codexQuotaSummary, failedAccount string, err error) {
+func printCodexQuotaAllPartialFailure(cmd *cobra.Command, refreshed []codexQuotaSummary, failedAccount string, err error, backend string) {
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 	payload := codexQuotaAllFailure{
@@ -1368,14 +1368,22 @@ func printCodexQuotaAllPartialFailure(cmd *cobra.Command, refreshed []codexQuota
 		FailedAccount: failedAccount,
 		Error:         err.Error(),
 		NextSteps: []string{
-			"inspect safe account evidence with: capd accounts codex smoke --json",
-			"after fixing the failing account, rerun: capd accounts codex quota all",
+			"inspect safe account evidence with: " + codexAccountsCommand(backend, "codex smoke --json"),
+			"after fixing the failing account, rerun: " + codexAccountsCommand(backend, "codex quota all"),
 		},
 	}
 	out, marshalErr := json.MarshalIndent(payload, "", "  ")
 	if marshalErr == nil {
 		fmt.Fprintln(cmd.OutOrStdout(), string(out))
 	}
+}
+
+func codexAccountsCommand(backend, suffix string) string {
+	cmd := "capd accounts"
+	if backend != "" && backend != secret.BackendFile {
+		cmd += " --secret-backend " + backend
+	}
+	return cmd + " " + suffix
 }
 
 func codexQuotaSummaryFrom(acc account.Account, q account.QuotaSnapshot) codexQuotaSummary {

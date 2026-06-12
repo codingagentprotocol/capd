@@ -1397,6 +1397,36 @@ func TestCodexAccountsQuotaAllFailurePrintsSafePartialEvidence(t *testing.T) {
 	}
 }
 
+func TestCodexQuotaAllPartialFailureNextStepsPreserveSecretBackend(t *testing.T) {
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetOut(&out)
+
+	printCodexQuotaAllPartialFailure(cmd, nil, "codex-fail", errors.New("safe failure"), secret.BackendNative)
+
+	var failure codexQuotaAllFailure
+	if err := json.Unmarshal(out.Bytes(), &failure); err != nil {
+		t.Fatalf("partial failure JSON = %q: %v", out.String(), err)
+	}
+	for _, want := range []string{
+		"capd accounts --secret-backend native codex smoke --json",
+		"capd accounts --secret-backend native codex quota all",
+	} {
+		if !containsSubstring(failure.NextSteps, want) {
+			t.Fatalf("next steps missing %q: %+v", want, failure.NextSteps)
+		}
+	}
+}
+
+func containsSubstring(items []string, want string) bool {
+	for _, item := range items {
+		if strings.Contains(item, want) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestCodexAccountsQuotaAllRejectsRawOutput(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)
