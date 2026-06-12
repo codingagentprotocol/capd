@@ -73,7 +73,7 @@ func TestCodexAccountsListShowsZeroQuotaWithoutLeakingSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	if !strings.Contains(text, "0.0%") {
+	if !strings.Contains(text, "0.0%") || !strings.Contains(text, "QUOTA_STATE") || !strings.Contains(text, protocol.AccountQuotaStateFresh) {
 		t.Fatalf("output missing zero quota: %s", text)
 	}
 	if strings.Contains(text, "access-secret") || strings.Contains(text, "refresh-secret") || strings.Contains(text, "secretRef") {
@@ -286,7 +286,7 @@ func TestAccountsListShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	for _, want := range []string{"PROVIDER", "codex-test", "gemini-test", "gemini@example.com", "0.0%"} {
+	for _, want := range []string{"PROVIDER", "QUOTA_STATE", "codex-test", "gemini-test", "gemini@example.com", "0.0%", protocol.AccountQuotaStateFresh, protocol.AccountQuotaStateMissing} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("output missing %q: %s", want, text)
 		}
@@ -309,6 +309,9 @@ func TestAccountsListJSONShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 		Email:     "gemini@example.com",
 		SecretRef: "file:gemini-secret",
 	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 0}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -336,8 +339,14 @@ func TestAccountsListJSONShowsAllProvidersWithoutLeakingSecrets(t *testing.T) {
 	if rows[0].Provider != codexauth.Provider || rows[0].ID != "codex-test" || !rows[0].Current {
 		t.Fatalf("first row = %+v", rows[0])
 	}
+	if rows[0].QuotaState != protocol.AccountQuotaStateFresh || rows[0].QuotaCheckedAt == 0 || rows[0].PrimaryUsed != "0.0%" {
+		t.Fatalf("first row quota = %+v", rows[0])
+	}
 	if rows[1].Provider != "gemini" || rows[1].ID != "gemini-test" {
 		t.Fatalf("second row = %+v", rows[1])
+	}
+	if rows[1].QuotaState != protocol.AccountQuotaStateMissing || rows[1].QuotaCheckedAt != 0 {
+		t.Fatalf("second row quota = %+v", rows[1])
 	}
 }
 

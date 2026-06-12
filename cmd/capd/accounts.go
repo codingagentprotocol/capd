@@ -52,19 +52,22 @@ func newAccountsCmd() *cobra.Command {
 					currentByProvider[acc.Provider] = current
 				}
 				row := accountListRow{
-					Current:   acc.ID == current,
-					ID:        acc.ID,
-					Provider:  acc.Provider,
-					AuthMode:  acc.AuthMode,
-					Email:     acc.Email,
-					AccountID: acc.AccountID,
-					Plan:      acc.Plan,
+					Current:    acc.ID == current,
+					ID:         acc.ID,
+					Provider:   acc.Provider,
+					AuthMode:   acc.AuthMode,
+					Email:      acc.Email,
+					AccountID:  acc.AccountID,
+					Plan:       acc.Plan,
+					QuotaState: protocol.AccountQuotaStateMissing,
 				}
 				if q, err := accounts.LoadQuota(acc.ID); err == nil {
 					if row.Plan == "" {
 						row.Plan = q.Plan
 					}
 					row.PrimaryUsed = formatPercent(q.PrimaryUsedPercent)
+					row.QuotaState = accountQuotaState(q)
+					row.QuotaCheckedAt = q.CheckedAt
 				}
 				rows = append(rows, row)
 			}
@@ -74,14 +77,14 @@ func newAccountsCmd() *cobra.Command {
 				return nil
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "CURRENT\tPROVIDER\tID\tMODE\tEMAIL\tREMOTE_ACCOUNT\tPLAN\tPRIMARY_USED")
+			fmt.Fprintln(w, "CURRENT\tPROVIDER\tID\tMODE\tEMAIL\tREMOTE_ACCOUNT\tPLAN\tPRIMARY_USED\tQUOTA_STATE")
 			for _, row := range rows {
 				mark := ""
 				if row.Current {
 					mark = "*"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-					mark, row.Provider, row.ID, row.AuthMode, row.Email, row.AccountID, row.Plan, row.PrimaryUsed)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					mark, row.Provider, row.ID, row.AuthMode, row.Email, row.AccountID, row.Plan, row.PrimaryUsed, row.QuotaState)
 			}
 			return w.Flush()
 		},
@@ -147,7 +150,7 @@ func newCodexAccountsCmd() *cobra.Command {
 				return err
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "CURRENT\tID\tMODE\tEMAIL\tCHATGPT_ACCOUNT\tPLAN\tPRIMARY_USED")
+			fmt.Fprintln(w, "CURRENT\tID\tMODE\tEMAIL\tCHATGPT_ACCOUNT\tPLAN\tPRIMARY_USED\tQUOTA_STATE")
 			for _, acc := range list {
 				mark := ""
 				if acc.ID == current {
@@ -155,13 +158,15 @@ func newCodexAccountsCmd() *cobra.Command {
 				}
 				plan := acc.Plan
 				used := ""
+				quotaState := protocol.AccountQuotaStateMissing
 				if q, err := accounts.LoadQuota(acc.ID); err == nil {
 					if plan == "" {
 						plan = q.Plan
 					}
 					used = formatPercent(q.PrimaryUsedPercent)
+					quotaState = accountQuotaState(q)
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", mark, acc.ID, acc.AuthMode, acc.Email, acc.AccountID, plan, used)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", mark, acc.ID, acc.AuthMode, acc.Email, acc.AccountID, plan, used, quotaState)
 			}
 			return w.Flush()
 		},
@@ -570,26 +575,37 @@ type codexSmokeProjection struct {
 }
 
 type accountListRow struct {
-	Current     bool   `json:"current"`
-	Provider    string `json:"provider"`
-	ID          string `json:"id"`
-	AuthMode    string `json:"authMode,omitempty"`
-	Email       string `json:"email,omitempty"`
-	AccountID   string `json:"accountId,omitempty"`
-	Plan        string `json:"plan,omitempty"`
-	PrimaryUsed string `json:"primaryUsed,omitempty"`
+	Current        bool   `json:"current"`
+	Provider       string `json:"provider"`
+	ID             string `json:"id"`
+	AuthMode       string `json:"authMode,omitempty"`
+	Email          string `json:"email,omitempty"`
+	AccountID      string `json:"accountId,omitempty"`
+	Plan           string `json:"plan,omitempty"`
+	PrimaryUsed    string `json:"primaryUsed,omitempty"`
+	QuotaState     string `json:"quotaState"`
+	QuotaCheckedAt int64  `json:"quotaCheckedAt,omitempty"`
+}
+
+func accountQuotaState(q account.QuotaSnapshot) string {
+	if account.QuotaSnapshotFresh(q, time.Now()) {
+		return protocol.AccountQuotaStateFresh
+	}
+	if q.CheckedAt > 0 {
+		return protocol.AccountQuotaStateStale
+	}
+	return protocol.AccountQuotaStateMissing
 }
 
 func setCodexSmokeQuotaEvidence(row *codexSmokeAccount, q account.QuotaSnapshot) {
 	row.PrimaryUsedPercent = &q.PrimaryUsedPercent
 	row.PrimaryUsed = formatPercent(q.PrimaryUsedPercent)
 	row.QuotaCheckedAt = q.CheckedAt
-	if account.QuotaSnapshotFresh(q, time.Now()) {
-		row.QuotaState = protocol.AccountQuotaStateFresh
+	row.QuotaState = accountQuotaState(q)
+	if row.QuotaState == protocol.AccountQuotaStateFresh {
 		row.QuotaFresh = true
 		return
 	}
-	row.QuotaState = protocol.AccountQuotaStateStale
 }
 
 func codexSmokeAutoRouteEvidence(accounts *account.Store) (*codexSmokeAutoRoute, error) {

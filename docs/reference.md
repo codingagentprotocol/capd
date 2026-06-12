@@ -76,14 +76,14 @@ the file backend.
 
 | Command | Meaning |
 |---------|---------|
-| `capd accounts list [--json]` | List imported account metadata across all providers; provider-scoped current accounts are marked with `*`. |
+| `capd accounts list [--json]` | List imported account metadata across all providers; provider-scoped current accounts are marked with `*`; quota state is reported as `fresh`, `stale`, or `missing`. |
 
 ### `capd accounts codex` — local Codex account control plane
 
 | Command | Meaning |
 |---------|---------|
 | `capd accounts codex import [--auth path]` | Import a Codex `auth.json` into capd. Defaults to `~/.codex/auth.json`. |
-| `capd accounts codex list` | List imported Codex account metadata; the current account is marked with `*`. |
+| `capd accounts codex list` | List imported Codex account metadata; the current account is marked with `*`; quota state is reported as `fresh`, `stale`, or `missing`. |
 | `capd accounts codex current [account-id]` | Show or set the current Codex account. |
 | `capd accounts codex project [account-id]` | Create or refresh a capd-managed per-account `CODEX_HOME`; prints the path. |
 | `capd accounts codex quota [account-id\|auto] [--raw]` | Fetch ChatGPT backend quota for an imported Codex account and update the local quota snapshot. `auto` uses the same conservative quota scoring rule as account-aware routing. Defaults to a safe summary; `--raw` prints backend usage JSON for debugging. |
