@@ -106,9 +106,12 @@ The local web console is served by the daemon at
 data validation page, use `capd console --probe`. The command passes the daemon
 token to the browser without printing it to the terminal. The probe also calls
 `/probe/data` with `Authorization: Bearer ...` to fetch machine-readable,
-secret-redacted health, account, quota, and route diagnostics. Ordinary probe
-refreshes follow the daemon's active SecretStore backend; choose native in the
-page or pass `--require-secret-backend native` only for explicit native checks.
+secret-redacted health, account, quota, and route diagnostics. The full
+console's ordinary diagnostic refresh and the probe's ordinary `Refresh` path
+use `accounts/list` metadata plus route evidence, so opening either page does
+not read account SecretStore credentials. Use the console's `就绪门禁`, the
+probe's `Readiness`, or pass `--require-secret-backend native` only for
+explicit native SecretStore checks.
 
 ## Quick start
 
@@ -177,9 +180,10 @@ For deterministic local regression, run `make verify`; for native SecretStore
 coverage, run `make verify-secretstore`; for a no-real-account Codex
 multi-account quota/routing/readiness regression, run
 `make verify-codex-readiness-sim`. That simulated gate also covers the safe Web
-probe summaries, probe readiness SecretStore defaults, `/healthz` backend
-requirement, and direct SecretStore JSON roundtrip without touching live Codex
-accounts. `capd doctor --json --fail --timeout 2m` is a safe
+Console/Probe prompt-free refresh contract, Web probe summaries, probe
+readiness SecretStore defaults, `/healthz` backend requirement, and direct
+SecretStore JSON roundtrip without touching live Codex accounts.
+`capd doctor --json --fail --timeout 2m` is a safe
 readiness audit for live Codex work: it checks daemon health, Codex CLI
 availability, imported account count, per-account SecretStore credential
 readability, quota freshness, auto-route freshness, the active SecretStore
@@ -223,9 +227,11 @@ behind an OS credential prompt.
 `capd probe data --json --readiness --timeout 2m --fail` calls the same authenticated
 `/probe/data` endpoint used by the lightweight web probe, so live preflight also
 verifies the Web diagnostics path with header auth and safe partial evidence.
-The full Web Console's `深度验证` button runs that same header-authenticated
-readiness probe and renders the returned checks, errors, auto-route, and
-route-candidate evidence in place.
+The full Web Console's ordinary diagnostic cards stay prompt-free and label
+SecretStore credentials and projected runtimes as `not checked in prompt-free
+refresh`. Its `深度验证` button runs that same header-authenticated readiness
+probe and renders the returned checks, errors, auto-route, and route-candidate
+evidence in place.
 The endpoint bounds server-side work too: ordinary probes get 12s and readiness
 probes get 2m. Its JSON includes a compact `summary` for account counts, quota
 freshness, auto-route freshness, route-decision status, and SecretStore backend
@@ -384,10 +390,11 @@ flowchart TB
   shortcut for live Codex work: it refreshes quota, requires multiple accounts,
   requires fresh auto-route and per-account quota evidence, and requires native
   SecretStore by default while preserving safe partial evidence on failure.
-- The Web Console exposes the same daemon-side evidence with an `accounts/check`
-  readiness gate for multi-account, fresh-quota, and optional native SecretStore
-  checks; that gate can refresh quota for every imported Codex account before it
-  validates freshness.
+- The Web Console's ordinary diagnostic refresh is prompt-free (`accounts/list`
+  plus route evidence). Its explicit `accounts/check` readiness gate covers
+  multi-account, fresh-quota, and optional native SecretStore checks; that gate
+  can refresh quota for every imported Codex account before it validates
+  freshness.
 - Codex account support is split into a control plane and a runtime plane:
   SQLite stores account metadata and quota snapshots, while each runtime can
   use its own `CODEX_HOME` and app-server profile.

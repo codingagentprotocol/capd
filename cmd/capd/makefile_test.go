@@ -134,6 +134,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"SecretStoreCheckFailsOnBackendMismatchAfterJSON",
 		"MigrateCodexAccountSecretsVerifiesTargetReadableBeforeMetadataUpdate",
 		"RunTaskFreshQuotaFailureSuggestsReadiness",
+		"DocsCoverPromptFreeBrowserProbeRefresh",
 		"ReferenceDocsCoverRunFreshQuotaRecovery",
 		"ReferenceDocsCoverBrowserTokenCleanup",
 		"go test ./internal/adapter/codex -run 'TestProbeUsesResolvedCodexBinary$$' -count=1",

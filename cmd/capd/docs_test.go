@@ -35,6 +35,10 @@ func TestReferenceDocsCoverRouteCandidateEvidence(t *testing.T) {
 }
 
 func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
+	readmeData, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
 	referenceData, err := os.ReadFile("../../docs/reference.md")
 	if err != nil {
 		t.Fatal(err)
@@ -43,8 +47,28 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	readme := string(readmeData)
 	reference := string(referenceData)
 	testingDoc := string(testingData)
+
+	for _, want := range []string{
+		"full\nconsole's ordinary diagnostic refresh",
+		"ordinary `Refresh` path\nuse `accounts/list` metadata plus route evidence",
+		"opening either page does\nnot read account SecretStore credentials",
+		"not checked in prompt-free\nrefresh",
+	} {
+		if !strings.Contains(readme, want) {
+			t.Fatalf("README missing prompt-free web refresh contract %q", want)
+		}
+	}
+	for _, forbidden := range []string{
+		"Ordinary probe\nrefreshes follow the daemon's active SecretStore backend",
+		"opening either page reads account SecretStore credentials",
+	} {
+		if strings.Contains(readme, forbidden) {
+			t.Fatalf("README contains stale prompt-prone web refresh wording %q", forbidden)
+		}
+	}
 
 	for _, want := range []string{
 		"full console's ordinary diagnostic refresh",
