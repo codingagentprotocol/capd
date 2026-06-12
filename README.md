@@ -158,6 +158,7 @@ CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --q
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native # readiness gate
 CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
 capd console --probe         # simple web data probe; opens with daemon token without printing it
+capd probe data --json --readiness --require-secret-backend native --fail # same probe diagnostics for automation
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe/data # safe JSON diagnostics
 capd health --json --require-secret-backend native # confirm daemon /healthz plus version/protocol/secret backend
 capd accounts import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # daemon-side CAP import
@@ -195,6 +196,9 @@ SecretStore diagnostics.
 the daemon version, protocol version, and active SecretStore backend without
 exposing token material, and fails early if the daemon was started with the
 wrong backend.
+`capd probe data --json --readiness --fail` calls the same authenticated
+`/probe/data` endpoint used by the lightweight web probe, so live preflight also
+verifies the Web diagnostics path with header auth and safe partial evidence.
 Both `agents/route --account auto --json` and daemon-side `accounts/check`
 include `routeCandidates`, sorted by the same conservative quota score used for
 auto routing, so clients can verify why one account was selected.
