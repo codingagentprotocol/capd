@@ -149,7 +149,10 @@ freshness, SecretStore backend, an explicit SecretStore write/read/delete
 roundtrip, daemon-side CAP `accounts/check` reachability, readiness issues, and
 concrete next steps. Its JSON also includes the same `routeCandidates` ordering
 used by `agents/route --account auto`, so live preflight evidence explains why
-one account would be selected. After fixing account or quota issues, use
+one account would be selected. The top-level `summary` object is the compact
+CI/Web view of missing accounts, quota freshness, auto-route freshness,
+SecretStore backend status, and daemon CAP reachability. After fixing account or
+quota issues, use
 `capd accounts check --json --readiness` to
 refresh and verify the daemon-side readiness gate before the final live run,
 with safe partial evidence printed on failure.

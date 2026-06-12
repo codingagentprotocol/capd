@@ -46,6 +46,9 @@ func TestDoctorJSONReportsMissingReadinessWithoutSecrets(t *testing.T) {
 	if got.Daemon.OK || got.Codex.ImportedAccounts != 0 {
 		t.Fatalf("report = %+v", got)
 	}
+	if got.Summary.Ready || got.Summary.ImportedAccounts != 0 || got.Summary.RequiredAccounts != 2 || got.Summary.MissingAccounts != 2 || got.Summary.DaemonHealthy || got.Summary.SecretBackendOK != true {
+		t.Fatalf("summary = %+v", got.Summary)
+	}
 	if len(got.Checks) == 0 {
 		t.Fatalf("missing readiness checks: %+v", got)
 	}
@@ -177,6 +180,9 @@ func TestDoctorVerifySecretStoreRoundTripWithoutLeakingDiagnosticSecret(t *testi
 		Evidence: "roundtrip ok for backend file",
 	}) {
 		t.Fatalf("missing secretstore roundtrip check: %+v", got.Checks)
+	}
+	if got.Summary.SecretStoreRoundTripOK == nil || !*got.Summary.SecretStoreRoundTripOK {
+		t.Fatalf("roundtrip summary = %+v", got.Summary)
 	}
 	for _, leaked := range []string{"doctor-secretstore-check", "capd-doctor", home} {
 		if strings.Contains(out.String(), leaked) {
@@ -341,6 +347,9 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	if report.Codex.ImportedAccounts != 2 || report.Codex.FreshQuotaAccounts != 2 || report.Codex.StaleQuotaAccounts != 0 || report.Codex.MissingQuotaAccounts != 0 {
 		t.Fatalf("codex quota summary = %+v", report.Codex)
 	}
+	if report.Summary.ImportedAccounts != 2 || report.Summary.RequiredAccounts != 2 || report.Summary.MissingAccounts != 0 || report.Summary.FreshQuotaAccounts != 2 || report.Summary.StaleQuotaAccounts != 0 || report.Summary.MissingQuotaAccounts != 0 {
+		t.Fatalf("summary quota = %+v", report.Summary)
+	}
 	if len(report.Codex.Accounts) != 2 {
 		t.Fatalf("codex accounts = %+v", report.Codex.Accounts)
 	}
@@ -352,6 +361,9 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	}
 	if report.Codex.CurrentAccountID != "codex-test" || report.Codex.AutoRouteAccountID != "codex-low" || !report.Codex.AutoRouteFresh {
 		t.Fatalf("codex route summary = %+v", report.Codex)
+	}
+	if report.Summary.AutoRouteAccountID != "codex-low" || !report.Summary.AutoRouteFresh || !report.Summary.DaemonHealthy || report.Summary.DaemonAccountsCheckOK {
+		t.Fatalf("summary route/daemon = %+v", report.Summary)
 	}
 	if report.Codex.AutoRouteScore != 5 || report.Codex.AutoRoutePrimary == nil || *report.Codex.AutoRoutePrimary != 5 || report.Codex.AutoRouteCheckedAt == 0 {
 		t.Fatalf("codex route evidence = %+v", report.Codex)

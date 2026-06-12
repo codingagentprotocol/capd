@@ -69,6 +69,7 @@ type doctorOptions struct {
 
 type doctorReport struct {
 	OK         bool                `json:"ok"`
+	Summary    doctorSummaryReport `json:"summary"`
 	Daemon     doctorDaemonReport  `json:"daemon"`
 	Agents     []doctorAgentReport `json:"agents"`
 	Codex      doctorCodexReport   `json:"codex"`
@@ -77,6 +78,24 @@ type doctorReport struct {
 	NextSteps  []string            `json:"nextSteps,omitempty"`
 	CheckedAt  int64               `json:"checkedAt"`
 	HealthAddr string              `json:"healthAddr"`
+}
+
+type doctorSummaryReport struct {
+	Ready                  bool   `json:"ready"`
+	ImportedAccounts       int    `json:"importedAccounts"`
+	RequiredAccounts       int    `json:"requiredAccounts"`
+	MissingAccounts        int    `json:"missingAccounts"`
+	FreshQuotaAccounts     int    `json:"freshQuotaAccounts"`
+	StaleQuotaAccounts     int    `json:"staleQuotaAccounts"`
+	MissingQuotaAccounts   int    `json:"missingQuotaAccounts"`
+	AutoRouteAccountID     string `json:"autoRouteAccountId,omitempty"`
+	AutoRouteFresh         bool   `json:"autoRouteFresh"`
+	DaemonHealthy          bool   `json:"daemonHealthy"`
+	DaemonAccountsCheckOK  bool   `json:"daemonAccountsCheckOk"`
+	SecretBackend          string `json:"secretBackend,omitempty"`
+	RequiredSecretBackend  string `json:"requiredSecretBackend,omitempty"`
+	SecretBackendOK        bool   `json:"secretBackendOk"`
+	SecretStoreRoundTripOK *bool  `json:"secretStoreRoundTripOk,omitempty"`
 }
 
 type doctorDaemonReport struct {
@@ -347,7 +366,43 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	report.NextSteps = compactStrings(report.NextSteps)
 	report.Issues = compactStrings(report.Issues)
 	report.OK = len(report.Issues) == 0
+	report.Summary = doctorSummary(report, opts)
 	return report, nil
+}
+
+func doctorSummary(report doctorReport, opts doctorOptions) doctorSummaryReport {
+	missingAccounts := 0
+	if report.Codex.ImportedAccounts < 2 {
+		missingAccounts = 2 - report.Codex.ImportedAccounts
+	}
+	secretBackendOK := opts.RequireSecretBackend == "" || opts.RequireSecretBackend == report.Codex.SecretBackend
+	summary := doctorSummaryReport{
+		Ready:                 report.OK,
+		ImportedAccounts:      report.Codex.ImportedAccounts,
+		RequiredAccounts:      2,
+		MissingAccounts:       missingAccounts,
+		FreshQuotaAccounts:    report.Codex.FreshQuotaAccounts,
+		StaleQuotaAccounts:    report.Codex.StaleQuotaAccounts,
+		MissingQuotaAccounts:  report.Codex.MissingQuotaAccounts,
+		AutoRouteAccountID:    report.Codex.AutoRouteAccountID,
+		AutoRouteFresh:        report.Codex.AutoRouteFresh,
+		DaemonHealthy:         report.Daemon.OK,
+		DaemonAccountsCheckOK: report.Codex.DaemonCheckOK,
+		SecretBackend:         report.Codex.SecretBackend,
+		RequiredSecretBackend: opts.RequireSecretBackend,
+		SecretBackendOK:       secretBackendOK,
+	}
+	if opts.VerifySecretStore {
+		roundTripOK := false
+		for _, check := range report.Checks {
+			if check.Name == "SecretStore roundtrip" {
+				roundTripOK = check.OK
+				break
+			}
+		}
+		summary.SecretStoreRoundTripOK = &roundTripOK
+	}
+	return summary
 }
 
 func doctorDaemonAccountsCheck(ctx context.Context, requireSecretBackend string) (protocol.AccountsCheckResult, string) {

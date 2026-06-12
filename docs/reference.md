@@ -83,6 +83,10 @@ routing score, checked time, and the same human-readable reason used by routing 
 `codex.accounts` JSON array lists safe per-account quota evidence (id, email,
 current marker, plan, quota state, freshness, primary usage, checked time) and
 never includes SecretStore refs, token material, runtime paths, or raw auth JSON.
+The top-level `summary` object gives CI and Web clients a compact readiness
+view: required/missing account counts, fresh/stale/missing quota counts,
+auto-route freshness, daemon CAP status, SecretStore backend match, and optional
+SecretStore roundtrip status.
 The top-level `checks` array is a stable readiness checklist with
 `name`, `ok`, `evidence`, and optional `nextStep` fields for daemon health,
 Codex CLI availability, SecretStore backend, multi-account import, quota
