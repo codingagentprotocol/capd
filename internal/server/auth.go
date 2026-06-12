@@ -17,9 +17,7 @@ const webSocketAuthSubprotocolPrefix = "capd.auth."
 func (s *Server) authorized(r *http.Request) (bool, string) {
 	tok := r.URL.Query().Get("token")
 	if tok == "" {
-		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
-			tok = strings.TrimPrefix(h, "Bearer ")
-		}
+		tok = bearerToken(r)
 	}
 	subprotocol := ""
 	if tok == "" {
@@ -32,6 +30,24 @@ func (s *Server) authorized(r *http.Request) (bool, string) {
 		return false, ""
 	}
 	return subtle.ConstantTimeCompare([]byte(tok), []byte(s.opts.Token)) == 1, subprotocol
+}
+
+func (s *Server) authorizedBearer(r *http.Request) bool {
+	tok := bearerToken(r)
+	if tok == "" {
+		return false
+	}
+	if err := security.ValidateHeaderValue(tok); err != nil {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(tok), []byte(s.opts.Token)) == 1
+}
+
+func bearerToken(r *http.Request) string {
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		return strings.TrimPrefix(h, "Bearer ")
+	}
+	return ""
 }
 
 func webSocketAuthSubprotocol(token string) string {

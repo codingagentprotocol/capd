@@ -81,6 +81,8 @@ CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --requ
 CAPD_SECRET_BACKEND=native capd start
 
 capd console --probe
+curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe/data
+curl -H "Authorization: Bearer $(cat ~/.capd/token)" "http://127.0.0.1:7777/probe/data?readiness=1&requireSecretBackend=native"
 capd health --json --require-secret-backend native
 capd accounts import --auth /tmp/acct-a/auth.json --auth /tmp/acct-b/auth.json
 capd accounts check --json
@@ -182,4 +184,6 @@ The Web Console's `就绪门禁` button applies the same daemon-side
 `accounts/check` readiness gate, with an optional native SecretStore
 requirement. It asks the daemon to refresh every imported Codex account before
 checking freshness; use `刷新全部 quota` for an explicit refresh outside the
-readiness gate.
+readiness gate. `/probe/data` exposes the same safe diagnostics for web clients
+and smoke tests over HTTP, but requires an `Authorization: Bearer` header so
+daemon tokens are not embedded in diagnostics URLs.

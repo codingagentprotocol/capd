@@ -79,6 +79,19 @@ function webSocketAuthProtocol(token) {
 }
 function showJSON(data) { $("json").textContent = JSON.stringify(data, null, 2); }
 function showSummary(lines) { $("summary").textContent = lines.join("\n"); }
+async function fetchProbeData(readiness) {
+  if (!TOKEN) throw new Error("token missing");
+  const query = new URLSearchParams();
+  if (readiness) query.set("readiness", "1");
+  if ($("native").checked) query.set("requireSecretBackend", "native");
+  const res = await fetch(httpURL("/probe/data" + (query.toString() ? "?" + query.toString() : "")), {
+    cache:"no-store",
+    headers:{ Authorization:`Bearer ${TOKEN}` }
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok && !body.errors) throw new Error(`probe data failed: ${res.status}`);
+  return body;
+}
 function rpcError(error) {
   const e = new Error(error.message || JSON.stringify(error));
   e.data = error.data;
@@ -261,10 +274,17 @@ async function refresh(readiness = false) {
     ];
     if (readinessError) summary.push(`readiness error: ${readinessError}`);
     if (routeError) summary.push(`route error: ${routeError}`);
+    let httpProbe = null;
+    try {
+      httpProbe = await fetchProbeData(readiness);
+      summary.push(`http probe: ${httpProbe.ok ? "ok" : "attention"} (${(httpProbe.checks || []).length} checks)`);
+    } catch (probeErr) {
+      summary.push(`http probe error: ${probeErr.message || String(probeErr)}`);
+    }
     const checks = validationRows({ healthOK:healthInfo, result, route, routeDecision, readiness, requireNative:$("native").checked, readinessError, routeError });
     showSummary(summary);
     showTests(checks);
-    showJSON({ checks, health: healthInfo, accountsCheck: result, routeDecision, autoRoute: route, routeCandidates: (routeDecision && routeDecision.routeCandidates) || result.routeCandidates, readinessError, routeError });
+    showJSON({ checks, health: healthInfo, accountsCheck: result, routeDecision, autoRoute: route, routeCandidates: (routeDecision && routeDecision.routeCandidates) || result.routeCandidates, httpProbe, readinessError, routeError });
   } catch (e) {
     setMetric("daemon", "attention", "bad");
     showSummary([e.message || String(e)]);

@@ -103,7 +103,9 @@ capd service install && capd service start  # persistent
 The local web console is served by the daemon at
 `http://127.0.0.1:7777/console/`. Open it with `capd console`; for the compact
 data validation page, use `capd console --probe`. The command passes the daemon
-token to the browser without printing it to the terminal.
+token to the browser without printing it to the terminal. The probe also calls
+`/probe/data` with `Authorization: Bearer ...` to fetch machine-readable,
+secret-redacted health, account, quota, and route diagnostics.
 
 ## Quick start
 
@@ -156,6 +158,7 @@ CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --q
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native # readiness gate
 CAPD_SECRET_BACKEND=native capd start # keep running in another terminal for CAP/WebSocket checks
 capd console --probe         # simple web data probe; opens with daemon token without printing it
+curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe/data # safe JSON diagnostics
 capd health --json --require-secret-backend native # confirm daemon /healthz plus version/protocol/secret backend
 capd accounts import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # daemon-side CAP import
 capd accounts check --json   # daemon-side accounts/check smoke evidence

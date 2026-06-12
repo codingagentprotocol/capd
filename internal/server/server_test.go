@@ -14,6 +14,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/session"
@@ -146,7 +147,7 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 		t.Fatalf("csp = %q", got)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"CAPD Probe", "accounts/check", "agents/route", "/healthz?format=json", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "protocolVersion", "secretBackend", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "checks", "validationRows", "showTests", "daemon health", "multi-account readiness", "quota freshness", "auto route fresh", "native secret backend", "readiness gate", "rpcError", "e.data", "capd accounts check --readiness", "capd agents route --account auto", "CAPD_SECRET_BACKEND=native capd start", "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", `call("accounts/check", { provider:"codex" })`} {
+	for _, want := range []string{"CAPD Probe", "accounts/check", "agents/route", "/healthz?format=json", "/probe/data", "Authorization:`Bearer ${TOKEN}`", "fetchProbeData", "httpProbe", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "protocolVersion", "secretBackend", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "checks", "validationRows", "showTests", "daemon health", "multi-account readiness", "quota freshness", "auto route fresh", "native secret backend", "readiness gate", "rpcError", "e.data", "capd accounts check --readiness", "capd agents route --account auto", "CAPD_SECRET_BACKEND=native capd start", "deep verify with: capd doctor --json --fail --verify-secretstore --require-secret-backend native", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", `call("accounts/check", { provider:"codex" })`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("probe HTML missing %q", want)
 		}
@@ -160,6 +161,84 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("probe HTML missing subprotocol auth %q", want)
 		}
+	}
+}
+
+func TestProbeDataRequiresAuthorizationHeader(t *testing.T) {
+	s, _ := newTestServer(t)
+	for _, target := range []string{"/probe/data", "/probe/data?token=test-token"} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		rec := httptest.NewRecorder()
+		s.handleProbeData(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("%s status = %d", target, rec.Code)
+		}
+	}
+}
+
+func TestProbeDataReturnsSafeAccountRouteEvidence(t *testing.T) {
+	s, _, _, accounts := newCodexAccountIntegrationServer(t)
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 12}); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/probe/data", nil)
+	req.Header.Set("Authorization", "Bearer it-token")
+	rec := httptest.NewRecorder()
+	s.handleProbeData(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var got probeDataResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.OK {
+		t.Fatalf("probe data not ok: %+v body=%s", got.Errors, rec.Body.String())
+	}
+	if got.AccountsCheck == nil || got.AccountsCheck.CheckedAccounts != 1 {
+		t.Fatalf("accountsCheck = %+v", got.AccountsCheck)
+	}
+	if got.RouteDecision == nil || got.RouteDecision.AccountID != "codex-test" {
+		t.Fatalf("routeDecision = %+v", got.RouteDecision)
+	}
+	if got.AutoRoute == nil || got.AutoRoute.AccountID != "codex-test" || !got.AutoRoute.Fresh {
+		t.Fatalf("autoRoute = %+v", got.AutoRoute)
+	}
+	body := rec.Body.String()
+	for _, leaked := range []string{"it-token", "test-token", "secretRef", "rawAuthJson", s.opts.RuntimeRoot} {
+		if strings.Contains(body, leaked) {
+			t.Fatalf("probe data leaked %q: %s", leaked, body)
+		}
+	}
+}
+
+func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
+	s, _, _, accounts := newCodexAccountIntegrationServer(t)
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 12}); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/probe/data?readiness=1&requireSecretBackend=file", nil)
+	req.Header.Set("Authorization", "Bearer it-token")
+	rec := httptest.NewRecorder()
+	s.handleProbeData(rec, req)
+	if rec.Code != http.StatusFailedDependency {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var got probeDataResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.OK {
+		t.Fatal("readiness unexpectedly ok with one account")
+	}
+	if got.AccountsCheck == nil || got.AccountsCheck.CheckedAccounts != 1 {
+		t.Fatalf("partial accountsCheck = %+v", got.AccountsCheck)
+	}
+	if len(got.Errors) == 0 || !strings.Contains(got.Errors[0].Message, "expected multiple Codex accounts") {
+		t.Fatalf("errors = %+v", got.Errors)
+	}
+	if !strings.Contains(rec.Body.String(), "multi-account readiness") {
+		t.Fatalf("body missing readiness checks: %s", rec.Body.String())
 	}
 }
 

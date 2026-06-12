@@ -30,6 +30,9 @@ and include CSP, referrer, permissions, and frame-deny headers because the token
 may be supplied once in the page URL. The console and probe remove that token
 from history, then authenticate the WebSocket with `Sec-WebSocket-Protocol:
 capd.auth.<base64url-token>` instead of putting the token in the WebSocket URL.
+For automation and simple web validation, `GET /probe/data` returns the same
+safe daemon/account/route diagnostics as JSON and accepts only
+`Authorization: Bearer <daemon-token>`, not query-string tokens.
 The console exposes account import,
 current-account selection,
 runtime projection, selected or all-account quota refresh, safe account checks,
@@ -39,7 +42,9 @@ the lightweight validation probe without printing the daemon token to the
 terminal. The probe's Evidence JSON includes a `checks` array with
 `name`, `ok`, `evidence`, and optional `nextStep` fields plus safe `health`
 metadata (`version`, `protocolVersion`, and `secretBackend` when supported) so
-browser-side readiness evidence mirrors `capd doctor --json`. The full console
+browser-side readiness evidence mirrors `capd doctor --json`. The probe also
+fetches `/probe/data` with an Authorization header so Web clients can validate
+the HTTP diagnostics path without exposing the token in URLs. The full console
 renders the same readiness concepts as visible pass/fail cards under the
 diagnostic line, and it shows the account-aware `routeCandidates` returned by
 `agents/route` and `accounts/check` so route choices can be audited from the
@@ -129,6 +134,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 |---------|--------|
 | `capd health [--json] [--require-secret-backend <file\|native>]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok`, `addr`, and daemon metadata such as version, protocol version, and active SecretStore backend when supported; `--require-secret-backend` fails early when the daemon was started with the wrong backend |
 | `capd console [--probe] [--url]` | opens the local web console, or the compact validation probe with `--probe`, after checking daemon health. By default it passes the daemon token to the browser without printing it; `--url` prints the tokenized URL only when explicitly requested. |
+| `GET /probe/data` | authenticated HTTP diagnostics endpoint for Web clients and smoke tests. Requires `Authorization: Bearer <daemon-token>`, returns safe JSON health, `accounts/check`, `agents/route`, `routeCandidates`, and pass/fail `checks`; use `?readiness=1&requireSecretBackend=native` for the stronger live readiness view. |
 | `capd doctor [--json] [--fail] [--verify-secretstore] [--require-secret-backend <file\|native>]` | local readiness preflight for daemon health, Codex CLI availability, imported account count, quota freshness, auto-route freshness, daemon-side CAP account evidence, and SecretStore backend; `--verify-secretstore` performs an explicit write/read/delete diagnostic roundtrip; text mode fails when issues are found, and `--fail` makes JSON mode fail too |
 | `capd agents list` | table: id, available/not installed, version, binary path |
 | `capd agents route [--account <id\|auto>] [--capability name] [--require-fresh-quota] [--json]` | preview local routing without starting a session; with `--account auto`, shows the Codex account selected by conservative quota scoring. JSON includes `routeCandidates`, sorted by the same account-aware routing score. `--require-fresh-quota` fails unless that auto selection is backed by fresh cached quota |
