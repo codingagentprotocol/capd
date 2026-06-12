@@ -1101,6 +1101,9 @@ func TestAccountsImportCodexAuthJSONWithoutLeakingSecrets(t *testing.T) {
 	if result.CurrentAccountID != "codex-test" {
 		t.Fatalf("current account = %q", result.CurrentAccountID)
 	}
+	if result.ImportedAccounts != 2 {
+		t.Fatalf("imported accounts = %d", result.ImportedAccounts)
+	}
 	acc, err := accounts.LoadAccount(result.Account.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -1150,7 +1153,7 @@ func TestAccountsImportCodexAuthPathsBatchWithoutLeakingSecrets(t *testing.T) {
 		AuthPath:  ignoredPath,
 		AuthPaths: []string{firstPath, " ", secondPath},
 	}), &result)
-	if result.Account.ID != "codex-acct_second" || len(result.Accounts) != 2 {
+	if result.Account.ID != "codex-acct_second" || len(result.Accounts) != 2 || result.ImportedAccounts != 3 {
 		t.Fatalf("result = %+v", result)
 	}
 	if result.Accounts[0].ID != "codex-acct_first" || result.Accounts[1].ID != "codex-acct_second" {

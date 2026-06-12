@@ -157,6 +157,7 @@ type AccountsImportParams struct {
 
 type AccountsImportResult struct {
 	CurrentAccountID string           `json:"currentAccountId,omitempty"`
+	ImportedAccounts int              `json:"importedAccounts,omitempty"`
 	Account          AccountSummary   `json:"account"`
 	Accounts         []AccountSummary `json:"accounts,omitempty"`
 }

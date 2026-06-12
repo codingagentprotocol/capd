@@ -511,7 +511,7 @@ func TestAccountsImportCallsDaemonRPCWithRepeatedAuthFlags(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Accounts) != 2 || result.Accounts[0].ID != "codex-acct_first" || result.Accounts[1].ID != "codex-acct_second" || result.Account.ID != "codex-acct_second" {
+	if len(result.Accounts) != 2 || result.Accounts[0].ID != "codex-acct_first" || result.Accounts[1].ID != "codex-acct_second" || result.Account.ID != "codex-acct_second" || result.ImportedAccounts != 3 {
 		t.Fatalf("result = %+v", result)
 	}
 	for _, id := range []string{"codex-acct_first", "codex-acct_second"} {
@@ -533,11 +533,25 @@ func TestAccountsImportCallsDaemonRPCWithRepeatedAuthFlags(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "imported codex-acct_first <first@example.com>") || !strings.Contains(out.String(), "current codex-test") {
+	if !strings.Contains(out.String(), "imported codex-acct_first <first@example.com>") || !strings.Contains(out.String(), "current codex-test") || !strings.Contains(out.String(), "next: verify readiness with: capd accounts check --readiness") {
 		t.Fatalf("text output = %s", out.String())
 	}
 	if strings.Contains(out.String(), firstPath) || strings.Contains(out.String(), "first-access-secret") || strings.Contains(out.String(), token) {
 		t.Fatalf("accounts import text leaked data: %s", out.String())
+	}
+}
+
+func TestAccountsImportNextStep(t *testing.T) {
+	cases := map[int]string{
+		0: "",
+		1: "import a second Codex account with: capd accounts import --auth /path/to/auth.json",
+		2: "verify readiness with: capd accounts check --readiness",
+		3: "verify readiness with: capd accounts check --readiness",
+	}
+	for imported, want := range cases {
+		if got := accountsImportNextStep(imported); got != want {
+			t.Fatalf("accountsImportNextStep(%d) = %q, want %q", imported, got, want)
+		}
 	}
 }
 

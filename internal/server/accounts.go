@@ -169,12 +169,17 @@ func (s *Server) importAccount(ctx context.Context, params protocol.AccountsImpo
 	if err != nil {
 		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
 	}
+	list, err := s.opts.Accounts.ListAccounts(provider)
+	if err != nil {
+		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInternalError, "list imported accounts: %v", err)
+	}
 	var last protocol.AccountSummary
 	if len(imported) > 0 {
 		last = imported[len(imported)-1]
 	}
 	return protocol.AccountsImportResult{
 		CurrentAccountID: current,
+		ImportedAccounts: len(list),
 		Account:          last,
 		Accounts:         imported,
 	}, nil

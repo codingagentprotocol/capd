@@ -234,13 +234,22 @@ async function importCodexAccount() {
     const result = await call("accounts/import", params);
     const imported = result.accounts && result.accounts.length ? result.accounts : [result.account].filter(Boolean);
     const labels = imported.map(a => a.email || a.id).join(", ");
-    line("ev-sys", `· 已导入 Codex 账号 ${labels || "unknown"}${imported.length > 1 ? ` (${imported.length})` : ""}`);
+    const total = result.importedAccounts || imported.length;
+    line("ev-sys", `· 已导入 Codex 账号 ${labels || "unknown"}${imported.length > 1 ? ` (${imported.length})` : ""} · total ${total}`);
+    const nextStep = accountsImportNextStep(total);
+    if (nextStep) line("ev-sys", `· next ${nextStep}`);
     await loadAccounts();
   } catch (e) {
     line("ev-err", `✗ 导入 Codex 失败: ${e.message || JSON.stringify(e)}`);
   } finally {
     button.disabled = false;
   }
+}
+
+function accountsImportNextStep(importedAccounts) {
+  if (!importedAccounts) return "";
+  if (importedAccounts < 2) return "继续导入第二个 Codex 账号";
+  return "运行就绪门禁或 capd accounts check --readiness";
 }
 
 async function checkAccounts(readinessGate = false) {

@@ -145,6 +145,9 @@ For a direct local import that does not require the daemon, use
 			if result.CurrentAccountID != "" {
 				fmt.Fprintf(cmd.OutOrStdout(), "current %s\n", result.CurrentAccountID)
 			}
+			if step := accountsImportNextStep(result.ImportedAccounts); step != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "next: %s\n", step)
+			}
 			return nil
 		},
 	}
@@ -675,6 +678,16 @@ func newCodexAccountsCmd() *cobra.Command {
 
 	cmd.AddCommand(importCmd, listCmd, currentCmd, projectCmd, removeCmd, quotaCmd, smokeCmd)
 	return cmd
+}
+
+func accountsImportNextStep(importedAccounts int) string {
+	if importedAccounts <= 0 {
+		return ""
+	}
+	if importedAccounts < 2 {
+		return "import a second Codex account with: capd accounts import --auth /path/to/auth.json"
+	}
+	return "verify readiness with: capd accounts check --readiness"
 }
 
 func smokeRouteEvidenceText(route codexSmokeAutoRoute) string {
