@@ -1200,7 +1200,7 @@ func migrateCodexAccountSecrets(ctx context.Context, accounts *account.Store, so
 		result.NextSteps = append(result.NextSteps, "rerun with --from matching the account secret backend or choose a specific account")
 	}
 	if len(result.Migrated) > 0 {
-		result.NextSteps = append(result.NextSteps, "restart capd with CAPD_SECRET_BACKEND="+result.TargetBackend+" and run capd accounts check --readiness")
+		result.NextSteps = append(result.NextSteps, "restart capd with CAPD_SECRET_BACKEND="+result.TargetBackend+" and run: CAPD_SECRET_BACKEND="+result.TargetBackend+" capd accounts check --json --readiness --require-secret-backend "+result.TargetBackend)
 		if !opts.DeleteSource {
 			result.NextSteps = append(result.NextSteps, "after readiness passes, rerun with --delete-source to remove old source secrets")
 		}

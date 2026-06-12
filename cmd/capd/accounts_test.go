@@ -143,6 +143,9 @@ func TestMigrateCodexAccountSecretsMovesToTargetBackend(t *testing.T) {
 	if !result.OK || len(result.Migrated) != 1 || result.Migrated[0].Status != "migrated" || result.Migrated[0].From != secret.BackendFile || result.Migrated[0].To != "native:codex-test" {
 		t.Fatalf("result = %+v", result)
 	}
+	if !containsString(result.NextSteps, "restart capd with CAPD_SECRET_BACKEND=native and run: CAPD_SECRET_BACKEND=native capd accounts check --json --readiness --require-secret-backend native") {
+		t.Fatalf("nextSteps = %+v", result.NextSteps)
+	}
 	acc, err := accounts.LoadAccount("codex-test")
 	if err != nil {
 		t.Fatal(err)

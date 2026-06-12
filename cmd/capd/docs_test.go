@@ -64,6 +64,7 @@ func TestReferenceDocsCoverSecretMigrationReadbackSafety(t *testing.T) {
 		"if target readback fails, capd removes the attempted target secret",
 		"keeps the source ref",
 		"reports safe partial evidence",
+		"`CAPD_SECRET_BACKEND=native capd accounts check --json --readiness --require-secret-backend native`",
 		"add `--delete-source` only after native readiness passes",
 	} {
 		if !strings.Contains(reference, want) {
