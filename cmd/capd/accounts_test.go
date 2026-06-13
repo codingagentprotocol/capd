@@ -922,6 +922,28 @@ func TestAccountsImportCallsDaemonRPCWithRepeatedAuthFlags(t *testing.T) {
 
 	var out bytes.Buffer
 	cmd := newAccountsCmd()
+	t.Setenv("CAPD_CODEX_AUTH_PATHS", strings.Join([]string{firstPath, secondPath}, string(os.PathListSeparator)))
+	cmd.SetArgs([]string{"import", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var envResult protocol.AccountsImportResult
+	if err := json.Unmarshal(out.Bytes(), &envResult); err != nil {
+		t.Fatal(err)
+	}
+	if len(envResult.Accounts) != 2 || envResult.Accounts[0].ID != "codex-acct_first" || envResult.Accounts[1].ID != "codex-acct_second" || envResult.Account.ID != "codex-acct_second" || envResult.ImportedAccounts != 3 {
+		t.Fatalf("env result = %+v", envResult)
+	}
+	for _, leaked := range []string{token, firstPath, secondPath, "first-access-secret", "second-access-secret", "first-refresh-secret", "second-refresh-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts import env leaked %q: %s", leaked, out.String())
+		}
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
 	cmd.SetArgs([]string{"import", "--json", "--auth", firstPath, "--auth", secondPath})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)

@@ -98,7 +98,10 @@ For a direct local import that does not require the daemon, use
 			jsonOut, _ := cmd.Flags().GetBool("json")
 			authPathsFlag, _ := cmd.Flags().GetStringArray("auth")
 			params := protocol.AccountsImportParams{Provider: provider}
-			authPaths := cleanImportAuthPaths(authPathsFlag)
+			authPaths, err := codexImportAuthPaths(authPathsFlag)
+			if err != nil {
+				return err
+			}
 			switch len(authPaths) {
 			case 0:
 			case 1:
@@ -136,7 +139,7 @@ For a direct local import that does not require the daemon, use
 		},
 	}
 	importCmd.Flags().String("provider", "codex", "account provider to import")
-	importCmd.Flags().StringArray("auth", nil, "path to Codex auth.json; repeat to import multiple accounts through the daemon")
+	importCmd.Flags().StringArray("auth", nil, "path to Codex auth.json; repeat to import multiple accounts through the daemon (default: ~/.codex/auth.json, or CAPD_CODEX_AUTH_PATHS when set)")
 	importCmd.Flags().Bool("json", false, "print accounts/import result as JSON without token material")
 
 	checkCmd := &cobra.Command{

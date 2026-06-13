@@ -105,6 +105,45 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 	}
 }
 
+func TestDocsCoverDaemonImportAuthPathListEnv(t *testing.T) {
+	readmeData, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	referenceData, err := os.ReadFile("../../docs/reference.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testingData, err := os.ReadFile("../../docs/testing.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, doc := range map[string]string{
+		"README":    string(readmeData),
+		"reference": string(referenceData),
+		"testing":   string(testingData),
+	} {
+		for _, want := range []string{
+			"CAPD_CODEX_AUTH_PATHS",
+			"capd accounts import",
+		} {
+			if !strings.Contains(doc, want) {
+				t.Fatalf("%s missing daemon import env contract %q", name, want)
+			}
+		}
+	}
+	reference := string(referenceData)
+	for _, want := range []string{
+		"OS path-list of auth files",
+		"`:` on macOS/Linux, `;` on Windows",
+		"matching the CAP/WebSocket path used by web clients",
+	} {
+		if !strings.Contains(reference, want) {
+			t.Fatalf("reference docs missing daemon import env detail %q", want)
+		}
+	}
+}
+
 func TestReferenceDocsCoverAccountListRouteAudit(t *testing.T) {
 	data, err := os.ReadFile("../../docs/reference.md")
 	if err != nil {

@@ -115,6 +115,7 @@ curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" "http://127.0.0.1:7777/probe/data?readiness=1&requireSecretBackend=native"
 capd health --json --require-secret-backend native
 capd accounts import --auth /tmp/acct-a/auth.json --auth /tmp/acct-b/auth.json
+CAPD_CODEX_AUTH_PATHS="/tmp/acct-a/auth.json:/tmp/acct-b/auth.json" capd accounts import
 capd accounts check --json
 capd accounts check --json --readiness
 capd agents usage codex --account auto
@@ -222,9 +223,10 @@ If a daemon is already healthy on the target port but reports a different
 SecretStore backend, the selftest fails immediately and asks you to restart
 that daemon instead of trying to start a second process on the same port.
 When doctor reports missing accounts and the daemon is running, prefer
-`capd accounts import --auth ...` so the import uses the same CAP/WebSocket path
-as the Web Console. `capd accounts codex import` remains available for direct
-local imports when the daemon is not running.
+`capd accounts import --auth ...` or
+`CAPD_CODEX_AUTH_PATHS=... capd accounts import` so the import uses the same
+CAP/WebSocket path as the Web Console. `capd accounts codex import` remains
+available for direct local imports when the daemon is not running.
 
 `capd secretstore check --json --roundtrip --require-backend native --timeout 2m` is the
 smallest direct native SecretStore gate. It opens the active backend, writes,
