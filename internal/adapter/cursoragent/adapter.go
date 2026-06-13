@@ -19,11 +19,17 @@ import (
 
 const ID = "cursor-agent"
 
-type Adapter struct{}
+type Adapter struct {
+	id, name, bin string
+}
 
-func New() *Adapter { return &Adapter{} }
+func New() *Adapter { return NewWithCLI(ID, "Cursor CLI", "cursor-agent") }
 
-func (a *Adapter) ID() string { return ID }
+func NewWithCLI(id, name, bin string) *Adapter {
+	return &Adapter{id: id, name: name, bin: bin}
+}
+
+func (a *Adapter) ID() string { return a.id }
 
 func (a *Adapter) Capabilities() protocol.AgentCapabilities {
 	return protocol.AgentCapabilities{
@@ -32,20 +38,26 @@ func (a *Adapter) Capabilities() protocol.AgentCapabilities {
 }
 
 func (a *Adapter) Probe(ctx context.Context) (protocol.AgentInfo, error) {
-	return adapter.ProbeCLI(ctx, ID, "Cursor CLI", "cursor-agent", "--version")
+	return adapter.ProbeCLI(ctx, a.id, a.name, a.bin, "--version")
 }
 
 func (a *Adapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
-	if err := adapter.RequireBin(ID, "cursor-agent"); err != nil {
+	if err := adapter.RequireBin(a.id, a.bin); err != nil {
 		return nil, err
 	}
-	if opts.Resume != "" {
-		return adapter.NewTurnSessionResumed(turnConfig, opts, opts.Resume), nil
+	config := adapter.TurnConfig{
+		BuildSpec: func(opts adapter.SessionOpts, nativeID string, msg adapter.Message) proc.Spec {
+			spec := buildSpec(opts, nativeID, msg)
+			spec.Bin = a.bin
+			return spec
+		},
+		Translate: translate,
 	}
-	return adapter.NewTurnSession(turnConfig, opts), nil
+	if opts.Resume != "" {
+		return adapter.NewTurnSessionResumed(config, opts, opts.Resume), nil
+	}
+	return adapter.NewTurnSession(config, opts), nil
 }
-
-var turnConfig = adapter.TurnConfig{BuildSpec: buildSpec, Translate: translate}
 
 func buildSpec(opts adapter.SessionOpts, nativeID string, msg adapter.Message) proc.Spec {
 	prompt := msg.Prompt
