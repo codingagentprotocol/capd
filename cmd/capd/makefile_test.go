@@ -155,7 +155,10 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"DocsCoverPromptFreeBrowserProbeRefresh",
 		"ReferenceDocsCoverRunFreshQuotaRecovery",
 		"ReferenceDocsCoverBrowserTokenCleanup",
-		"go test ./internal/adapter/codex -run 'TestProbeUsesResolvedCodexBinary$$' -count=1",
+		"go test ./internal/adapter/adaptertest ./internal/adapter/codex",
+		"ConformanceHelpers",
+		"CodexAdapterConformanceStaticContract",
+		"ProbeUsesResolvedCodexBinary",
 	} {
 		if !strings.Contains(makefile, want) {
 			t.Fatalf("Makefile simulated readiness target missing %q", want)

@@ -209,5 +209,7 @@ it is considered supported.
    routes before starting sessions.
 8. Done: add session backpressure stress tests for slow subscribers,
    overflow signaling, persistence, and replay.
-9. Add adapter conformance fixtures for Codex first, then clone them for other
-   adapters.
+9. Done: add reusable adapter conformance fixtures and a Codex static
+   contract.
+10. Clone adapter conformance lifecycle checks for Claude, Gemini, OpenCode,
+    and Cursor once each fixture can run without real credentials.
