@@ -115,6 +115,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"AccountsCheckReadinessShortcutSetsDaemonGateParams",
 		"AccountsCheckErrorNextStepsExplainSecretAccessDenied",
 		"AccountsCheckErrorNextStepsPreserveRequiredSecretBackend",
+		"AccountsCheckRefreshQuotaFailureDoesNotLeakSecrets",
 		"DoctorReportsMultiAccountQuotaAndAutoRoute",
 		"DoctorChecksDaemonAccountsThroughCAP",
 		"DoctorDaemonAccountsCheckUsesCallerTimeout",

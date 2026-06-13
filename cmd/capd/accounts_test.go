@@ -871,6 +871,9 @@ func TestAccountsCheckErrorNextStepsPreserveRequiredSecretBackend(t *testing.T) 
 	if !containsString(quotaSteps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend native --timeout 2m") {
 		t.Fatalf("quota steps = %+v", quotaSteps)
 	}
+	if got := accountsCheckFailedQuotaAccount("refresh quota: codex-test: quota: HTTP 429"); got != "codex-test" {
+		t.Fatalf("failed quota account = %q", got)
+	}
 }
 
 func TestAccountsImportCallsDaemonRPCWithRepeatedAuthFlags(t *testing.T) {
@@ -1632,6 +1635,35 @@ func TestAccountsCheckRefreshQuotaFailureDoesNotLeakSecrets(t *testing.T) {
 	for _, leaked := range []string{token, "access-secret", "refresh-secret", "backend-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
 		if strings.Contains(err.Error(), leaked) || strings.Contains(out.String(), leaked) {
 			t.Fatalf("accounts check refresh failure leaked %q: err=%v out=%s", leaked, err, out.String())
+		}
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"check", "--json", "--refresh-quota", "--require-fresh-quota", "--require-all-fresh-quota"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "codex-test") || !strings.Contains(err.Error(), "HTTP 429") {
+		t.Fatalf("json err = %v", err)
+	}
+	var failure accountsCheckJSONError
+	if err := json.Unmarshal(out.Bytes(), &failure); err != nil {
+		t.Fatalf("json error output = %q: %v", out.String(), err)
+	}
+	if failure.OK || len(failure.Data) == 0 || !containsString(failure.NextSteps, "fix quota refresh for failed account: codex-test") || !containsString(failure.NextSteps, "refresh and verify daemon-side readiness with: capd accounts check --json --readiness --require-secret-backend file --timeout 2m") {
+		t.Fatalf("json failure = %+v", failure)
+	}
+	var partial protocol.AccountsCheckResult
+	if err := json.Unmarshal(failure.Data, &partial); err != nil {
+		t.Fatalf("accounts/check partial = %s: %v", failure.Data, err)
+	}
+	if partial.CheckedAccounts != 1 || !partial.QuotaRefreshed || partial.SecretBackend != secret.BackendFile {
+		t.Fatalf("accounts/check partial = %+v", partial)
+	}
+	for _, leaked := range []string{token, "access-secret", "refresh-secret", "backend-secret", "secretRef", "secret_ref", "CODEX_HOME", filepath.Join(home, "runtimes")} {
+		if strings.Contains(out.String(), leaked) {
+			t.Fatalf("accounts check json refresh failure leaked %q: %s", leaked, out.String())
 		}
 	}
 }

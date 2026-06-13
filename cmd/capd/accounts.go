@@ -290,9 +290,14 @@ func printAccountsCheckJSONError(cmd *cobra.Command, err error) {
 	if perr.Data != nil {
 		if data, marshalErr := json.Marshal(perr.Data); marshalErr == nil && string(data) != "null" {
 			payload.Data = data
-			var partial protocol.AccountsCheckResult
-			if err := json.Unmarshal(data, &partial); err == nil {
-				payload.NextSteps = accountsCheckErrorNextSteps(perr.Message, partial)
+			var quotaPartial protocol.AccountsQuotaResult
+			if err := json.Unmarshal(data, &quotaPartial); err == nil && accountsQuotaPartialHasRecovery(quotaPartial) {
+				payload.NextSteps = accountsQuotaPartialNextSteps(quotaPartial)
+			} else {
+				var partial protocol.AccountsCheckResult
+				if err := json.Unmarshal(data, &partial); err == nil {
+					payload.NextSteps = accountsCheckErrorNextSteps(perr.Message, partial)
+				}
 			}
 		}
 	}
@@ -301,6 +306,18 @@ func printAccountsCheckJSONError(cmd *cobra.Command, err error) {
 		return
 	}
 	fmt.Fprintln(cmd.OutOrStdout(), string(out))
+}
+
+func accountsQuotaPartialHasRecovery(partial protocol.AccountsQuotaResult) bool {
+	return partial.FailedAccount != "" || len(partial.NextSteps) > 0
+}
+
+func accountsQuotaPartialNextSteps(partial protocol.AccountsQuotaResult) []string {
+	steps := append([]string(nil), partial.NextSteps...)
+	if partial.FailedAccount != "" {
+		steps = append(steps, "fix quota refresh for failed account: "+partial.FailedAccount)
+	}
+	return compactStrings(steps)
 }
 
 func accountsCheckErrorNextSteps(message string, partial protocol.AccountsCheckResult) []string {
@@ -336,9 +353,29 @@ func accountsCheckErrorNextSteps(message string, partial protocol.AccountsCheckR
 		}
 	}
 	if strings.Contains(message, "fresh cached quota") || strings.Contains(message, "quota is not fresh") || (!summary.AutoRouteFresh && summary.CheckedAccounts > 0) || summary.StaleQuotaAccounts > 0 || summary.MissingQuotaAccounts > 0 {
-		steps = append(steps, "refresh and verify daemon-side readiness with: "+accountsCheckReadinessCommand(requiredBackend))
+		if failedAccount := accountsCheckFailedQuotaAccount(message); failedAccount != "" {
+			steps = append(steps, "fix quota refresh for failed account: "+failedAccount)
+		}
+		backend := requiredBackend
+		if backend == "" {
+			backend = partial.SecretBackend
+		}
+		steps = append(steps, "refresh and verify daemon-side readiness with: "+accountsCheckReadinessCommand(backend))
 	}
 	return compactStrings(steps)
+}
+
+func accountsCheckFailedQuotaAccount(message string) string {
+	const prefix = "refresh quota: "
+	if !strings.Contains(message, prefix) {
+		return ""
+	}
+	rest := strings.TrimPrefix(message[strings.Index(message, prefix):], prefix)
+	accountID, _, ok := strings.Cut(rest, ":")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(accountID)
 }
 
 func accountsCheckSecretBackendHint(partial protocol.AccountsCheckResult, requiredBackend string) string {
