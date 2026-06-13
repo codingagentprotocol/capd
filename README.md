@@ -238,11 +238,14 @@ behind an OS credential prompt.
 `capd probe data --json --readiness --timeout 2m --fail` calls the same authenticated
 `/probe/data` endpoint used by the lightweight web probe, so live preflight also
 verifies the Web diagnostics path with header auth and safe partial evidence.
-The full Web Console's ordinary diagnostic cards stay prompt-free and label
-SecretStore credentials and projected runtimes as `not checked in prompt-free
-refresh`. Its `深度验证` button runs that same header-authenticated readiness
-probe and renders the returned checks, errors, auto-route, and route-candidate
-evidence in place.
+The full Web Console's ordinary diagnostic cards and the compact Probe's
+ordinary validation rows stay prompt-free and label SecretStore credentials and
+projected runtimes as `not checked in prompt-free refresh`. Their ordinary next
+steps point first to `capd doctor --prompt-free`; `深度验证`, `就绪门禁`, or the
+Probe `Readiness` button are explicit deeper checks that may read account
+SecretStore credentials. The console's `深度验证` button runs that same
+header-authenticated readiness probe and renders the returned checks, errors,
+auto-route, and route-candidate evidence in place.
 The endpoint bounds server-side work too: ordinary probes get 12s and readiness
 probes get 2m. Its JSON includes a compact `summary` for account counts, quota
 freshness, auto-route freshness, route-decision status, and SecretStore backend

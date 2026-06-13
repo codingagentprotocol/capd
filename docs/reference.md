@@ -57,7 +57,10 @@ diagnostic line, marks SecretStore credentials and projected runtimes as
 `深度验证` against the same header-authenticated `/probe/data` readiness endpoint,
 and shows the account-aware `routeCandidates` returned by `agents/route` and
 the explicit `accounts/check` readiness gate so route choices can be audited
-from the browser without exposing token material or local runtime paths.
+from the browser without exposing token material or local runtime paths. The
+ordinary Console and Probe next steps prefer `capd doctor --prompt-free`; the
+deeper `深度验证`, `就绪门禁`, and Probe `Readiness` paths are explicit actions
+that may read account SecretStore credentials.
 When the native SecretStore gate is enabled, the console and probe distinguish
 backend mismatches from deeper OS SecretStore verification and point the latter to
 `capd doctor --json --fail --verify-secretstore --require-secret-backend native`.

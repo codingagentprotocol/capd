@@ -62,7 +62,8 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"full\nconsole's ordinary diagnostic refresh",
 		"ordinary `Refresh` path\nuse `accounts/list` metadata plus route evidence",
 		"opening either page does\nnot read account SecretStore credentials",
-		"not checked in prompt-free\nrefresh",
+		"not checked in prompt-free refresh",
+		"ordinary next\nsteps point first to `capd doctor --prompt-free`",
 	} {
 		if !strings.Contains(readme, want) {
 			t.Fatalf("README missing prompt-free web refresh contract %q", want)
@@ -84,6 +85,7 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"console's\n`就绪门禁` action",
 		"probe's `Readiness` button run the stronger account",
 		"`not checked in prompt-free refresh`",
+		"ordinary Console and Probe next steps prefer `capd doctor --prompt-free`",
 	} {
 		if !strings.Contains(reference, want) {
 			t.Fatalf("reference docs missing prompt-free probe refresh contract %q", want)
@@ -93,8 +95,9 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"full console's ordinary diagnostic refresh",
 		"`Refresh` path use `accounts/list` metadata plus route evidence",
 		"do not read\naccount SecretStore credentials",
-		"console's\n`就绪门禁`",
+		"console's `就绪门禁`",
 		"without repeated OS credential prompts",
+		"ordinary next steps\nprefer `capd doctor --prompt-free`",
 	} {
 		if !strings.Contains(testingDoc, want) {
 			t.Fatalf("testing docs missing prompt-free probe refresh contract %q", want)

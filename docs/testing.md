@@ -125,10 +125,10 @@ capd run --agent codex --account auto --require-fresh-quota "say ready"
 The full console's ordinary diagnostic refresh and the browser probe's ordinary
 `Refresh` path use `accounts/list` metadata plus route evidence and do not read
 account SecretStore credentials, so they can be used for low-friction
-diagnostics without repeated OS credential prompts. Use the console's
-`就绪门禁`, the probe's `Readiness`, `--readiness`, or
-`--require-secret-backend native` when you intentionally want the native
-SecretStore gate.
+diagnostics without repeated OS credential prompts. Their ordinary next steps
+prefer `capd doctor --prompt-free`; use the console's `就绪门禁`, the probe's
+`Readiness`, `--readiness`, or `--require-secret-backend native` when you
+intentionally want the native SecretStore gate.
 
 After importing multiple accounts and starting the daemon in another terminal,
 the same live preflight is available without sending a prompt:
