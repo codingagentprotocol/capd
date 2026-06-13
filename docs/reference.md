@@ -173,6 +173,9 @@ Web Console calls the daemon `repair/run` RPC for per-step dry-runs and approved
 execution, while scoped read-only browser tokens are rejected.
 Without `--yes`, `--execute` asks the user to type `execute` before running
 anything.
+Repair execution is intentionally bounded: one run evaluates at most 20 steps,
+skips commands larger than 4096 bytes, and truncates captured command output at
+8192 bytes while setting `outputTruncated:true` in JSON evidence.
 
 | Flag | Default | Meaning |
 |------|---------|---------|

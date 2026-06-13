@@ -125,11 +125,12 @@ type repairRunSummary struct {
 }
 
 type repairRunStepReport struct {
-	Step   protocol.RepairStep `json:"step"`
-	Status string              `json:"status"`
-	Reason string              `json:"reason,omitempty"`
-	Output string              `json:"output,omitempty"`
-	Error  string              `json:"error,omitempty"`
+	Step            protocol.RepairStep `json:"step"`
+	Status          string              `json:"status"`
+	Reason          string              `json:"reason,omitempty"`
+	Output          string              `json:"output,omitempty"`
+	OutputTruncated bool                `json:"outputTruncated,omitempty"`
+	Error           string              `json:"error,omitempty"`
 }
 
 func runRepairPlan(ctx context.Context, steps []protocol.RepairStep, opts repairRunOptions) (repairRunReport, error) {
@@ -175,11 +176,12 @@ func repairRunStepReports(steps []protocol.RepairRunStepReport) []repairRunStepR
 	out := make([]repairRunStepReport, 0, len(steps))
 	for _, step := range steps {
 		out = append(out, repairRunStepReport{
-			Step:   step.Step,
-			Status: step.Status,
-			Reason: step.Reason,
-			Output: step.Output,
-			Error:  step.Error,
+			Step:            step.Step,
+			Status:          step.Status,
+			Reason:          step.Reason,
+			Output:          step.Output,
+			OutputTruncated: step.OutputTruncated,
+			Error:           step.Error,
 		})
 	}
 	return out
@@ -219,6 +221,9 @@ func printRepairRunReport(w io.Writer, report repairRunReport) {
 		}
 		if step.Output != "" {
 			fmt.Fprintf(w, "   output: %s\n", step.Output)
+			if step.OutputTruncated {
+				fmt.Fprintln(w, "   output truncated: true")
+			}
 		}
 	}
 }

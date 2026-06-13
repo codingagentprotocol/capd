@@ -243,7 +243,9 @@ it is dry-run by default, and `--execute --yes` runs only non-placeholder,
 non-foreground repair commands. It leaves daemon startup, shell `export`
 commands, auth path placeholders, and the final live preflight for explicit
 manual action unless the command is made runnable and, for the final gate,
-`--include-final` is supplied. `/probe/data` and `capd repair run --json`
+`--include-final` is supplied. Repair execution is bounded to 20 steps, 4096
+byte commands, and 8192 bytes of captured output per step; truncated JSON rows
+set `outputTruncated:true`. `/probe/data` and `capd repair run --json`
 attach `execution.runnable` plus `execution.reason` to repair steps; the Web
 Console and compact Probe render that server-provided classification, with a
 local fallback for older daemons. The Console renders repair plans returned by

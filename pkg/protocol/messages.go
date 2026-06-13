@@ -343,11 +343,12 @@ type RepairRunSummary struct {
 }
 
 type RepairRunStepReport struct {
-	Step   RepairStep `json:"step"`
-	Status string     `json:"status"`
-	Reason string     `json:"reason,omitempty"`
-	Output string     `json:"output,omitempty"`
-	Error  string     `json:"error,omitempty"`
+	Step            RepairStep `json:"step"`
+	Status          string     `json:"status"`
+	Reason          string     `json:"reason,omitempty"`
+	Output          string     `json:"output,omitempty"`
+	OutputTruncated bool       `json:"outputTruncated,omitempty"`
+	Error           string     `json:"error,omitempty"`
 }
 
 func (r AccountsQuotaResult) MarshalJSON() ([]byte, error) {
