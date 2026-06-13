@@ -159,8 +159,9 @@ contexts.
 - Users can export a support bundle with audit metadata plus evidence reports.
 
 **Status:** foundational append-only JSONL audit storage and support bundle
-export are in place; next steps are wiring account import, SecretStore checks,
-route decisions, approval decisions, and repair execution into that audit sink.
+export are in place. CLI route decisions and `secretstore check` now write safe
+audit metadata; next steps are wiring account import, approval decisions, and
+repair execution into that audit sink.
 
 ## P3 Performance And Reliability
 

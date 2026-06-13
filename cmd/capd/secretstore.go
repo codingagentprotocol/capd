@@ -47,6 +47,7 @@ func newSecretStoreCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			recordSecretStoreCheckAudit(report)
 			if jsonOut {
 				out, _ := json.MarshalIndent(report, "", "  ")
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))

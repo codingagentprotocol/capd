@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/codingagentprotocol/capd/internal/audit"
 )
 
 func TestSecretStoreCheckJSONRoundTrip(t *testing.T) {
@@ -25,6 +27,13 @@ func TestSecretStoreCheckJSONRoundTrip(t *testing.T) {
 	}
 	if !got.OK || got.Backend != "file" || got.RoundTrip == nil || !got.RoundTrip.OK {
 		t.Fatalf("report = %+v", got)
+	}
+	events, err := audit.Recent("", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Type != "secretstore.check" || events[0].Outcome != "ok" || events[0].Data["backend"] != "file" || events[0].Data["roundTrip"] != true {
+		t.Fatalf("audit events = %+v", events)
 	}
 	for _, leaked := range []string{home, "doctor-secretstore-check", "capd-doctor"} {
 		if strings.Contains(out.String(), leaked) {

@@ -64,11 +64,13 @@ func newAgentsCmd() *cobra.Command {
 			}
 			result, err := routeCLI(discovery.Discover(cmd.Context(), daemon.Registry()), accounts, params)
 			if err != nil {
+				recordAgentRouteAudit(params, protocol.AgentRouteResult{}, err)
 				if params.JSON {
 					printRouteCLIJSONError(cmd, err)
 				}
 				return err
 			}
+			recordAgentRouteAudit(params, result, nil)
 			if params.JSON {
 				out, _ := json.MarshalIndent(result, "", "  ")
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))
