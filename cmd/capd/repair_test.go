@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
 
+	"github.com/codingagentprotocol/capd/internal/audit"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
@@ -102,6 +104,16 @@ func TestRepairRunCommandPrintsJSONDryRun(t *testing.T) {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("repair JSON leaked %q: %s", forbidden, text)
 		}
+	}
+	events, err := audit.Recent("", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Type != "repair.run" || events[0].Outcome != "ok" || events[0].Data["dryRun"] != true || events[0].Data["total"] == float64(0) {
+		t.Fatalf("audit events = %+v", events)
+	}
+	if strings.Contains(fmt.Sprint(events), "tok-repair-json") || strings.Contains(fmt.Sprint(events), home) || strings.Contains(fmt.Sprint(events), "capd start") {
+		t.Fatalf("repair audit leaked sensitive or command detail: %+v", events)
 	}
 }
 

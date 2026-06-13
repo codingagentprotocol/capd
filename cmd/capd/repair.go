@@ -66,6 +66,7 @@ func newRepairCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			recordRepairRunAudit(run)
 			if jsonOut {
 				out, _ := json.MarshalIndent(run, "", "  ")
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))

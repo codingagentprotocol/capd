@@ -648,8 +648,10 @@ func newCodexAccountsCmd() *cobra.Command {
 			for _, path := range authPaths {
 				result, err := importer.ImportAuthJSON(cmd.Context(), path)
 				if err != nil {
+					recordCodexImportAudit("failed", secrets.Backend(), "", "")
 					return fmt.Errorf("import account: %s", codexauth.SafeImportError(err, path))
 				}
+				recordCodexImportAudit("ok", secrets.Backend(), result.Account.ID, result.Account.AuthMode)
 				fmt.Fprintf(cmd.OutOrStdout(), "imported %s", result.Account.ID)
 				if result.Account.Email != "" {
 					fmt.Fprintf(cmd.OutOrStdout(), " <%s>", result.Account.Email)

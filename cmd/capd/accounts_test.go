@@ -22,6 +22,7 @@ import (
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
 	"github.com/codingagentprotocol/capd/internal/account/secret"
+	"github.com/codingagentprotocol/capd/internal/audit"
 	"github.com/codingagentprotocol/capd/internal/daemon"
 	"github.com/codingagentprotocol/capd/internal/server"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
@@ -385,6 +386,18 @@ func TestCodexAccountsImportMissingAuthDoesNotLeakPath(t *testing.T) {
 	if strings.Contains(err.Error(), missingPath) {
 		t.Fatalf("import error leaked path: %v", err)
 	}
+	events, auditErr := audit.Recent("", 10)
+	if auditErr != nil {
+		t.Fatal(auditErr)
+	}
+	if len(events) != 1 || events[0].Type != "accounts.codex.import" || events[0].Outcome != "failed" || events[0].Data["backend"] != secret.BackendFile {
+		t.Fatalf("audit events = %+v", events)
+	}
+	for _, leaked := range []string{missingPath, "auth.json"} {
+		if strings.Contains(fmt.Sprint(events), leaked) {
+			t.Fatalf("audit event leaked %q: %+v", leaked, events)
+		}
+	}
 }
 
 func TestCodexAccountsImportUsesAuthPathListEnv(t *testing.T) {
@@ -434,6 +447,18 @@ func TestCodexAccountsImportUsesAuthPathListEnv(t *testing.T) {
 	for _, leaked := range []string{firstPath, secondPath, "first-access-secret", "first-refresh-secret", "second-access-secret", "second-refresh-secret", "secretRef", "secret_ref"} {
 		if strings.Contains(text, leaked) {
 			t.Fatalf("import output leaked %q: %s", leaked, text)
+		}
+	}
+	events, auditErr := audit.Recent("", 10)
+	if auditErr != nil {
+		t.Fatal(auditErr)
+	}
+	if len(events) != 2 || events[0].Type != "accounts.codex.import" || events[0].Outcome != "ok" || events[0].Data["account"] != "codex-acct_first" || events[1].Data["account"] != "codex-acct_second" {
+		t.Fatalf("audit events = %+v", events)
+	}
+	for _, leaked := range []string{firstPath, secondPath, "first-access-secret", "first-refresh-secret", "second-access-secret", "second-refresh-secret"} {
+		if strings.Contains(fmt.Sprint(events), leaked) {
+			t.Fatalf("audit event leaked %q: %+v", leaked, events)
 		}
 	}
 	accounts, err := account.OpenStore(filepath.Join(home, ".capd", "accounts.db"))

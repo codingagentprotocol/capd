@@ -58,3 +58,36 @@ func recordSecretStoreCheckAudit(report secretStoreReport) {
 		},
 	})
 }
+
+func recordCodexImportAudit(outcome, backend, accountID, authMode string) {
+	recordAuditEvent(audit.Event{
+		Type:    "accounts.codex.import",
+		Actor:   "cli",
+		Outcome: outcome,
+		Data: map[string]any{
+			"backend":  backend,
+			"account":  accountID,
+			"authMode": authMode,
+		},
+	})
+}
+
+func recordRepairRunAudit(run repairRunReport) {
+	outcome := "ok"
+	if !run.OK {
+		outcome = "failed"
+	}
+	recordAuditEvent(audit.Event{
+		Type:    "repair.run",
+		Actor:   "cli",
+		Outcome: outcome,
+		Data: map[string]any{
+			"dryRun":    run.DryRun,
+			"total":     int64(run.Summary.Total),
+			"planned":   int64(run.Summary.Planned),
+			"skipped":   int64(run.Summary.Skipped),
+			"succeeded": int64(run.Summary.Succeeded),
+			"failed":    int64(run.Summary.Failed),
+		},
+	})
+}
