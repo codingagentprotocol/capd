@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
+	"github.com/codingagentprotocol/capd/internal/audit"
 	"github.com/codingagentprotocol/capd/internal/config"
 	"github.com/codingagentprotocol/capd/internal/daemon"
 	"github.com/codingagentprotocol/capd/internal/discovery"
@@ -144,6 +145,23 @@ func writeSupportBundle(ctx context.Context, opts supportBundleOptions) (support
 		}
 	}
 	artifacts["agentsRoute"] = filepath.Base(routePath)
+
+	auditPath := filepath.Join(dir, "audit.json")
+	events, err := audit.Recent("", 100)
+	if err != nil {
+		if err := writeSupportJSON(auditPath, supportErrorArtifact("audit", err)); err != nil {
+			return supportBundleResult{}, err
+		}
+	} else {
+		if err := writeSupportJSON(auditPath, map[string]any{
+			"ok":     true,
+			"source": "audit",
+			"events": events,
+		}); err != nil {
+			return supportBundleResult{}, err
+		}
+	}
+	artifacts["audit"] = filepath.Base(auditPath)
 
 	if opts.IncludeProbeData {
 		probePath := filepath.Join(dir, "probe-data.json")

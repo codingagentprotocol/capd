@@ -7,12 +7,30 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/codingagentprotocol/capd/internal/audit"
 )
 
 func TestSupportBundleWritesSafeEvidencePackage(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if err := writeTokenForTest(home, "tok-support-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if err := audit.Append("", audit.Event{
+		Time:    123,
+		Type:    "agents.route",
+		Actor:   "cli",
+		Outcome: "ok",
+		Data: map[string]any{
+			"agent":     "codex",
+			"account":   "codex-low",
+			"token":     "tok-support-secret",
+			"secretRef": "file://hidden",
+			"authJSON":  `{"access_token":"hidden"}`,
+			"localPath": filepath.Join(home, ".capd", "auth.json"),
+		},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("CAPD_HOST", "127.0.0.1")
@@ -33,7 +51,7 @@ func TestSupportBundleWritesSafeEvidencePackage(t *testing.T) {
 			t.Fatalf("output missing %q: %s", want, text)
 		}
 	}
-	for _, path := range []string{"manifest.json", "doctor-prompt-free.json", "agents-route.json", "health.json", "report.html"} {
+	for _, path := range []string{"manifest.json", "doctor-prompt-free.json", "agents-route.json", "audit.json", "health.json", "report.html"} {
 		if _, err := os.Stat(filepath.Join(outDir, path)); err != nil {
 			t.Fatalf("missing %s: %v", path, err)
 		}
@@ -49,13 +67,27 @@ func TestSupportBundleWritesSafeEvidencePackage(t *testing.T) {
 	if manifest["status"] != "failed" || manifest["stage"] != "support-bundle" || manifest["daemonMode"] != "external" {
 		t.Fatalf("manifest = %+v", manifest)
 	}
-	for _, name := range []string{"manifest.json", "doctor-prompt-free.json", "agents-route.json", "health.json", "report.html"} {
+	for _, name := range []string{"manifest.json", "doctor-prompt-free.json", "agents-route.json", "audit.json", "health.json", "report.html"} {
 		data, err := os.ReadFile(filepath.Join(outDir, name))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(data), "tok-support-secret") {
-			t.Fatalf("%s leaked daemon token", name)
+		for _, leaked := range []string{"tok-support-secret", "file://hidden", "access_token", home} {
+			if strings.Contains(string(data), leaked) {
+				t.Fatalf("%s leaked %q", name, leaked)
+			}
+		}
+	}
+	auditData, err := os.ReadFile(filepath.Join(outDir, "audit.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(auditData), `"type": "agents.route"`) || !strings.Contains(string(auditData), `"agent": "codex"`) {
+		t.Fatalf("audit artifact missing safe event metadata: %s", auditData)
+	}
+	for _, unsafe := range []string{"secretRef", "authJSON", "localPath", "token"} {
+		if strings.Contains(string(auditData), unsafe) {
+			t.Fatalf("audit artifact kept unsafe key %q: %s", unsafe, auditData)
 		}
 	}
 }
