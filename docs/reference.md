@@ -140,6 +140,27 @@ selected route account's `secretBackend` evidence when no backend was
 explicitly required, so mixed file/native installations get a backend-specific
 verification command without overriding an intentional gate.
 
+### `capd repair run` — approval-gated repair autopilot
+
+Builds the same doctor `repairPlan` and classifies each `protocol.RepairStep`
+as runnable or manual. The default is a dry-run, so it prints what would happen
+without executing commands. Add `--execute --yes` to run only commands that are
+safe to automate: no placeholder paths, no shell environment mutations, no
+foreground daemon startup, and no final live preflight unless `--include-final`
+is also supplied. Without `--yes`, `--execute` asks the user to type `execute`
+before running anything.
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--execute` | off | execute runnable steps instead of only planning |
+| `--yes` | off | skip the typed confirmation prompt when executing |
+| `--json` | off | print machine-readable step statuses and command output |
+| `--include-final` | off | allow executing the final `make live-codex-preflight` gate |
+| `--prompt-free` | on | build the doctor plan without reading account SecretStore credentials |
+| `--verify-secretstore` | off | let doctor perform a SecretStore roundtrip before planning; use with `--prompt-free=false` |
+| `--require-secret-backend` | — | plan against `file` or `native` SecretStore |
+| `--timeout` | `2m` | bound planning and executed repair commands |
+
 ### `capd run <prompt>` — send one task and stream it
 
 | Flag | Default | Meaning |

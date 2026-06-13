@@ -170,6 +170,8 @@ CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --requ
 CAPD_SECRET_BACKEND=native capd doctor --repair-plan --prompt-free --require-secret-backend native # repair commands only
 make live-codex-repair-plan # same repair plan using LIVE_SECRET_BACKEND/CAPD_BIN
 make live-codex-repair-commands # one repair command per line, no jq required
+CAPD_SECRET_BACKEND=native capd repair run --require-secret-backend native # dry-run approval-gated repair steps
+CAPD_SECRET_BACKEND=native capd repair run --execute --yes --require-secret-backend native # execute only runnable non-placeholder steps
 capd start --secret-backend native # keep running in another terminal for CAP/WebSocket checks
 capd console --probe --require-secret-backend native # simple web data probe; opens with daemon token without printing it
 capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail # same probe diagnostics for automation
@@ -224,7 +226,12 @@ long task only needs the ordered repair plan JSON array, or
 and `CAPD_BIN` knobs as the live preflight. Use
 `capd doctor --repair-commands --prompt-free` or
 `make live-codex-repair-commands` when a shell log needs one command per line
-without `jq`.
+without `jq`. Use `capd repair run` for the approval-gated autopilot path:
+it is dry-run by default, and `--execute --yes` runs only non-placeholder,
+non-foreground repair commands. It leaves daemon startup, shell `export`
+commands, auth path placeholders, and the final live preflight for explicit
+manual action unless the command is made runnable and, for the final gate,
+`--include-final` is supplied.
 For unattended release checks, `make
 live-codex-selftest` starts a temporary daemon when needed, waits for health,
 runs the same preflight, and cleans up only the daemon it started. The final

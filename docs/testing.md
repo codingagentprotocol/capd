@@ -269,7 +269,12 @@ SecretStore credential prompts. Use `make live-codex-repair-plan` when the
 automation should share `LIVE_SECRET_BACKEND` and `CAPD_BIN` with
 `make live-codex-preflight`. Use `capd doctor --repair-commands --prompt-free`
 or `make live-codex-repair-commands` when logs should contain one copy/paste
-command per line without requiring `jq`.
+command per line without requiring `jq`. Use
+`capd repair run --require-secret-backend native` to dry-run the same plan as an
+approval-gated autopilot; add `--execute --yes` only when the log shows the
+remaining steps are runnable. The runner skips placeholder auth paths, daemon
+startup, shell `export` commands, and the final live preflight unless
+`--include-final` is explicitly set.
 The top-level `summary` object is the compact
 CI/Web view of missing accounts, account credential readability, quota
 freshness, auto-route freshness, SecretStore backend status, and daemon CAP
