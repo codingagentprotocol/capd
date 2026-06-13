@@ -17,6 +17,7 @@ export CAPD_PORT="$port"
 export CAPD_SECRET_BACKEND="$backend"
 
 daemon_pid=""
+daemon_mode="existing"
 
 json_escape() {
 	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -29,23 +30,32 @@ write_summary() {
 	status="$(json_escape "$1")"
 	stage="$(json_escape "$2")"
 	detail="$(json_escape "${3:-}")"
+	checked_at="$(json_escape "$(date -u '+%Y-%m-%dT%H:%M:%SZ')")"
 	backend_json="$(json_escape "$backend")"
 	host_json="$(json_escape "$host")"
 	port_json="$(json_escape "$port")"
+	daemon_mode_json="$(json_escape "$daemon_mode")"
+	log_json="$(json_escape "$log")"
+	bin_json="$(json_escape "$bin")"
 	diagnose_json="$(json_escape "$diagnose_secretstore")"
 	run_prompt_json="$(json_escape "$run_prompt")"
 	{
 		printf '{\n'
+		printf '  "summaryVersion": 1,\n'
 		printf '  "status": "%s",\n' "$status"
 		printf '  "stage": "%s",\n' "$stage"
 		printf '  "detail": "%s",\n' "$detail"
+		printf '  "checkedAt": "%s",\n' "$checked_at"
 		printf '  "backend": "%s",\n' "$backend_json"
 		printf '  "host": "%s",\n' "$host_json"
 		printf '  "port": "%s",\n' "$port_json"
+		printf '  "daemonMode": "%s",\n' "$daemon_mode_json"
+		printf '  "logPath": "%s",\n' "$log_json"
+		printf '  "bin": "%s",\n' "$bin_json"
 		printf '  "diagnoseSecretStore": "%s",\n' "$diagnose_json"
 		printf '  "runPrompt": "%s"\n' "$run_prompt_json"
 		printf '}\n'
-	} >"$summary"
+	} >"$summary" || echo "warning: failed to write live summary to $summary" >&2
 }
 
 cleanup() {
@@ -73,6 +83,7 @@ health_any_backend() {
 }
 
 if health; then
+	daemon_mode="existing"
 	echo "using existing capd daemon at ${host}:${port} with ${backend} SecretStore"
 elif health_any_backend; then
 	echo "capd daemon is running at ${host}:${port}, but not with ${backend} SecretStore" >&2
@@ -81,6 +92,7 @@ elif health_any_backend; then
 	write_summary "failed" "secret-backend" "daemon is running with a different SecretStore backend"
 	exit 1
 else
+	daemon_mode="temporary"
 	echo "starting temporary capd daemon at ${host}:${port} with ${backend} SecretStore"
 	"$bin" start --host "$host" --port "$port" --secret-backend "$backend" >"$log" 2>&1 &
 	daemon_pid="$!"
