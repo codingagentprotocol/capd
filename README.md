@@ -215,7 +215,8 @@ metadata, fresh route gate JSON, prompt-free probe data JSON, and smoke JSON; se
 daemon-side accounts/check, and probe diagnostics. Set
 `CAPD_LIVE_SUMMARY=/tmp/capd-live-summary.json` to emit a compact status/stage
 artifact with timestamp, daemon mode, binary, and log path for CI or
-long-running tasks. `make live-codex-readiness` runs the
+long-running tasks; the file is updated with `status:"running"` as each stage
+starts, then overwritten by the final result. `make live-codex-readiness` runs the
 same preflight and then sends the final live prompt. Override the final prompt with
 `LIVE_PROMPT="..." make live-codex-readiness`; override the backend only for
 intentional testing with `LIVE_SECRET_BACKEND=file`. The target runs every live

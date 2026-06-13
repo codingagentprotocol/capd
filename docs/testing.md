@@ -170,6 +170,8 @@ selftest result with `summaryVersion`, `status`, `stage`, `checkedAt`,
 `backend`, `host`, `port`, `daemonMode`, `logPath`, and `bin` so CI or
 long-running tasks can tell whether the failure happened in daemon startup,
 preflight, or the final live prompt and collect the matching daemon log.
+The file is updated as the run advances with `status:"running"` and the latest
+reached `stage`, then overwritten with the final `passed` or `failed` result.
 
 Without real Codex accounts, run the deterministic simulated gate:
 

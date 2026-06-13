@@ -69,10 +69,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+write_summary "running" "initializing" "live Codex selftest starting"
+
 if [ -z "${CAPD_LIVE_DAEMON_BIN:-}" ]; then
 	go build -o "$bin" ./cmd/capd
 	bin_owned=1
 fi
+
+write_summary "running" "daemon-health" "checking daemon health"
 
 health() {
 	"$bin" health --json --require-secret-backend "$backend" >/dev/null 2>&1
@@ -115,6 +119,8 @@ else
 	done
 fi
 
+write_summary "running" "live-codex-preflight" "running live Codex preflight"
+
 if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then
 	echo "live-codex-preflight failed; safe diagnostics follow" >&2
 	echo "readiness gaps to resolve: >=2 imported Codex accounts, fresh quota for auto-route/all accounts, ${backend} SecretStore, and daemon/Web readiness" >&2
@@ -139,6 +145,7 @@ fi
 case "$run_prompt" in
 	1|true|TRUE|yes|YES)
 		echo "running live Codex prompt with quota-aware auto account"
+		write_summary "running" "live-prompt" "running quota-aware Codex prompt"
 		if ! "$bin" run --agent codex --account auto --require-fresh-quota "$prompt"; then
 			write_summary "failed" "live-prompt" "quota-aware Codex prompt failed"
 			exit 1
