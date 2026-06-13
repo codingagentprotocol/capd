@@ -296,7 +296,8 @@ header-authenticated readiness probe and renders the returned checks, errors,
 auto-route, route-candidate evidence, and repair-plan commands in place.
 It can also paste a live selftest `manifest.json` or `summary.json` into the
 diagnostic package viewer to inspect recorded route, probe, doctor, and smoke
-evidence paths without reading local files or exposing daemon tokens.
+evidence paths, including the generated `report.html`, without reading local
+files or exposing daemon tokens.
 Pasting the matching artifact JSON from `agents-route.json`,
 `probe-data-readiness.json`, or `doctor-prompt-free.json` turns that same viewer
 into a compact QA report for route policy, route candidates, quota freshness,

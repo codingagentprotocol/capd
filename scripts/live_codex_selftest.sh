@@ -123,6 +123,7 @@ write_evidence_manifest() {
 	doctor_json="$(json_escape "$(evidence_manifest_path "$evidence_doctor")")"
 	smoke_json="$(json_escape "$(evidence_manifest_path "$evidence_smoke")")"
 	accounts_check_json="$(json_escape "$(evidence_manifest_path "$evidence_accounts_check")")"
+	report_json="$(json_escape "$(evidence_manifest_path "$evidence_report")")"
 	{
 		printf '{\n'
 		printf '  "manifestVersion": 1,\n'
@@ -141,7 +142,8 @@ write_evidence_manifest() {
 		printf '    "probeData": "%s",\n' "$probe_json"
 		printf '    "doctor": "%s",\n' "$doctor_json"
 		printf '    "accountsSmoke": "%s",\n' "$smoke_json"
-		printf '    "accountsCheck": "%s"\n' "$accounts_check_json"
+		printf '    "accountsCheck": "%s",\n' "$accounts_check_json"
+		printf '    "report": "%s"\n' "$report_json"
 		printf '  }\n'
 		printf '}\n'
 	} >"$evidence_manifest"

@@ -102,8 +102,8 @@
 <div id="readinessChecks"></div>
 <div id="repairPlan"></div>
 <div id="evidencePackage">
-  <div class="head"><span>Live selftest evidence manifest</span><span class="empty">paste manifest.json or summary.json</span></div>
-  <textarea id="evidenceManifestInput" spellcheck="false" placeholder='{"manifestVersion":1,"status":"passed","artifacts":{"agentsRoute":"..."}}'></textarea>
+  <div class="head"><span>Live selftest evidence manifest</span><span class="empty">paste manifest.json or summary.json; report.html path is shown, not loaded</span></div>
+  <textarea id="evidenceManifestInput" spellcheck="false" placeholder='{"manifestVersion":1,"status":"passed","artifacts":{"agentsRoute":"...","report":"report.html"}}'></textarea>
   <textarea id="evidenceArtifactsInput" spellcheck="false" placeholder='Optional artifact JSON objects, separated by blank lines. Example: {"routePolicy":{"name":"conservative-quota-pressure"},"routeCandidates":[...]}'></textarea>
   <div class="actions">
     <button id="renderEvidenceManifest">查看诊断包</button>
@@ -1328,6 +1328,7 @@ function normalizeEvidenceManifest(data) {
       daemonMode: data.daemonMode || "",
       artifacts: {
         manifest: data.evidenceManifestPath || "",
+        report: data.evidenceReportPath || "",
         agentsRoute: data.routeEvidencePath || "",
         probeData: data.probeEvidencePath || "",
         doctor: data.doctorEvidencePath || "",
@@ -1377,6 +1378,7 @@ function evidenceManifestRows(manifest) {
   ];
   const artifactNames = [
     ["manifest", "manifest index"],
+    ["report", "HTML report"],
     ["health", "daemon health"],
     ["accountsList", "account metadata"],
     ["agentsRoute", "route evidence"],

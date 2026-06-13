@@ -139,8 +139,8 @@ prefer `capd doctor --prompt-free`; use the console's `就绪门禁`, the probe'
 intentionally want the native SecretStore gate.
 The full console also has a diagnostic package viewer for pasting live selftest
 `manifest.json` or `summary.json` output and checking the recorded route, probe,
-doctor, smoke, and SecretStore evidence artifact paths without reading local
-files from the browser.
+doctor, smoke, generated `report.html`, and SecretStore evidence artifact paths
+without reading local files from the browser.
 Paste the matching artifact JSON into the same viewer to get a compact QA report
 for route policy, route candidates, quota freshness, and repair-plan evidence.
 For automation, `capd probe evidence --manifest
