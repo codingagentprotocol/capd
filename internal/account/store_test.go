@@ -377,6 +377,51 @@ func TestSelectQuotaRouteAccountUsesLimitingQuotaWindow(t *testing.T) {
 	}
 }
 
+func TestRoutePolicyCanTuneFreshnessAndTieBreak(t *testing.T) {
+	st := newStore(t)
+	for _, id := range []string{"current", "older"} {
+		if err := st.UpsertAccount(Account{ID: id, Provider: "codex", AuthMode: "oauth"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SetCurrentAccount("codex", "current"); err != nil {
+		t.Fatal(err)
+	}
+	oldCheckedAt := time.Now().Add(-2 * time.Hour).Unix()
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "current", PrimaryUsedPercent: 40, CheckedAt: oldCheckedAt}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "older", PrimaryUsedPercent: 20, CheckedAt: oldCheckedAt}); err != nil {
+		t.Fatal(err)
+	}
+
+	defaultEvidence := QuotaRouteEvidence(st, Account{ID: "older", Provider: "codex"})
+	if defaultEvidence.Fresh || defaultEvidence.Score != quotaUnknownScore {
+		t.Fatalf("default evidence = %+v", defaultEvidence)
+	}
+
+	policy := RoutePolicy{
+		FreshTTL:               3 * time.Hour,
+		UnknownScore:           88,
+		CurrentAccountTieBreak: 0.5,
+	}
+	got, err := SelectQuotaRouteAccountWithPolicy(st, "codex", policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "older" {
+		t.Fatalf("selected = %+v", got)
+	}
+	currentEvidence := policy.Evidence(st, Account{ID: "current", Provider: "codex"}, "current", time.Now())
+	if !currentEvidence.Fresh || currentEvidence.Score != 39.5 {
+		t.Fatalf("current evidence = %+v", currentEvidence)
+	}
+	missingEvidence := policy.Evidence(st, Account{ID: "missing", Provider: "codex"}, "", time.Now())
+	if missingEvidence.Score != 88 || missingEvidence.QuotaState != protocol.AccountQuotaStateMissing {
+		t.Fatalf("missing evidence = %+v", missingEvidence)
+	}
+}
+
 func TestSelectQuotaRouteAccountTreatsInvalidQuotaAsUnknown(t *testing.T) {
 	st := newStore(t)
 	for _, acc := range []Account{

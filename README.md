@@ -522,9 +522,11 @@ Self-evolution backlog for the Codex account plane:
   the public `protocol.RepairStep` shape, the CLI has an approval-gated repair
   runner, and browser diagnostics classify each step as runnable or manual. The
   next evolution is wiring the console to trigger approved repair runs directly.
-- Account-aware routing policy: add pluggable scoring weights for quota,
-  freshness, account health, recent failures, and user intent while keeping the
-  conservative default deterministic.
+- Account-aware routing policy: `internal/account.RoutePolicy` now centralizes
+  quota freshness, unknown-score risk, and current-account tie-break tuning.
+  Next, add configurable scoring weights for account health, recent failures,
+  task class, and user intent while keeping the conservative default
+  deterministic.
 - Token health timeline: persist safe quota and route decisions as time-series
   metadata so the console can show freshness, drift, and repeated failure
   patterns without storing token material.

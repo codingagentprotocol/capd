@@ -15,16 +15,42 @@ const (
 	// low-usage account does not dominate routing indefinitely.
 	QuotaRouteCacheTTL = 30 * time.Minute
 	quotaUnknownScore  = 75.0
+	currentTieBreak    = 0.01
 )
 
+// RoutePolicy is the account-aware scheduler policy. It is intentionally small
+// while routing is still deterministic, but gives future model/task-aware
+// schedulers one place to tune freshness, unknown-risk, and stability weights.
+type RoutePolicy struct {
+	FreshTTL               time.Duration
+	UnknownScore           float64
+	CurrentAccountTieBreak float64
+}
+
+// DefaultQuotaRoutePolicy is conservative: stale or missing quota receives a
+// moderately high unknown score, and the current account gets only a tiny exact
+// tie-break to avoid needless runtime churn.
+var DefaultQuotaRoutePolicy = RoutePolicy{
+	FreshTTL:               QuotaRouteCacheTTL,
+	UnknownScore:           quotaUnknownScore,
+	CurrentAccountTieBreak: currentTieBreak,
+}
+
 // SelectQuotaRouteAccount picks the provider account with the lowest routing
-// score. Fresh quota uses primary usage percent directly; missing or stale
-// quota is assigned a conservative unknown score, and the current account wins
-// exact ties to avoid needless runtime churn.
+// score. Fresh quota uses the highest pressure across known quota windows;
+// missing or stale quota is assigned a conservative unknown score, and the
+// current account wins exact ties to avoid needless runtime churn.
 func SelectQuotaRouteAccount(st *Store, provider string) (Account, error) {
+	return SelectQuotaRouteAccountWithPolicy(st, provider, DefaultQuotaRoutePolicy)
+}
+
+// SelectQuotaRouteAccountWithPolicy is the policy-injection seam for tests and
+// future task/model-aware schedulers.
+func SelectQuotaRouteAccountWithPolicy(st *Store, provider string, policy RoutePolicy) (Account, error) {
 	if st == nil {
 		return Account{}, fmt.Errorf("account store is required")
 	}
+	policy = policy.normalized()
 	accounts, err := st.ListAccounts(provider)
 	if err != nil {
 		return Account{}, err
@@ -35,9 +61,9 @@ func SelectQuotaRouteAccount(st *Store, provider string) (Account, error) {
 	current, _ := st.CurrentAccount(provider)
 	now := time.Now()
 	best := accounts[0]
-	bestScore := quotaRouteScoreAt(st, best, current, now)
+	bestScore := quotaRouteScoreAt(st, best, current, now, policy)
 	for _, acc := range accounts[1:] {
-		score := quotaRouteScoreAt(st, acc, current, now)
+		score := quotaRouteScoreAt(st, acc, current, now, policy)
 		if score < bestScore || (score == bestScore && routeTieBeats(acc, best, current)) {
 			best = acc
 			bestScore = score
@@ -54,7 +80,7 @@ func SelectLowestQuotaAccount(st *Store, provider string) (Account, error) {
 
 // QuotaRouteScore is intentionally small and stable: lower is better.
 func QuotaRouteScore(st *Store, acc Account, current string) float64 {
-	return quotaRouteScoreAt(st, acc, current, time.Now())
+	return DefaultQuotaRoutePolicy.Score(st, acc, current, time.Now())
 }
 
 // QuotaRouteEvidence returns the protocol-safe route evidence for an account.
@@ -65,13 +91,13 @@ func QuotaRouteEvidence(st *Store, acc Account) protocol.AccountRouteEvidence {
 		return protocol.AccountRouteEvidence{
 			AccountID:     acc.ID,
 			SecretBackend: routeSecretBackend(acc),
-			Score:         quotaUnknownScore,
+			Score:         DefaultQuotaRoutePolicy.normalized().UnknownScore,
 			QuotaState:    protocol.AccountQuotaStateMissing,
 			Reason:        "missing cached quota",
 		}
 	}
 	current, _ := st.CurrentAccount(acc.Provider)
-	return quotaRouteEvidenceAt(st, acc, current, time.Now())
+	return DefaultQuotaRoutePolicy.Evidence(st, acc, current, time.Now())
 }
 
 // QuotaRouteCandidates returns every provider account with the same
@@ -90,9 +116,10 @@ func QuotaRouteCandidates(st *Store, provider string) ([]protocol.AccountRouteEv
 	}
 	current, _ := st.CurrentAccount(provider)
 	now := time.Now()
+	policy := DefaultQuotaRoutePolicy.normalized()
 	sort.Slice(accounts, func(i, j int) bool {
-		leftScore := quotaRouteScoreAt(st, accounts[i], current, now)
-		rightScore := quotaRouteScoreAt(st, accounts[j], current, now)
+		leftScore := quotaRouteScoreAt(st, accounts[i], current, now, policy)
+		rightScore := quotaRouteScoreAt(st, accounts[j], current, now, policy)
 		if leftScore != rightScore {
 			return leftScore < rightScore
 		}
@@ -100,7 +127,7 @@ func QuotaRouteCandidates(st *Store, provider string) ([]protocol.AccountRouteEv
 	})
 	candidates := make([]protocol.AccountRouteEvidence, 0, len(accounts))
 	for _, acc := range accounts {
-		candidates = append(candidates, quotaRouteEvidenceAt(st, acc, current, now))
+		candidates = append(candidates, policy.Evidence(st, acc, current, now))
 	}
 	return candidates, nil
 }
@@ -112,16 +139,17 @@ func QuotaRouteReason(st *Store, acc Account) string {
 		return fmt.Sprintf("auto account %s without fresh cached quota", acc.ID)
 	}
 	current, _ := st.CurrentAccount(acc.Provider)
-	return quotaRouteReasonAt(st, acc, current, time.Now())
+	return DefaultQuotaRoutePolicy.Reason(st, acc, current, time.Now())
 }
 
-func quotaRouteEvidenceAt(st *Store, acc Account, current string, now time.Time) protocol.AccountRouteEvidence {
+func (p RoutePolicy) Evidence(st *Store, acc Account, current string, now time.Time) protocol.AccountRouteEvidence {
+	p = p.normalized()
 	evidence := protocol.AccountRouteEvidence{
 		AccountID:     acc.ID,
 		SecretBackend: routeSecretBackend(acc),
-		Score:         quotaRouteScoreAt(st, acc, current, now),
+		Score:         p.Score(st, acc, current, now),
 		QuotaState:    protocol.AccountQuotaStateMissing,
-		Reason:        quotaRouteReasonAt(st, acc, current, now),
+		Reason:        p.Reason(st, acc, current, now),
 	}
 	if q, err := st.LoadQuota(acc.ID); err == nil {
 		evidence.CheckedAt = q.CheckedAt
@@ -132,7 +160,7 @@ func quotaRouteEvidenceAt(st *Store, acc Account, current string, now time.Time)
 			evidence.LimitingUsedPercent = &limiting
 			evidence.LimitingQuotaDimension = dimension
 		}
-		if QuotaSnapshotFresh(q, now) {
+		if p.QuotaSnapshotFresh(q, now) {
 			evidence.QuotaState = protocol.AccountQuotaStateFresh
 			evidence.Fresh = true
 		} else {
@@ -153,14 +181,15 @@ func routeSecretBackend(acc Account) string {
 	return ref.Backend
 }
 
-func quotaRouteReasonAt(st *Store, acc Account, current string, now time.Time) string {
+func (p RoutePolicy) Reason(st *Store, acc Account, current string, now time.Time) string {
+	p = p.normalized()
 	suffix := ""
 	if acc.ID == current {
 		suffix = "; current account tie-break"
 	}
 	if st != nil {
 		if q, err := st.LoadQuota(acc.ID); err == nil {
-			if QuotaSnapshotFresh(q, now) {
+			if p.QuotaSnapshotFresh(q, now) {
 				pressure, dimension, _ := quotaRoutePressure(q)
 				if dimension == "primary" {
 					return fmt.Sprintf("auto account %s primary %.0f%%%s", acc.ID, pressure, suffix)
@@ -174,13 +203,18 @@ func quotaRouteReasonAt(st *Store, acc Account, current string, now time.Time) s
 	return fmt.Sprintf("auto account %s without fresh cached quota%s", acc.ID, suffix)
 }
 
-func quotaRouteScoreAt(st *Store, acc Account, current string, now time.Time) float64 {
-	score := quotaUnknownScore
-	if q, err := st.LoadQuota(acc.ID); err == nil && QuotaSnapshotFresh(q, now) {
+func (p RoutePolicy) Score(st *Store, acc Account, current string, now time.Time) float64 {
+	p = p.normalized()
+	return quotaRouteScoreAt(st, acc, current, now, p)
+}
+
+func quotaRouteScoreAt(st *Store, acc Account, current string, now time.Time, policy RoutePolicy) float64 {
+	score := policy.UnknownScore
+	if q, err := st.LoadQuota(acc.ID); err == nil && policy.QuotaSnapshotFresh(q, now) {
 		score, _, _ = quotaRoutePressure(q)
 	}
 	if acc.ID == current {
-		score -= 0.01
+		score -= policy.CurrentAccountTieBreak
 	}
 	return score
 }
@@ -196,6 +230,11 @@ func routeTieBeats(candidate, incumbent Account, current string) bool {
 }
 
 func QuotaSnapshotFresh(q QuotaSnapshot, now time.Time) bool {
+	return DefaultQuotaRoutePolicy.QuotaSnapshotFresh(q, now)
+}
+
+func (p RoutePolicy) QuotaSnapshotFresh(q QuotaSnapshot, now time.Time) bool {
+	p = p.normalized()
 	if q.CheckedAt <= 0 {
 		return false
 	}
@@ -205,7 +244,20 @@ func QuotaSnapshotFresh(q QuotaSnapshot, now time.Time) bool {
 		return false
 	}
 	age := now.Unix() - q.CheckedAt
-	return age >= 0 && time.Duration(age)*time.Second <= QuotaRouteCacheTTL
+	return age >= 0 && time.Duration(age)*time.Second <= p.FreshTTL
+}
+
+func (p RoutePolicy) normalized() RoutePolicy {
+	if p.FreshTTL <= 0 {
+		p.FreshTTL = QuotaRouteCacheTTL
+	}
+	if p.UnknownScore <= 0 {
+		p.UnknownScore = quotaUnknownScore
+	}
+	if p.CurrentAccountTieBreak <= 0 {
+		p.CurrentAccountTieBreak = currentTieBreak
+	}
+	return p
 }
 
 func usablePercentPtr(n float64) *float64 {
