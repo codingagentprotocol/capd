@@ -135,6 +135,145 @@ func (s *Server) listAccounts(params protocol.AccountsListParams) (protocol.Acco
 	return result, nil
 }
 
+func (s *Server) listProfiles(params protocol.ProfilesListParams) (protocol.ProfilesListResult, *protocol.Error) {
+	if s.opts.Accounts == nil {
+		return protocol.ProfilesListResult{Provider: codexauth.Provider, Profiles: []protocol.AccountProfileSummary{}}, nil
+	}
+	provider := profileProvider(params.Provider)
+	name := strings.TrimSpace(params.Name)
+	current, err := s.opts.Accounts.CurrentProfile(provider)
+	if err != nil {
+		return protocol.ProfilesListResult{}, protocol.NewError(protocol.CodeInternalError, "load current profile: %v", err)
+	}
+	if name != "" {
+		profile, err := s.opts.Accounts.LoadProfile(provider, name)
+		if err != nil {
+			return protocol.ProfilesListResult{}, protocol.NewError(protocol.CodeInvalidParams, "unknown profile %q", name)
+		}
+		members, err := s.opts.Accounts.ProfileAccounts(provider, name)
+		if err != nil {
+			return protocol.ProfilesListResult{}, protocol.NewError(protocol.CodeInternalError, "load profile members: %v", err)
+		}
+		currentAccount, err := s.opts.Accounts.CurrentAccount(provider)
+		if err != nil {
+			return protocol.ProfilesListResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
+		}
+		return protocol.ProfilesListResult{
+			Provider:       provider,
+			CurrentProfile: current,
+			Profiles:       []protocol.AccountProfileSummary{profileSummary(profile, current, len(members))},
+			Accounts:       accountSummariesWithQuota(s.opts.Accounts, members, currentAccount),
+		}, nil
+	}
+	profiles, err := s.opts.Accounts.ListProfiles(provider)
+	if err != nil {
+		return protocol.ProfilesListResult{}, protocol.NewError(protocol.CodeInternalError, "list profiles: %v", err)
+	}
+	summaries := make([]protocol.AccountProfileSummary, 0, len(profiles))
+	for _, profile := range profiles {
+		members, err := s.opts.Accounts.ProfileAccounts(profile.Provider, profile.Name)
+		if err != nil {
+			return protocol.ProfilesListResult{}, protocol.NewError(protocol.CodeInternalError, "load profile members: %v", err)
+		}
+		summaries = append(summaries, profileSummary(profile, current, len(members)))
+	}
+	return protocol.ProfilesListResult{Provider: provider, CurrentProfile: current, Profiles: summaries}, nil
+}
+
+func (s *Server) updateProfile(params protocol.ProfilesUpdateParams) (protocol.ProfilesUpdateResult, *protocol.Error) {
+	if s.opts.Accounts == nil {
+		return protocol.ProfilesUpdateResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
+	}
+	provider := profileProvider(params.Provider)
+	name := strings.TrimSpace(params.Name)
+	if name == "" {
+		return protocol.ProfilesUpdateResult{}, protocol.NewError(protocol.CodeInvalidParams, "profile name is required")
+	}
+	if params.Delete {
+		if err := s.opts.Accounts.DeleteProfile(provider, name); err != nil {
+			return protocol.ProfilesUpdateResult{}, protocol.NewError(protocol.CodeInvalidParams, "delete profile: %v", err)
+		}
+		current, err := s.opts.Accounts.CurrentProfile(provider)
+		if err != nil {
+			return protocol.ProfilesUpdateResult{}, protocol.NewError(protocol.CodeInternalError, "load current profile: %v", err)
+		}
+		return protocol.ProfilesUpdateResult{Provider: provider, CurrentProfile: current, Deleted: true}, nil
+	}
+	profile := account.Profile{Provider: provider, Name: name, Description: strings.TrimSpace(params.Description)}
+	if err := s.opts.Accounts.UpsertProfile(profile); err != nil {
+		return protocol.ProfilesUpdateResult{}, protocol.NewError(protocol.CodeInvalidParams, "save profile: %v", err)
+	}
+	if params.SetCurrent {
+		if err := s.opts.Accounts.SetCurrentProfile(provider, name); err != nil {
+			return protocol.ProfilesUpdateResult{}, protocol.NewError(protocol.CodeInvalidParams, "set current profile: %v", err)
+		}
+	}
+	current, err := s.opts.Accounts.CurrentProfile(provider)
+	if err != nil {
+		return protocol.ProfilesUpdateResult{}, protocol.NewError(protocol.CodeInternalError, "load current profile: %v", err)
+	}
+	members, err := s.opts.Accounts.ProfileAccounts(provider, name)
+	if err != nil {
+		return protocol.ProfilesUpdateResult{}, protocol.NewError(protocol.CodeInternalError, "load profile members: %v", err)
+	}
+	summary := profileSummary(profile, current, len(members))
+	return protocol.ProfilesUpdateResult{Provider: provider, CurrentProfile: current, Profile: &summary}, nil
+}
+
+func (s *Server) updateProfileMembers(params protocol.ProfilesMembersParams) (protocol.ProfilesMembersResult, *protocol.Error) {
+	if s.opts.Accounts == nil {
+		return protocol.ProfilesMembersResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
+	}
+	provider := profileProvider(params.Provider)
+	name := strings.TrimSpace(params.Name)
+	if name == "" {
+		return protocol.ProfilesMembersResult{}, protocol.NewError(protocol.CodeInvalidParams, "profile name is required")
+	}
+	if len(params.AddAccountIDs) == 0 && len(params.RemoveAccountIDs) == 0 {
+		return protocol.ProfilesMembersResult{}, protocol.NewError(protocol.CodeInvalidParams, "addAccountIds or removeAccountIds is required")
+	}
+	for _, id := range params.AddAccountIDs {
+		accountID := strings.TrimSpace(id)
+		if accountID == "" {
+			continue
+		}
+		if err := s.opts.Accounts.AddProfileAccount(provider, name, accountID); err != nil {
+			return protocol.ProfilesMembersResult{}, protocol.NewError(protocol.CodeInvalidParams, "add profile member %q: %v", accountID, err)
+		}
+	}
+	for _, id := range params.RemoveAccountIDs {
+		accountID := strings.TrimSpace(id)
+		if accountID == "" {
+			continue
+		}
+		if err := s.opts.Accounts.RemoveProfileAccount(provider, name, accountID); err != nil {
+			return protocol.ProfilesMembersResult{}, protocol.NewError(protocol.CodeInvalidParams, "remove profile member %q: %v", accountID, err)
+		}
+	}
+	profile, err := s.opts.Accounts.LoadProfile(provider, name)
+	if err != nil {
+		return protocol.ProfilesMembersResult{}, protocol.NewError(protocol.CodeInvalidParams, "unknown profile %q", name)
+	}
+	currentProfile, err := s.opts.Accounts.CurrentProfile(provider)
+	if err != nil {
+		return protocol.ProfilesMembersResult{}, protocol.NewError(protocol.CodeInternalError, "load current profile: %v", err)
+	}
+	currentAccount, err := s.opts.Accounts.CurrentAccount(provider)
+	if err != nil {
+		return protocol.ProfilesMembersResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
+	}
+	members, err := s.opts.Accounts.ProfileAccounts(provider, name)
+	if err != nil {
+		return protocol.ProfilesMembersResult{}, protocol.NewError(protocol.CodeInternalError, "load profile members: %v", err)
+	}
+	return protocol.ProfilesMembersResult{
+		Provider:       provider,
+		CurrentProfile: currentProfile,
+		Profile:        profileSummary(profile, currentProfile, len(members)),
+		Accounts:       accountSummariesWithQuota(s.opts.Accounts, members, currentAccount),
+	}, nil
+}
+
 func (s *Server) importAccount(ctx context.Context, params protocol.AccountsImportParams) (protocol.AccountsImportResult, *protocol.Error) {
 	if s.opts.Accounts == nil || s.opts.Secrets == nil {
 		return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
@@ -964,6 +1103,36 @@ func (s *Server) removeAccount(ctx context.Context, params protocol.AccountsRemo
 
 func accountSummary(acc account.Account, quota account.QuotaSnapshot) protocol.AccountSummary {
 	return accountSummaryWithRoute(nil, acc, quota, "")
+}
+
+func profileProvider(provider string) string {
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return codexauth.Provider
+	}
+	return provider
+}
+
+func profileSummary(profile account.Profile, current string, members int) protocol.AccountProfileSummary {
+	return protocol.AccountProfileSummary{
+		Current:     profile.Name == current,
+		Provider:    profile.Provider,
+		Name:        profile.Name,
+		Description: profile.Description,
+		Accounts:    members,
+	}
+}
+
+func accountSummariesWithQuota(accounts *account.Store, list []account.Account, current string) []protocol.AccountSummary {
+	summaries := make([]protocol.AccountSummary, 0, len(list))
+	for _, acc := range list {
+		var quota account.QuotaSnapshot
+		if q, err := accounts.LoadQuota(acc.ID); err == nil {
+			quota = q
+		}
+		summaries = append(summaries, accountSummaryWithRoute(accounts, acc, quota, current))
+	}
+	return summaries
 }
 
 func accountSummaryWithRoute(accounts *account.Store, acc account.Account, quota account.QuotaSnapshot, current string) protocol.AccountSummary {

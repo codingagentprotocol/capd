@@ -19,6 +19,15 @@
   .acct .provider { color:#58a6ff; font-size:12px; margin-top:2px; }
   .acct .quota { color:#8b949e; font-size:12px; margin:4px 0; }
   .acct button { padding:3px 8px; }
+  #profileTools { display:flex; gap:8px; margin:0 0 8px; flex-wrap:wrap; align-items:center; }
+  #profileTools input { flex:0 1 300px; }
+  #profiles { display:flex; gap:8px; margin:0 0 12px; overflow-x:auto; padding-bottom:2px; }
+  .profile { min-width:220px; border:1px solid #30363d; border-radius:6px; padding:8px; background:#010409; font-size:12px; }
+  .profile.current { border-color:#3fb950; }
+  .profile .name { color:#e6edf3; word-break:break-all; font-size:13px; }
+  .profile .meta { color:#8b949e; margin-top:2px; }
+  .profile .members { color:#58a6ff; margin-top:4px; overflow-wrap:anywhere; }
+  .profile button { padding:3px 8px; margin-top:6px; }
   #routePreview { color:#8b949e; font-size:12px; margin:-4px 0 10px; min-height:18px; }
   #readiness { color:#8b949e; font-size:12px; margin:-4px 0 10px; min-height:18px; }
   #readiness.ok { color:#3fb950; }
@@ -79,7 +88,7 @@
 <div id="bar">
   <select id="agent"></select>
   <select id="account"><option value="">不用账号</option><option value="auto">自动账号</option></select>
-  <input id="accountProfile" placeholder="profile（仅自动账号）" style="flex:0 0 190px" disabled />
+  <input id="accountProfile" placeholder="profile（路由仅自动账号）" style="flex:0 0 190px" />
   <input id="cwd" list="cwds" placeholder="项目目录（留空=主目录）" style="flex:0 0 260px" />
   <datalist id="cwds"></datalist>
   <input id="prompt" placeholder="让 agent 干点什么…" />
@@ -97,6 +106,16 @@
   <button id="cancel">中断</button>
 </div>
 <div id="accounts"></div>
+<div id="profileTools">
+  <input id="profileDescription" placeholder="profile 描述（保存时可选）" />
+  <button id="refreshProfiles">刷新 profiles</button>
+  <button id="saveProfile">保存 profile</button>
+  <button id="setCurrentProfile">设为当前 profile</button>
+  <button id="addProfileMember">加入所选账号</button>
+  <button id="removeProfileMember">移除所选账号</button>
+  <button id="deleteProfile">删除 profile</button>
+</div>
+<div id="profiles"></div>
 <div id="routePreview"></div>
 <div id="readiness">诊断等待连接…</div>
 <div id="accountDiagnostics"></div>
@@ -136,6 +155,7 @@ if (TOKEN) {
 const log = document.getElementById("log");
 const sessionsEl = document.getElementById("sessions");
 const accountsEl = document.getElementById("accounts");
+const profilesEl = document.getElementById("profiles");
 const routePreviewEl = document.getElementById("routePreview");
 const readinessEl = document.getElementById("readiness");
 const accountDiagnosticsEl = document.getElementById("accountDiagnostics");
@@ -300,6 +320,7 @@ async function loadAccounts() {
       call("accounts/list", { provider: "codex" })
     ]);
     renderAccounts(allResult.accounts || [], codexResult.currentAccountId || "");
+    loadProfiles().catch(e => line("ev-sys", "· profiles/list 不可用: " + (e.message || JSON.stringify(e))));
     await refreshReadinessDiagnostic(codexResult);
   } catch (e) {
     accountsEl.textContent = "";
@@ -922,6 +943,100 @@ function renderAccounts(accounts, currentAccountId) {
   previewRoute();
 }
 
+async function loadProfiles(name = "") {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const params = { provider: "codex" };
+  if (name) params.name = name;
+  const result = await call("profiles/list", params);
+  renderProfiles(result);
+}
+
+function renderProfiles(result) {
+  profilesEl.textContent = "";
+  const profiles = result.profiles || [];
+  for (const p of profiles) {
+    const card = document.createElement("div");
+    card.className = "profile" + (p.current ? " current" : "");
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = `${p.provider || "codex"}/${p.name}`;
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = `${p.current ? "current · " : ""}${p.accounts || 0} accounts${p.description ? " · " + p.description : ""}`;
+    card.append(name, meta);
+    if (Array.isArray(result.accounts) && result.accounts.length && profiles.length === 1) {
+      const members = document.createElement("div");
+      members.className = "members";
+      members.textContent = result.accounts.map(a => `${a.email || a.id} (${accountQuotaState(a)})`).join(" · ");
+      card.appendChild(members);
+    }
+    const use = document.createElement("button");
+    use.textContent = "使用";
+    use.onclick = () => {
+      document.getElementById("account").value = "auto";
+      document.getElementById("accountProfile").value = p.name;
+      document.getElementById("profileDescription").value = p.description || "";
+      markActiveAccount();
+      updateProfileControl();
+      previewRoute();
+      loadProfiles(p.name).catch(e => line("ev-sys", "· profile detail 不可用: " + (e.message || JSON.stringify(e))));
+    };
+    card.appendChild(use);
+    profilesEl.appendChild(card);
+  }
+  if (profiles.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "暂无 profile，可输入名称后保存";
+    profilesEl.appendChild(empty);
+  }
+}
+
+async function saveProfile(setCurrent = false) {
+  const name = accountProfileName();
+  if (!name) {
+    routePreviewEl.textContent = "请输入 profile 名称";
+    return;
+  }
+  const description = document.getElementById("profileDescription").value.trim();
+  const result = await call("profiles/update", { provider: "codex", name, description, setCurrent });
+  line("ev-sys", `· profile ${result.profile && result.profile.name || name} saved${setCurrent ? " · current" : ""}`);
+  await loadProfiles(name);
+  previewRoute();
+}
+
+async function deleteProfile() {
+  const name = accountProfileName();
+  if (!name) {
+    routePreviewEl.textContent = "请输入 profile 名称";
+    return;
+  }
+  if (!confirm(`删除 profile ${name}?`)) return;
+  await call("profiles/update", { provider: "codex", name, delete: true });
+  line("ev-sys", `· profile ${name} deleted`);
+  await loadProfiles();
+  previewRoute();
+}
+
+async function updateProfileMember(add) {
+  const name = accountProfileName();
+  const accountId = document.getElementById("account").value;
+  if (!name) {
+    routePreviewEl.textContent = "请输入 profile 名称";
+    return;
+  }
+  if (!accountId || accountId === "auto") {
+    routePreviewEl.textContent = "请选择一个具体 Codex 账号";
+    return;
+  }
+  const params = { provider: "codex", name };
+  if (add) params.addAccountIds = [accountId]; else params.removeAccountIds = [accountId];
+  const result = await call("profiles/members", params);
+  line("ev-sys", `· profile ${name} ${add ? "added" : "removed"} ${accountId} · accounts=${result.profile.accounts}`);
+  await loadProfiles(name);
+  previewRoute();
+}
+
 function markActiveAccount() {
   const selected = document.getElementById("account").value;
   for (const card of accountsEl.querySelectorAll(".acct")) card.classList.remove("active");
@@ -938,8 +1053,7 @@ function accountProfileName() {
 function updateProfileControl() {
   const profileEl = document.getElementById("accountProfile");
   const accountId = document.getElementById("account").value;
-  profileEl.disabled = accountId !== "auto";
-  profileEl.title = profileEl.disabled ? "profile 只用于自动账号路由" : "约束自动账号路由到指定账号 profile";
+  profileEl.title = accountId === "auto" ? "约束自动账号路由到指定账号 profile" : "用于创建或管理 profile；路由时仅自动账号会使用";
 }
 
 async function previewRoute() {
@@ -1592,6 +1706,12 @@ document.getElementById("checkReady").onclick = () => checkAccounts(true);
 document.getElementById("refreshSelectedQuota").onclick = refreshSelectedQuota;
 document.getElementById("refreshAllQuota").onclick = refreshAllQuota;
 document.getElementById("renderEvidenceManifest").onclick = renderEvidenceManifest;
+document.getElementById("refreshProfiles").onclick = () => loadProfiles(accountProfileName()).catch(e => line("ev-err", `✗ profile 刷新失败: ${e.message || JSON.stringify(e)}`));
+document.getElementById("saveProfile").onclick = () => saveProfile(false).catch(e => line("ev-err", `✗ profile 保存失败: ${e.message || JSON.stringify(e)}`));
+document.getElementById("setCurrentProfile").onclick = () => saveProfile(true).catch(e => line("ev-err", `✗ profile 当前设置失败: ${e.message || JSON.stringify(e)}`));
+document.getElementById("addProfileMember").onclick = () => updateProfileMember(true).catch(e => line("ev-err", `✗ profile 加入失败: ${e.message || JSON.stringify(e)}`));
+document.getElementById("removeProfileMember").onclick = () => updateProfileMember(false).catch(e => line("ev-err", `✗ profile 移除失败: ${e.message || JSON.stringify(e)}`));
+document.getElementById("deleteProfile").onclick = () => deleteProfile().catch(e => line("ev-err", `✗ profile 删除失败: ${e.message || JSON.stringify(e)}`));
 document.getElementById("clearEvidenceManifest").onclick = () => {
   evidenceManifestInputEl.value = "";
   evidenceArtifactsInputEl.value = "";

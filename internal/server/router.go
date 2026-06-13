@@ -159,6 +159,27 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		}
 		return s.removeAccount(ctx, params)
 
+	case protocol.MethodProfilesList:
+		var params protocol.ProfilesListParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		return s.listProfiles(params)
+
+	case protocol.MethodProfilesUpdate:
+		var params protocol.ProfilesUpdateParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		return s.updateProfile(params)
+
+	case protocol.MethodProfilesMembers:
+		var params protocol.ProfilesMembersParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		return s.updateProfileMembers(params)
+
 	case protocol.MethodSessionCreate:
 		var params protocol.SessionCreateParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
@@ -439,6 +460,9 @@ func clientScopeAllows(scope, method string) bool {
 			protocol.MethodAccountsCheck,
 			protocol.MethodAccountsQuota,
 			protocol.MethodAccountsRemove,
+			protocol.MethodProfilesList,
+			protocol.MethodProfilesUpdate,
+			protocol.MethodProfilesMembers,
 			protocol.MethodSessionList,
 			protocol.MethodSessionAttach,
 			protocol.MethodSessionHistory:

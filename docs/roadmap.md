@@ -205,8 +205,8 @@ it is considered supported.
 5. Done: add CLI profile-aware routing filters for `--account auto`.
 6. Done: extend daemon `agents/route`, `session/create`, and `capd run` with
    profile-aware auto account routing.
-7. Add Web Console controls for choosing profile-aware auto routes before
-   starting sessions.
+7. Done: add Web Console controls for choosing and managing profile-aware auto
+   routes before starting sessions.
 8. Add session backpressure stress tests before changing event fan-out internals.
 9. Add adapter conformance fixtures for Codex first, then clone them for other
    adapters.

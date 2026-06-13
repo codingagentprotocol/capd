@@ -1194,6 +1194,85 @@ func TestAccountsListReturnsMetadataAndQuotaOnly(t *testing.T) {
 	}
 }
 
+func TestProfilesRPCManagesSafeGroupsAndRoutes(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	addCodexAccountForTest(t, accounts, "codex-low-outside", "low@example.com")
+	addCodexAccountForTest(t, accounts, "codex-work", "work@example.com")
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low-outside", PrimaryUsedPercent: 1, RawJSON: `{"token":"must-not-return"}`}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-work", PrimaryUsedPercent: 20, RawJSON: `{"token":"must-not-return"}`}); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var updated protocol.ProfilesUpdateResult
+	c.mustResult(c.call(protocol.MethodProfilesUpdate, protocol.ProfilesUpdateParams{
+		Provider:    " " + codexauth.Provider + " ",
+		Name:        " work ",
+		Description: " Work pool ",
+		SetCurrent:  true,
+	}), &updated)
+	if updated.CurrentProfile != "work" || updated.Profile == nil || !updated.Profile.Current || updated.Profile.Description != "Work pool" {
+		t.Fatalf("updated profile = %+v", updated)
+	}
+
+	var members protocol.ProfilesMembersResult
+	c.mustResult(c.call(protocol.MethodProfilesMembers, protocol.ProfilesMembersParams{
+		Provider:      codexauth.Provider,
+		Name:          "work",
+		AddAccountIDs: []string{" codex-work "},
+	}), &members)
+	if members.Profile.Name != "work" || members.Profile.Accounts != 1 || len(members.Accounts) != 1 || members.Accounts[0].ID != "codex-work" {
+		t.Fatalf("members = %+v", members)
+	}
+	if members.Accounts[0].Quota == nil || members.Accounts[0].Quota.PrimaryUsedPercent != 20 || members.Accounts[0].RouteScore == nil {
+		t.Fatalf("member summary missing quota/route = %+v", members.Accounts[0])
+	}
+	data, _ := json.Marshal(members)
+	for _, leaked := range []string{"must-not-return", "secretRef", "rawAuthJson", "RawJSON", "file:codex-work"} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("profiles/members leaked %q: %s", leaked, data)
+		}
+	}
+
+	var listed protocol.ProfilesListResult
+	c.mustResult(c.call(protocol.MethodProfilesList, protocol.ProfilesListParams{
+		Provider: codexauth.Provider,
+		Name:     " work ",
+	}), &listed)
+	if listed.CurrentProfile != "work" || len(listed.Profiles) != 1 || listed.Profiles[0].Accounts != 1 || len(listed.Accounts) != 1 || listed.Accounts[0].ID != "codex-work" {
+		t.Fatalf("listed profile = %+v", listed)
+	}
+
+	var routed protocol.AgentRouteResult
+	c.mustResult(c.call(protocol.MethodAgentsRoute, protocol.AgentRouteParams{
+		AccountID: protocol.AccountAuto,
+		Profile:   "work",
+	}), &routed)
+	if routed.AccountID != "codex-work" || len(routed.RouteCandidates) != 1 || routed.RouteCandidates[0].AccountID != "codex-work" {
+		t.Fatalf("profile route = %+v", routed)
+	}
+
+	c.mustResult(c.call(protocol.MethodProfilesMembers, protocol.ProfilesMembersParams{
+		Provider:         codexauth.Provider,
+		Name:             "work",
+		RemoveAccountIDs: []string{"codex-work"},
+	}), &members)
+	if members.Profile.Accounts != 0 || len(members.Accounts) != 0 {
+		t.Fatalf("members after remove = %+v", members)
+	}
+	var deleted protocol.ProfilesUpdateResult
+	c.mustResult(c.call(protocol.MethodProfilesUpdate, protocol.ProfilesUpdateParams{
+		Provider: codexauth.Provider,
+		Name:     "work",
+		Delete:   true,
+	}), &deleted)
+	if !deleted.Deleted || deleted.CurrentProfile != "" || deleted.Profile != nil {
+		t.Fatalf("deleted profile = %+v", deleted)
+	}
+}
+
 func TestAccountsListWithoutProviderReturnsAllProviders(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
 	if err := accounts.UpsertAccount(account.Account{

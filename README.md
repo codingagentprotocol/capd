@@ -166,6 +166,7 @@ capd accounts profile create work --description "Work Codex accounts"
 capd accounts profile add work codex-acct-a codex-acct-b
 capd accounts profile current work
 capd accounts profile show work --json # safe profile members for account-pool routing
+# The Web Console can create profiles, add/remove members, and route with --account auto + profile.
 capd accounts codex project  # create a per-account CODEX_HOME projection
 capd accounts codex migrate-secrets --from file --to native --dry-run # preview moving older imports to native SecretStore
 capd accounts codex migrate-secrets --from file --to native --timeout 2m # update refs after native secrets are written and read back

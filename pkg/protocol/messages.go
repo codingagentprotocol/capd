@@ -15,6 +15,9 @@ const (
 	MethodAccountsCheck   = "accounts/check"   // safe local account smoke evidence, without paths or secrets
 	MethodAccountsQuota   = "accounts/quota"   // refresh imported account quota, without secrets
 	MethodAccountsRemove  = "accounts/remove"  // remove an imported account and local token material
+	MethodProfilesList    = "profiles/list"    // list safe account profile metadata and members
+	MethodProfilesUpdate  = "profiles/update"  // create/update/delete/select account profiles
+	MethodProfilesMembers = "profiles/members" // add/remove account profile members
 	MethodSessionCreate   = "session/create"   // start an agent session
 	MethodSessionList     = "session/list"     // enumerate sessions and their liveness
 	MethodSessionAttach   = "session/attach"   // re-attach to a live or persisted session
@@ -339,6 +342,55 @@ type AccountsRemoveResult struct {
 	CredentialRemoved bool   `json:"credentialRemoved"`
 	CurrentAccountID  string `json:"currentAccountId,omitempty"`
 	RemainingAccounts int    `json:"remainingAccounts"`
+}
+
+type ProfilesListParams struct {
+	Provider string `json:"provider,omitempty"` // empty = codex
+	Name     string `json:"name,omitempty"`     // optional profile detail
+}
+
+type ProfilesListResult struct {
+	Provider       string                  `json:"provider"`
+	CurrentProfile string                  `json:"currentProfile,omitempty"`
+	Profiles       []AccountProfileSummary `json:"profiles"`
+	Accounts       []AccountSummary        `json:"accounts,omitempty"`
+}
+
+type ProfilesUpdateParams struct {
+	Provider    string `json:"provider,omitempty"` // empty = codex
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	SetCurrent  bool   `json:"setCurrent,omitempty"`
+	Delete      bool   `json:"delete,omitempty"`
+}
+
+type ProfilesUpdateResult struct {
+	Provider       string                 `json:"provider"`
+	CurrentProfile string                 `json:"currentProfile,omitempty"`
+	Profile        *AccountProfileSummary `json:"profile,omitempty"`
+	Deleted        bool                   `json:"deleted,omitempty"`
+}
+
+type ProfilesMembersParams struct {
+	Provider         string   `json:"provider,omitempty"` // empty = codex
+	Name             string   `json:"name"`
+	AddAccountIDs    []string `json:"addAccountIds,omitempty"`
+	RemoveAccountIDs []string `json:"removeAccountIds,omitempty"`
+}
+
+type ProfilesMembersResult struct {
+	Provider       string                `json:"provider"`
+	CurrentProfile string                `json:"currentProfile,omitempty"`
+	Profile        AccountProfileSummary `json:"profile"`
+	Accounts       []AccountSummary      `json:"accounts"`
+}
+
+type AccountProfileSummary struct {
+	Current     bool   `json:"current,omitempty"`
+	Provider    string `json:"provider"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Accounts    int    `json:"accounts"`
 }
 
 type AccountSummary struct {
