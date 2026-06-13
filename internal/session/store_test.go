@@ -390,6 +390,65 @@ func TestSubscriberOverflowSignals(t *testing.T) {
 	}
 }
 
+func TestSubscriberOverflowDoesNotStopPersistenceOrReplay(t *testing.T) {
+	st, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	fake := &fakeAdapter{id: "fake"}
+	m := NewManager(adapter.NewRegistry(fake), st)
+	sess, err := m.Create(context.Background(), "fake", adapter.SessionOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, cancelSlow, overflow := sess.Subscribe(0)
+	defer cancelSlow()
+	_, lastSession, _ := fake.snapshot()
+
+	total := subBuffer + 32
+	for i := 0; i < total; i++ {
+		ev := protocol.Event{
+			Type: protocol.EventOutputText,
+			Data: map[string]any{"text": "x"},
+		}
+		select {
+		case lastSession.events <- ev:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("event pump blocked after %d events", i)
+		}
+	}
+
+	select {
+	case <-overflow:
+	case <-time.After(2 * time.Second):
+		t.Fatal("overflow was not signaled")
+	}
+	waitFor(t, func() bool {
+		events, _ := st.LoadEvents(sess.ID, 0, total+10)
+		return len(events) >= total
+	})
+
+	replay, _, cancelReplay, _ := sess.Subscribe(0)
+	defer cancelReplay()
+	var got []protocol.Event
+	for len(got) < total {
+		select {
+		case ev, ok := <-replay:
+			if !ok {
+				t.Fatalf("replay closed after %d events", len(got))
+			}
+			got = append(got, ev)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("replay stalled after %d events", len(got))
+		}
+	}
+	last := got[len(got)-1]
+	if last.Seq != uint64(total-1) || last.Type != protocol.EventOutputText {
+		t.Fatalf("last replay = %+v, want seq %d output", last, total-1)
+	}
+}
+
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

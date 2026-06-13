@@ -207,6 +207,7 @@ it is considered supported.
    profile-aware auto account routing.
 7. Done: add Web Console controls for choosing and managing profile-aware auto
    routes before starting sessions.
-8. Add session backpressure stress tests before changing event fan-out internals.
+8. Done: add session backpressure stress tests for slow subscribers,
+   overflow signaling, persistence, and replay.
 9. Add adapter conformance fixtures for Codex first, then clone them for other
    adapters.
