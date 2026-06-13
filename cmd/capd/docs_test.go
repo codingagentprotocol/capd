@@ -297,6 +297,9 @@ func TestTestingDocsCoverLiveSelftestDaemonSafety(t *testing.T) {
 		"reports a different\nSecretStore backend",
 		"fails immediately",
 		"instead of trying to start a second process on the same port",
+		"`CAPD_LIVE_EVIDENCE_DIR=/tmp/capd-live-evidence`",
+		"`manifest.json` index",
+		"primary evidence paths",
 	} {
 		if !strings.Contains(testingDoc, want) {
 			t.Fatalf("testing docs missing live selftest daemon safety contract %q", want)

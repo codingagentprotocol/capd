@@ -170,9 +170,15 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`summary="${CAPD_LIVE_SUMMARY:-}"`,
 		`repair_plan="${CAPD_LIVE_REPAIR_PLAN:-}"`,
 		`evidence_dir="${CAPD_LIVE_EVIDENCE_DIR:-}"`,
+		`evidence_manifest=""`,
+		`evidence_health=""`,
+		`evidence_accounts=""`,
 		`evidence_route=""`,
 		`evidence_probe=""`,
 		`evidence_doctor=""`,
+		`evidence_smoke=""`,
+		`evidence_accounts_check=""`,
+		`evidence_manifest="$evidence_dir/manifest.json"`,
 		"bin_owned=0",
 		`daemon_mode="existing"`,
 		"write_summary()",
@@ -185,11 +191,20 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`"bin": "%s"`,
 		`"repairPlanPath": "%s"`,
 		`"evidenceDir": "%s"`,
+		`"evidenceManifestPath": "%s"`,
 		`"routeEvidencePath": "%s"`,
 		`"probeEvidencePath": "%s"`,
 		`"doctorEvidencePath": "%s"`,
 		`>"$summary"`,
 		`warning: failed to write live summary`,
+		"write_evidence_manifest()",
+		`"manifestVersion": 1`,
+		`"artifacts": {`,
+		`"accountsList": "%s"`,
+		`"agentsRoute": "%s"`,
+		`"probeData": "%s"`,
+		`"accountsCheck": "%s"`,
+		`} >"$evidence_manifest"`,
 		"prepare_evidence_dir()",
 		`mkdir -p "$evidence_dir"`,
 		"capture_evidence()",
@@ -203,6 +218,7 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`evidence_route="$evidence_dir/agents-route.json"`,
 		`evidence_probe="$evidence_dir/probe-data-readiness.json"`,
 		`evidence_doctor="$evidence_dir/doctor-prompt-free.json"`,
+		`evidence_manifest="$evidence_dir/manifest.json"`,
 		`prepare_evidence_dir || return $?`,
 		`"$bin" agents route --account auto --require-fresh-quota --json >"$evidence_route" || return $?`,
 		`"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail >"$evidence_probe" || return $?`,
@@ -229,19 +245,21 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`write_repair_plan`,
 		`write_summary "running" "live-codex-preflight"`,
 		`write_summary "failed" "live-codex-preflight"`,
+		`evidence_health="$evidence_dir/health.json"`,
+		`evidence_accounts="$evidence_dir/accounts-list.json"`,
+		`evidence_smoke="$evidence_dir/accounts-smoke.json"`,
 		`capture_evidence "agents-route.json" "$bin" agents route --account auto --require-fresh-quota --json || true`,
 		`capture_evidence "probe-data-prompt-free.json" "$bin" probe data --json --timeout 2m || true`,
+		`write_evidence_manifest "failed" "live-codex-preflight"`,
 		"readiness gaps to resolve: >=2 imported Codex accounts, fresh quota for auto-route/all accounts, ${backend} SecretStore, and daemon/Web readiness",
 		`diagnose_secretstore="${LIVE_DIAGNOSE_SECRETSTORE:-0}"`,
-		`"$bin" health --json --require-secret-backend "$backend" || true`,
-		`"$bin" accounts --secret-backend "$backend" codex list --json || true`,
-		`"$bin" agents route --account auto --require-fresh-quota --json || true`,
-		`"$bin" probe data --json --timeout 2m || true`,
-		`"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`,
+		`capture_evidence "health.json" "$bin" health --json --require-secret-backend "$backend" || true`,
+		`capture_evidence "accounts-list.json" "$bin" accounts --secret-backend "$backend" codex list --json || true`,
+		`capture_evidence "accounts-smoke.json" "$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`,
 		`case "$diagnose_secretstore" in`,
-		`"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true`,
-		`"$bin" accounts check --json --readiness --require-secret-backend "$backend" --timeout 2m || true`,
-		`"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true`,
+		`capture_evidence "doctor-secretstore.json" "$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true`,
+		`capture_evidence "accounts-check-readiness.json" "$bin" accounts check --json --readiness --require-secret-backend "$backend" --timeout 2m || true`,
+		`capture_evidence "probe-data-readiness.json" "$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true`,
 		`LIVE_RUN_PROMPT`,
 		`if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then`,
 		`"$bin" run --agent codex --account auto --require-fresh-quota "$prompt"`,
@@ -250,6 +268,8 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`write_summary "running" "evidence"`,
 		`if ! write_success_evidence; then`,
 		`write_summary "failed" "evidence"`,
+		`if ! write_evidence_manifest "passed" "complete"`,
+		`failed to write live Codex evidence manifest`,
 		`write_summary "passed" "complete"`,
 	} {
 		if !strings.Contains(script, want) {
@@ -277,12 +297,12 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		t.Fatal("live selftest failure block must exist before optional SecretStore gate")
 	}
 	defaultFailureBlock := script[failureStart:gate]
-	if !(strings.Index(defaultFailureBlock, `"$bin" accounts --secret-backend "$backend" codex list --json || true`) < strings.Index(defaultFailureBlock, `"$bin" agents route --account auto --require-fresh-quota --json || true`) &&
-		strings.Index(defaultFailureBlock, `"$bin" agents route --account auto --require-fresh-quota --json || true`) < strings.Index(defaultFailureBlock, `"$bin" probe data --json --timeout 2m || true`) &&
-		strings.Index(defaultFailureBlock, `"$bin" probe data --json --timeout 2m || true`) < strings.Index(defaultFailureBlock, `"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`)) {
+	if !(strings.Index(defaultFailureBlock, `capture_evidence "accounts-list.json" "$bin" accounts --secret-backend "$backend" codex list --json || true`) < strings.Index(defaultFailureBlock, `capture_evidence "agents-route.json" "$bin" agents route --account auto --require-fresh-quota --json || true`) &&
+		strings.Index(defaultFailureBlock, `capture_evidence "agents-route.json" "$bin" agents route --account auto --require-fresh-quota --json || true`) < strings.Index(defaultFailureBlock, `capture_evidence "probe-data-prompt-free.json" "$bin" probe data --json --timeout 2m || true`) &&
+		strings.Index(defaultFailureBlock, `capture_evidence "probe-data-prompt-free.json" "$bin" probe data --json --timeout 2m || true`) < strings.Index(defaultFailureBlock, `capture_evidence "accounts-smoke.json" "$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`)) {
 		t.Fatal("live selftest default failure diagnostics must show route evidence and prompt-free Web probe data before smoke")
 	}
-	for _, forbidden := range []string{`"$bin" doctor `, `"$bin" accounts check --json --readiness`, `"$bin" probe data --json --readiness`} {
+	for _, forbidden := range []string{`capture_evidence "doctor-secretstore.json"`, `capture_evidence "accounts-check-readiness.json"`, `capture_evidence "probe-data-readiness.json"`} {
 		if strings.Contains(defaultFailureBlock, forbidden) {
 			t.Fatalf("live selftest default failure diagnostics must stay prompt-free, found %q", forbidden)
 		}

@@ -12,10 +12,19 @@ bin="${CAPD_LIVE_DAEMON_BIN:-${TMPDIR:-/tmp}/capd-live-daemon-$$}"
 summary="${CAPD_LIVE_SUMMARY:-}"
 repair_plan="${CAPD_LIVE_REPAIR_PLAN:-}"
 evidence_dir="${CAPD_LIVE_EVIDENCE_DIR:-}"
+evidence_manifest=""
+evidence_health=""
+evidence_accounts=""
 evidence_route=""
 evidence_probe=""
 evidence_doctor=""
+evidence_smoke=""
+evidence_accounts_check=""
 bin_owned=0
+
+if [ -n "$evidence_dir" ]; then
+	evidence_manifest="$evidence_dir/manifest.json"
+fi
 
 export CAPD_HOST="$host"
 export CAPD_PORT="$port"
@@ -44,6 +53,7 @@ write_summary() {
 	bin_json="$(json_escape "$bin")"
 	repair_plan_json="$(json_escape "$repair_plan")"
 	evidence_dir_json="$(json_escape "$evidence_dir")"
+	evidence_manifest_json="$(json_escape "$evidence_manifest")"
 	evidence_route_json="$(json_escape "$evidence_route")"
 	evidence_probe_json="$(json_escape "$evidence_probe")"
 	evidence_doctor_json="$(json_escape "$evidence_doctor")"
@@ -64,6 +74,7 @@ write_summary() {
 		printf '  "bin": "%s",\n' "$bin_json"
 		printf '  "repairPlanPath": "%s",\n' "$repair_plan_json"
 		printf '  "evidenceDir": "%s",\n' "$evidence_dir_json"
+		printf '  "evidenceManifestPath": "%s",\n' "$evidence_manifest_json"
 		printf '  "routeEvidencePath": "%s",\n' "$evidence_route_json"
 		printf '  "probeEvidencePath": "%s",\n' "$evidence_probe_json"
 		printf '  "doctorEvidencePath": "%s",\n' "$evidence_doctor_json"
@@ -71,6 +82,50 @@ write_summary() {
 		printf '  "runPrompt": "%s"\n' "$run_prompt_json"
 		printf '}\n'
 	} >"$summary" || echo "warning: failed to write live summary to $summary" >&2
+}
+
+write_evidence_manifest() {
+	if [ -z "$evidence_dir" ]; then
+		return 0
+	fi
+	prepare_evidence_dir || return $?
+	status="$(json_escape "$1")"
+	stage="$(json_escape "$2")"
+	detail="$(json_escape "${3:-}")"
+	checked_at="$(json_escape "$(date -u '+%Y-%m-%dT%H:%M:%SZ')")"
+	backend_json="$(json_escape "$backend")"
+	host_json="$(json_escape "$host")"
+	port_json="$(json_escape "$port")"
+	daemon_mode_json="$(json_escape "$daemon_mode")"
+	health_json="$(json_escape "$evidence_health")"
+	accounts_json="$(json_escape "$evidence_accounts")"
+	route_json="$(json_escape "$evidence_route")"
+	probe_json="$(json_escape "$evidence_probe")"
+	doctor_json="$(json_escape "$evidence_doctor")"
+	smoke_json="$(json_escape "$evidence_smoke")"
+	accounts_check_json="$(json_escape "$evidence_accounts_check")"
+	{
+		printf '{\n'
+		printf '  "manifestVersion": 1,\n'
+		printf '  "status": "%s",\n' "$status"
+		printf '  "stage": "%s",\n' "$stage"
+		printf '  "detail": "%s",\n' "$detail"
+		printf '  "checkedAt": "%s",\n' "$checked_at"
+		printf '  "backend": "%s",\n' "$backend_json"
+		printf '  "host": "%s",\n' "$host_json"
+		printf '  "port": "%s",\n' "$port_json"
+		printf '  "daemonMode": "%s",\n' "$daemon_mode_json"
+		printf '  "artifacts": {\n'
+		printf '    "health": "%s",\n' "$health_json"
+		printf '    "accountsList": "%s",\n' "$accounts_json"
+		printf '    "agentsRoute": "%s",\n' "$route_json"
+		printf '    "probeData": "%s",\n' "$probe_json"
+		printf '    "doctor": "%s",\n' "$doctor_json"
+		printf '    "accountsSmoke": "%s",\n' "$smoke_json"
+		printf '    "accountsCheck": "%s"\n' "$accounts_check_json"
+		printf '  }\n'
+		printf '}\n'
+	} >"$evidence_manifest"
 }
 
 prepare_evidence_dir() {
@@ -121,6 +176,7 @@ write_success_evidence() {
 	evidence_route="$evidence_dir/agents-route.json"
 	evidence_probe="$evidence_dir/probe-data-readiness.json"
 	evidence_doctor="$evidence_dir/doctor-prompt-free.json"
+	evidence_manifest="$evidence_dir/manifest.json"
 	"$bin" agents route --account auto --require-fresh-quota --json >"$evidence_route" || return $?
 	"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail >"$evidence_probe" || return $?
 	"$bin" doctor --prompt-free --json --fail --require-secret-backend "$backend" --timeout 2m >"$evidence_doctor" || return $?
@@ -198,6 +254,12 @@ if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; t
 	prepare_evidence_dir || true
 	write_repair_plan
 	write_summary "failed" "live-codex-preflight" "readiness gaps: accounts, quota, SecretStore, or daemon/Web readiness"
+	if [ -n "$evidence_dir" ]; then
+		evidence_health="$evidence_dir/health.json"
+		evidence_accounts="$evidence_dir/accounts-list.json"
+		evidence_smoke="$evidence_dir/accounts-smoke.json"
+		evidence_manifest="$evidence_dir/manifest.json"
+	fi
 	capture_evidence "health.json" "$bin" health --json --require-secret-backend "$backend" || true
 	capture_evidence "accounts-list.json" "$bin" accounts --secret-backend "$backend" codex list --json || true
 	if [ -n "$evidence_dir" ]; then
@@ -211,6 +273,7 @@ if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; t
 		1|true|TRUE|yes|YES)
 			if [ -n "$evidence_dir" ]; then
 				evidence_doctor="$evidence_dir/doctor-secretstore.json"
+				evidence_accounts_check="$evidence_dir/accounts-check-readiness.json"
 			fi
 			capture_evidence "doctor-secretstore.json" "$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true
 			capture_evidence "accounts-check-readiness.json" "$bin" accounts check --json --readiness --require-secret-backend "$backend" --timeout 2m || true
@@ -222,6 +285,7 @@ if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; t
 			fi
 			;;
 	esac
+	write_evidence_manifest "failed" "live-codex-preflight" "readiness gaps: accounts, quota, SecretStore, or daemon/Web readiness" || true
 	write_summary "failed" "live-codex-preflight" "readiness gaps: accounts, quota, SecretStore, or daemon/Web readiness"
 	exit 1
 fi
@@ -242,6 +306,11 @@ write_summary "running" "evidence" "writing live Codex evidence artifacts"
 if ! write_success_evidence; then
 	write_repair_plan
 	write_summary "failed" "evidence" "failed to write live Codex evidence artifacts"
+	exit 1
+fi
+if ! write_evidence_manifest "passed" "complete" "live Codex selftest completed"; then
+	write_repair_plan
+	write_summary "failed" "evidence" "failed to write live Codex evidence manifest"
 	exit 1
 fi
 write_summary "passed" "complete" "live Codex selftest completed"
