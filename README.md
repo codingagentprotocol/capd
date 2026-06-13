@@ -300,8 +300,8 @@ evidence paths, including the generated `report.html`, without reading local
 files or exposing daemon tokens.
 Pasting the matching artifact JSON from `agents-route.json`,
 `probe-data-readiness.json`, or `doctor-prompt-free.json` turns that same viewer
-into a compact QA report for route policy, route candidates, quota freshness,
-and repair-plan evidence.
+into a compact QA report for route policy, route decision, route candidates,
+quota freshness, and repair-plan evidence.
 For CI or long-running tasks, `capd probe evidence --manifest
 /tmp/capd-live-evidence/manifest.json --fail` reads the same manifest and its
 listed artifacts locally, then fails if route policy, route candidates, fresh

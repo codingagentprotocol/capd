@@ -1437,6 +1437,7 @@ function evidenceArtifactRows(parsed) {
   const policy = firstValue(parsed.values, v => v && (v.routePolicy || (v.codex && v.codex.routePolicy) || (v.data && v.data.routePolicy)));
   const candidates = firstValue(parsed.values, v => v && (v.routeCandidates || (v.data && v.data.routeCandidates) || (v.codex && v.codex.routeCandidates)));
   const summary = firstValue(parsed.values, v => v && (v.summary || (v.data && v.data.summary)));
+  const routeDecision = firstValue(parsed.values, v => v && (v.accountRoute || v.routeDecision || (v.data && (v.data.accountRoute || v.data.routeDecision)) || (v.codex && (v.codex.accountRoute || v.codex.routeDecision))));
   const repairPlan = firstValue(parsed.values, v => v && (v.repairPlan || (v.data && v.data.repairPlan) || (v.codex && v.codex.repairPlan)));
   rows.push({
     name: "artifact coverage",
@@ -1461,6 +1462,12 @@ function evidenceArtifactRows(parsed) {
     nextStep: Array.isArray(candidates) && candidates.length > 0 ? "" : "paste agents-route.json or probe data with routeCandidates"
   });
   rows.push({
+    name: "route decision evidence",
+    ok: routeDecisionEvidenceOK(summary, routeDecision),
+    evidence: routeDecisionEvidenceText(summary, routeDecision),
+    nextStep: routeDecisionEvidenceOK(summary, routeDecision) ? "" : "paste agents-route.json with accountRoute or probe data with summary.routeDecisionOk=true"
+  });
+  rows.push({
     name: "quota freshness evidence",
     ok: quotaEvidenceOK(summary, candidates),
     evidence: quotaEvidenceText(summary, candidates),
@@ -1481,6 +1488,17 @@ function firstValue(values, picker) {
     if (picked) return picked;
   }
   return null;
+}
+
+function routeDecisionEvidenceOK(summary, routeDecision) {
+  if (summary && typeof summary.routeDecisionOk === "boolean") return summary.routeDecisionOk;
+  return !!routeDecision;
+}
+
+function routeDecisionEvidenceText(summary, routeDecision) {
+  if (summary && typeof summary.routeDecisionOk === "boolean") return `routeDecisionOk ${summary.routeDecisionOk}`;
+  if (routeDecision) return routeDecisionSummary(routeDecision);
+  return "missing routeDecisionOk";
 }
 
 function quotaEvidenceOK(summary, candidates) {

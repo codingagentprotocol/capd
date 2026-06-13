@@ -142,7 +142,8 @@ The full console also has a diagnostic package viewer for pasting live selftest
 doctor, smoke, generated `report.html`, and SecretStore evidence artifact paths
 without reading local files from the browser.
 Paste the matching artifact JSON into the same viewer to get a compact QA report
-for route policy, route candidates, quota freshness, and repair-plan evidence.
+for route policy, route decision, route candidates, quota freshness, and
+repair-plan evidence.
 For automation, `capd probe evidence --manifest
 /tmp/capd-live-evidence/manifest.json --fail` reads the saved manifest plus its
 listed artifacts and exits non-zero when route policy, route candidates, fresh

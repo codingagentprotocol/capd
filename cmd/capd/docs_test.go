@@ -70,7 +70,7 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"`manifest.json` or `summary.json`",
 		"generated `report.html`",
 		"without reading local\nfiles or exposing daemon tokens",
-		"compact QA report for route policy, route candidates, quota freshness",
+		"compact QA report for route policy, route decision, route candidates",
 		"capd probe evidence --manifest /tmp/capd-live-evidence/manifest.json --fail",
 		"--html /tmp/capd-live-evidence/report.html",
 	} {
@@ -111,7 +111,7 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"`manifest.json` or `summary.json`",
 		"generated `report.html`",
 		"without reading local files from the browser",
-		"compact QA report\nfor route policy, route candidates, quota freshness",
+		"compact QA report\nfor route policy, route decision, route candidates",
 		"capd probe evidence --manifest\n/tmp/capd-live-evidence/manifest.json --fail",
 		"--html /tmp/capd-live-evidence/report.html",
 	} {
