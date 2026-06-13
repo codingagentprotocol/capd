@@ -116,6 +116,54 @@ func TestProbeEvidenceCmdJSONAndFail(t *testing.T) {
 	}
 }
 
+func TestProbeEvidenceCmdWritesStandaloneHTMLReport(t *testing.T) {
+	dir := t.TempDir()
+	manifest := filepath.Join(dir, "manifest.json")
+	route := filepath.Join(dir, "agents-route.json")
+	probe := filepath.Join(dir, "probe-data-readiness.json")
+	report := filepath.Join(dir, "report", "evidence.html")
+	writeTestFile(t, manifest, `{"manifestVersion":1,"status":"passed","stage":"complete","backend":"native","daemonMode":"existing","artifacts":{"agentsRoute":"agents-route.json","probeData":"probe-data-readiness.json"}}`)
+	writeTestFile(t, route, `{"routePolicy":{"name":"conservative-quota-pressure","freshTtlSeconds":1800,"unknownScore":75,"currentAccountTieBreak":0.01,"quotaWindows":["primary"]},"routeCandidates":[{"accountId":"codex-a","quotaState":"fresh","fresh":true,"secretBackend":"native","primaryUsedPercent":12}],"access_token":"must-not-appear"}`)
+	writeTestFile(t, probe, `{"summary":{"checkedAccounts":1,"freshQuotaAccounts":1,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteFresh":true},"repairPlan":[]}`)
+
+	var out bytes.Buffer
+	cmd := newProbeCmd()
+	cmd.SetArgs([]string{"evidence", "--manifest", manifest, "--html", report, "--fail"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "html: "+report) {
+		t.Fatalf("output missing html path: %s", out.String())
+	}
+	html, err := os.ReadFile(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(html)
+	for _, want := range []string{
+		"<title>capd evidence report</title>",
+		"overall passed",
+		"status passed",
+		"backend native",
+		"Route candidates",
+		"conservative-quota-pressure",
+		"quota freshness",
+		"agents-route.json",
+		"probe-data-readiness.json",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("html missing %q: %s", want, text)
+		}
+	}
+	for _, forbidden := range []string{"must-not-appear", "access_token"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("html leaked raw artifact content %q: %s", forbidden, text)
+		}
+	}
+}
+
 func writeTestFile(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {

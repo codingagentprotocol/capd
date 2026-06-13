@@ -305,6 +305,8 @@ For CI or long-running tasks, `capd probe evidence --manifest
 /tmp/capd-live-evidence/manifest.json --fail` reads the same manifest and its
 listed artifacts locally, then fails if route policy, route candidates, fresh
 quota evidence, backend, daemon mode, or a passed selftest status is missing.
+Add `--html /tmp/capd-live-evidence/report.html` to write a standalone QA
+report from the same safe summary without embedding raw artifact JSON.
 The endpoint bounds server-side work too: ordinary probes get 12s and readiness
 probes get 2m. Its JSON includes a compact `summary` for account counts, quota
 freshness, auto-route freshness, route-decision status, and SecretStore backend

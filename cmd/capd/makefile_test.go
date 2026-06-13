@@ -143,6 +143,7 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"ProbeDataReadinessCanOverrideRequiredSecretBackend",
 		"ProbeEvidenceCmdSummarizesManifestArtifacts",
 		"ProbeEvidenceCmdJSONAndFail",
+		"ProbeEvidenceCmdWritesStandaloneHTMLReport",
 		"HealthRequireSecretBackendFailsOnMismatch",
 		"SecretStoreCheckJSONRoundTrip",
 		"SecretStoreCheckFailsOnBackendMismatchAfterJSON",

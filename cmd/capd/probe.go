@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"net/url"
@@ -88,6 +89,7 @@ func newProbeCmd() *cobra.Command {
 			artifactPaths, _ := cmd.Flags().GetStringArray("artifact")
 			jsonOut, _ := cmd.Flags().GetBool("json")
 			fail, _ := cmd.Flags().GetBool("fail")
+			htmlPath, _ := cmd.Flags().GetString("html")
 			report, err := loadProbeEvidenceReport(manifestPath, artifactPaths)
 			if err != nil {
 				return err
@@ -97,6 +99,12 @@ func newProbeCmd() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))
 			} else {
 				printProbeEvidenceReport(cmd, report)
+			}
+			if htmlPath != "" {
+				if err := writeProbeEvidenceHTML(htmlPath, report); err != nil {
+					return err
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "html: %s\n", htmlPath)
 			}
 			if fail && !report.OK {
 				return fmt.Errorf("probe evidence failed: %s", strings.Join(report.Issues, "; "))
@@ -108,6 +116,7 @@ func newProbeCmd() *cobra.Command {
 	evidenceCmd.Flags().StringArray("artifact", nil, "path to a safe evidence artifact JSON file; repeat for agents-route/probe-data/doctor")
 	evidenceCmd.Flags().Bool("json", false, "print evidence validation JSON")
 	evidenceCmd.Flags().Bool("fail", false, "exit non-zero when required evidence is missing or not ready")
+	evidenceCmd.Flags().String("html", "", "write a standalone HTML QA report for the evidence package")
 	_ = evidenceCmd.MarkFlagRequired("manifest")
 	cmd.AddCommand(dataCmd, evidenceCmd)
 	return cmd
@@ -574,6 +583,81 @@ func printProbeEvidenceReport(cmd *cobra.Command, report probeEvidenceReport) {
 		fmt.Fprintf(cmd.OutOrStdout(), "issue: %s\n", issue)
 	}
 }
+
+func writeProbeEvidenceHTML(path string, report probeEvidenceReport) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return probeEvidenceHTMLTemplate.Execute(file, report)
+}
+
+var probeEvidenceHTMLTemplate = template.Must(template.New("probe-evidence").Funcs(template.FuncMap{
+	"routePolicyHTML": func(policy *protocol.AccountRoutePolicy) string {
+		if policy == nil {
+			return ""
+		}
+		return routePolicyText(*policy)
+	},
+}).Parse(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>capd evidence report</title>
+<style>
+:root{color-scheme:light dark;--bg:#f7f8fb;--fg:#152033;--muted:#5e6b80;--line:#d8deea;--ok:#176b3a;--bad:#a12a2a;--card:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#10141c;--fg:#eef3fb;--muted:#a9b4c6;--line:#2d3748;--card:#171d28;--ok:#6bd28f;--bad:#ff8b8b}}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:1120px;margin:0 auto;padding:32px 20px 48px}
+h1{font-size:28px;margin:0 0 8px} h2{font-size:18px;margin:28px 0 10px}
+.muted{color:var(--muted)} .pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 10px;margin-right:8px}
+.ok{color:var(--ok);font-weight:700}.bad{color:var(--bad);font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:18px 0}
+.metric{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}.metric b{display:block;font-size:22px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px 10px;vertical-align:top}
+th{font-size:12px;text-transform:uppercase;color:var(--muted);letter-spacing:0}
+tr:last-child td{border-bottom:0} code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+</style>
+</head>
+<body>
+<main>
+<h1>capd evidence report</h1>
+<p class="muted">Standalone QA summary generated from safe live selftest evidence. Raw token material is not embedded.</p>
+<p>
+  <span class="{{if .OK}}ok{{else}}bad{{end}}">overall {{if .OK}}passed{{else}}failed{{end}}</span>
+  <span class="pill">status {{.Manifest.Status}}</span>
+  <span class="pill">stage {{.Manifest.Stage}}</span>
+  <span class="pill">backend {{.Manifest.Backend}}</span>
+  <span class="pill">daemon {{.Manifest.DaemonMode}}</span>
+</p>
+<p class="muted"><code>{{.Manifest.Source}}</code> <code>{{.Manifest.Path}}</code></p>
+<div class="grid">
+  <div class="metric"><span class="muted">Route candidates</span><b>{{.RouteCandidates}}</b></div>
+  <div class="metric"><span class="muted">Fresh candidates</span><b>{{.FreshCandidates}}</b></div>
+  <div class="metric"><span class="muted">Quota fresh</span><b>{{.QuotaFresh}}</b></div>
+  <div class="metric"><span class="muted">Repair steps</span><b>{{.RepairPlanSteps}}</b></div>
+</div>
+{{if .RoutePolicy}}<h2>Route Policy</h2><p><code>{{routePolicyHTML .RoutePolicy}}</code></p>{{end}}
+<h2>Checks</h2>
+<table>
+<thead><tr><th>Check</th><th>OK</th><th>Evidence</th><th>Next step</th></tr></thead>
+<tbody>{{range .Checks}}<tr><td>{{.Name}}</td><td class="{{if .OK}}ok{{else}}bad{{end}}">{{.OK}}</td><td>{{.Evidence}}</td><td>{{.NextStep}}</td></tr>{{end}}</tbody>
+</table>
+<h2>Artifacts</h2>
+<table>
+<thead><tr><th>Path</th><th>Kind</th><th>Policy</th><th>Candidates</th><th>Fresh</th><th>Quota</th><th>Repair</th></tr></thead>
+<tbody>{{range .Artifacts}}<tr><td><code>{{.Path}}</code></td><td>{{.Kind}}</td><td>{{.RoutePolicy}}</td><td>{{.RouteCandidates}}</td><td>{{.FreshCandidates}}</td><td>{{.QuotaFresh}}</td><td>{{.RepairPlanSteps}}</td></tr>{{end}}</tbody>
+</table>
+{{if .Issues}}<h2>Issues</h2><ul>{{range .Issues}}<li>{{.}}</li>{{end}}</ul>{{end}}
+</main>
+</body>
+</html>`))
 
 func probeEvidenceChecks(report probeEvidenceReport) []probeEvidenceCheck {
 	return []probeEvidenceCheck{

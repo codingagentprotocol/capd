@@ -70,6 +70,7 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"without reading local files or exposing daemon tokens",
 		"compact QA report for route policy, route candidates, quota freshness",
 		"capd probe evidence --manifest /tmp/capd-live-evidence/manifest.json --fail",
+		"--html /tmp/capd-live-evidence/report.html",
 	} {
 		if !strings.Contains(readme, want) {
 			t.Fatalf("README missing prompt-free web refresh contract %q", want)
@@ -109,6 +110,7 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"without reading local\nfiles from the browser",
 		"compact QA report\nfor route policy, route candidates, quota freshness",
 		"capd probe evidence --manifest\n/tmp/capd-live-evidence/manifest.json --fail",
+		"--html /tmp/capd-live-evidence/report.html",
 	} {
 		if !strings.Contains(testingDoc, want) {
 			t.Fatalf("testing docs missing prompt-free probe refresh contract %q", want)
@@ -129,6 +131,8 @@ func TestReferenceDocsCoverProbeEvidence(t *testing.T) {
 		"relative artifact paths are resolved from the manifest directory",
 		"route policy, route candidate count, fresh quota evidence",
 		"emits a `checks` array for CI/Web consumers",
+		"`--html` writes a standalone QA report",
+		"without embedding raw artifact JSON",
 		"`--fail` exits non-zero",
 	} {
 		if !strings.Contains(reference, want) {
