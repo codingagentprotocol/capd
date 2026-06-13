@@ -15,7 +15,9 @@ func TestLiveCodexReadinessUsesOneSecretBackend(t *testing.T) {
 	for _, want := range []string{
 		"LIVE_SECRET_BACKEND ?= native",
 		"CAPD_BIN ?= go run ./cmd/capd",
-		"verify-codex-readiness-sim live-codex-preflight live-codex-readiness live-codex-selftest",
+		"verify-codex-readiness-sim live-codex-repair-plan live-codex-preflight live-codex-readiness live-codex-selftest",
+		"live-codex-repair-plan:",
+		"@CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) doctor --repair-plan --prompt-free --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m",
 		"live-codex-preflight:",
 		"running daemon from: capd start --secret-backend $(LIVE_SECRET_BACKEND)",
 		"live-codex-readiness: live-codex-preflight",

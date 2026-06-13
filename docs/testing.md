@@ -108,6 +108,7 @@ CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --j
 CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native --timeout 2m
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native --timeout 2m
 CAPD_SECRET_BACKEND=native capd doctor --repair-plan --prompt-free --require-secret-backend native
+make live-codex-repair-plan
 
 # In another terminal, keep the daemon running for CAP/WebSocket checks:
 capd start --secret-backend native
@@ -260,7 +261,9 @@ view: each entry has an `id`, copy/paste `command`, expected evidence, and
 daemon/SecretStore requirements without token material or local runtime paths.
 Use `capd doctor --repair-plan --prompt-free --require-secret-backend native`
 when automation only needs the ordered repair commands and should avoid native
-SecretStore credential prompts.
+SecretStore credential prompts. Use `make live-codex-repair-plan` when the
+automation should share `LIVE_SECRET_BACKEND` and `CAPD_BIN` with
+`make live-codex-preflight`.
 The top-level `summary` object is the compact
 CI/Web view of missing accounts, account credential readability, quota
 freshness, auto-route freshness, SecretStore backend status, and daemon CAP

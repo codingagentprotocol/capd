@@ -168,6 +168,7 @@ CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --j
 CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native --timeout 2m # verify native SecretStore directly
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native --timeout 2m # readiness gate
 CAPD_SECRET_BACKEND=native capd doctor --repair-plan --prompt-free --require-secret-backend native # repair commands only
+make live-codex-repair-plan # same repair plan using LIVE_SECRET_BACKEND/CAPD_BIN
 capd start --secret-backend native # keep running in another terminal for CAP/WebSocket checks
 capd console --probe --require-secret-backend native # simple web data probe; opens with daemon token without printing it
 capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail # same probe diagnostics for automation
@@ -215,7 +216,9 @@ runnable commands plus expected evidence for fixing daemon, account import,
 SecretStore, quota freshness, auto-route freshness, and final live preflight
 gates. Text output prints the same plan under `repair plan:` for copy/paste
 debugging. Use `capd doctor --repair-plan --prompt-free` when CI or a long task
-only needs the ordered repair plan JSON array.
+only needs the ordered repair plan JSON array, or `make live-codex-repair-plan`
+when it should use the same `LIVE_SECRET_BACKEND` and `CAPD_BIN` knobs as the
+live preflight.
 For unattended release checks, `make
 live-codex-selftest` starts a temporary daemon when needed, waits for health,
 runs the same preflight, and cleans up only the daemon it started. The final
