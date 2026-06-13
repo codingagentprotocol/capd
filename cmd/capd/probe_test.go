@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -50,6 +52,71 @@ func TestProbeDataCmdUsesAuthorizationHeader(t *testing.T) {
 	}
 	if strings.Contains(text, token) {
 		t.Fatalf("output leaked token: %s", text)
+	}
+}
+
+func TestProbeEvidenceCmdSummarizesManifestArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	manifest := filepath.Join(dir, "manifest.json")
+	route := filepath.Join(dir, "agents-route.json")
+	probe := filepath.Join(dir, "probe-data-readiness.json")
+	doctor := filepath.Join(dir, "doctor-prompt-free.json")
+	writeTestFile(t, manifest, `{"manifestVersion":1,"status":"passed","stage":"complete","backend":"native","daemonMode":"temporary","artifacts":{"agentsRoute":"`+route+`","probeData":"`+probe+`","doctor":"`+doctor+`"}}`)
+	writeTestFile(t, route, `{"routePolicy":{"name":"conservative-quota-pressure","freshTtlSeconds":1800,"unknownScore":75,"currentAccountTieBreak":0.01,"quotaWindows":["primary","secondary","code_review"]},"routeCandidates":[{"accountId":"codex-a","quotaState":"fresh","fresh":true,"secretBackend":"native","primaryUsedPercent":12}]}`)
+	writeTestFile(t, probe, `{"summary":{"checkedAccounts":2,"freshQuotaAccounts":2,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteFresh":true},"repairPlan":[]}`)
+	writeTestFile(t, doctor, `{"codex":{"routePolicy":{"name":"conservative-quota-pressure"}},"repairPlan":[]}`)
+
+	var out bytes.Buffer
+	cmd := newProbeCmd()
+	cmd.SetArgs([]string{"evidence", "--manifest", manifest, "--fail"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{
+		"ok: true",
+		"manifest: manifest.json " + manifest + " status=passed stage=complete backend=native daemon=temporary",
+		"route policy: conservative-quota-pressure ttl=1800s unknown=75.00 tie-break=0.01 windows=primary/secondary/code_review",
+		"route candidates: 1 fresh=1",
+		"quota fresh: true",
+		"repair plan: 0 steps",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("text missing %q: %s", want, text)
+		}
+	}
+}
+
+func TestProbeEvidenceCmdJSONAndFail(t *testing.T) {
+	dir := t.TempDir()
+	summary := filepath.Join(dir, "summary.json")
+	route := filepath.Join(dir, "agents-route.json")
+	writeTestFile(t, summary, `{"summaryVersion":1,"status":"failed","stage":"live-codex-preflight","backend":"native","daemonMode":"existing","routeEvidencePath":"`+route+`"}`)
+	writeTestFile(t, route, `{"routeCandidates":[{"accountId":"codex-a","quotaState":"stale","fresh":false}]}`)
+
+	var out bytes.Buffer
+	cmd := newProbeCmd()
+	cmd.SetArgs([]string{"evidence", "--manifest", summary, "--artifact", route, "--json", "--fail"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "probe evidence failed") {
+		t.Fatalf("err = %v output=%s", err, out.String())
+	}
+	text := out.String()
+	for _, want := range []string{`"ok": false`, `"source": "summary.json"`, `"status": "failed"`, `"routeCandidates": 1`, `"freshCandidates": 0`, `"routePolicy evidence missing"`, `"fresh quota evidence missing"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("json missing %q: %s", want, text)
+		}
+	}
+}
+
+func writeTestFile(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 

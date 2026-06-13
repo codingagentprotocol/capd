@@ -69,6 +69,7 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"`manifest.json` or `summary.json`",
 		"without reading local files or exposing daemon tokens",
 		"compact QA report for route policy, route candidates, quota freshness",
+		"capd probe evidence --manifest /tmp/capd-live-evidence/manifest.json --fail",
 	} {
 		if !strings.Contains(readme, want) {
 			t.Fatalf("README missing prompt-free web refresh contract %q", want)
@@ -107,9 +108,29 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"`manifest.json` or `summary.json`",
 		"without reading local\nfiles from the browser",
 		"compact QA report\nfor route policy, route candidates, quota freshness",
+		"capd probe evidence --manifest\n/tmp/capd-live-evidence/manifest.json --fail",
 	} {
 		if !strings.Contains(testingDoc, want) {
 			t.Fatalf("testing docs missing prompt-free probe refresh contract %q", want)
+		}
+	}
+}
+
+func TestReferenceDocsCoverProbeEvidence(t *testing.T) {
+	data, err := os.ReadFile("../../docs/reference.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := string(data)
+	for _, want := range []string{
+		"capd probe evidence --manifest <manifest.json\\|summary.json>",
+		"validates saved live selftest evidence without contacting the daemon",
+		"follows artifact paths from the manifest or summary",
+		"route policy, route candidate count, fresh quota evidence",
+		"`--fail` exits non-zero",
+	} {
+		if !strings.Contains(reference, want) {
+			t.Fatalf("reference docs missing probe evidence contract %q", want)
 		}
 	}
 }

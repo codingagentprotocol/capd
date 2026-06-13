@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -78,8 +79,70 @@ func newProbeCmd() *cobra.Command {
 	dataCmd.Flags().Bool("fail", false, "exit non-zero when /probe/data reports ok=false or an HTTP error status")
 	dataCmd.Flags().Duration("timeout", 2*time.Minute, "maximum time to wait for /probe/data")
 	dataCmd.Flags().String("require-secret-backend", "", "request a SecretStore backend requirement for readiness diagnostics (file or native)")
-	cmd.AddCommand(dataCmd)
+	evidenceCmd := &cobra.Command{
+		Use:   "evidence",
+		Short: "Validate live selftest evidence manifest and artifacts",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			manifestPath, _ := cmd.Flags().GetString("manifest")
+			artifactPaths, _ := cmd.Flags().GetStringArray("artifact")
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			fail, _ := cmd.Flags().GetBool("fail")
+			report, err := loadProbeEvidenceReport(manifestPath, artifactPaths)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				out, _ := json.MarshalIndent(report, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+			} else {
+				printProbeEvidenceReport(cmd, report)
+			}
+			if fail && !report.OK {
+				return fmt.Errorf("probe evidence failed: %s", strings.Join(report.Issues, "; "))
+			}
+			return nil
+		},
+	}
+	evidenceCmd.Flags().String("manifest", "", "path to CAPD live selftest manifest.json or summary.json")
+	evidenceCmd.Flags().StringArray("artifact", nil, "path to a safe evidence artifact JSON file; repeat for agents-route/probe-data/doctor")
+	evidenceCmd.Flags().Bool("json", false, "print evidence validation JSON")
+	evidenceCmd.Flags().Bool("fail", false, "exit non-zero when required evidence is missing or not ready")
+	_ = evidenceCmd.MarkFlagRequired("manifest")
+	cmd.AddCommand(dataCmd, evidenceCmd)
 	return cmd
+}
+
+type probeEvidenceReport struct {
+	OK              bool                         `json:"ok"`
+	Manifest        probeEvidenceManifest        `json:"manifest"`
+	Artifacts       []probeEvidenceArtifact      `json:"artifacts,omitempty"`
+	RoutePolicy     *protocol.AccountRoutePolicy `json:"routePolicy,omitempty"`
+	RouteCandidates int                          `json:"routeCandidates"`
+	FreshCandidates int                          `json:"freshCandidates"`
+	QuotaFresh      bool                         `json:"quotaFresh"`
+	RepairPlanSteps int                          `json:"repairPlanSteps"`
+	Issues          []string                     `json:"issues,omitempty"`
+}
+
+type probeEvidenceManifest struct {
+	Path       string            `json:"path"`
+	Source     string            `json:"source"`
+	Version    int               `json:"version"`
+	Status     string            `json:"status"`
+	Stage      string            `json:"stage"`
+	Backend    string            `json:"backend"`
+	DaemonMode string            `json:"daemonMode"`
+	Artifacts  map[string]string `json:"artifacts,omitempty"`
+}
+
+type probeEvidenceArtifact struct {
+	Path            string `json:"path"`
+	Kind            string `json:"kind"`
+	RoutePolicy     bool   `json:"routePolicy"`
+	RouteCandidates int    `json:"routeCandidates"`
+	FreshCandidates int    `json:"freshCandidates"`
+	QuotaFresh      bool   `json:"quotaFresh"`
+	RepairPlanSteps int    `json:"repairPlanSteps"`
 }
 
 type probeDataOptions struct {
@@ -290,4 +353,282 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 	if result.Error != "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "error: probe data %s\n", result.Error)
 	}
+}
+
+func loadProbeEvidenceReport(manifestPath string, artifactPaths []string) (probeEvidenceReport, error) {
+	manifest, err := loadProbeEvidenceManifest(manifestPath)
+	if err != nil {
+		return probeEvidenceReport{}, err
+	}
+	report := probeEvidenceReport{Manifest: manifest}
+	if len(artifactPaths) == 0 {
+		artifactPaths = manifestArtifactPaths(manifest)
+	}
+	for _, path := range artifactPaths {
+		artifact, err := loadProbeEvidenceArtifact(path)
+		if err != nil {
+			return probeEvidenceReport{}, err
+		}
+		report.Artifacts = append(report.Artifacts, artifact)
+		if artifact.RouteCandidates > 0 {
+			report.RouteCandidates += artifact.RouteCandidates
+			report.FreshCandidates += artifact.FreshCandidates
+		}
+		if artifact.RepairPlanSteps > 0 {
+			report.RepairPlanSteps += artifact.RepairPlanSteps
+		}
+	}
+	for _, artifact := range report.Artifacts {
+		if artifact.RoutePolicy && report.RoutePolicy == nil {
+			policy, _ := readRoutePolicyFromFile(artifact.Path)
+			report.RoutePolicy = policy
+		}
+		if artifact.QuotaFresh {
+			report.QuotaFresh = true
+		}
+	}
+	report.Issues = probeEvidenceIssues(report)
+	report.OK = len(report.Issues) == 0
+	return report, nil
+}
+
+func manifestArtifactPaths(manifest probeEvidenceManifest) []string {
+	seen := map[string]bool{}
+	paths := []string{}
+	for _, key := range []string{"agentsRoute", "probeData", "doctor", "accountsSmoke", "accountsCheck", "health", "accountsList"} {
+		path := manifest.Artifacts[key]
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		paths = append(paths, path)
+	}
+	return paths
+}
+
+func loadProbeEvidenceManifest(path string) (probeEvidenceManifest, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return probeEvidenceManifest{}, err
+	}
+	var data map[string]any
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return probeEvidenceManifest{}, fmt.Errorf("decode evidence manifest: %w", err)
+	}
+	manifest := probeEvidenceManifest{Path: path, Artifacts: map[string]string{}}
+	if version, ok := intField(data, "manifestVersion"); ok {
+		manifest.Source = "manifest.json"
+		manifest.Version = version
+		manifest.Status = stringField(data, "status")
+		manifest.Stage = stringField(data, "stage")
+		manifest.Backend = stringField(data, "backend")
+		manifest.DaemonMode = stringField(data, "daemonMode")
+		if artifacts, ok := data["artifacts"].(map[string]any); ok {
+			for key, value := range artifacts {
+				if path, ok := value.(string); ok && path != "" {
+					manifest.Artifacts[key] = path
+				}
+			}
+		}
+		return manifest, nil
+	}
+	if version, ok := intField(data, "summaryVersion"); ok {
+		manifest.Source = "summary.json"
+		manifest.Version = version
+		manifest.Status = stringField(data, "status")
+		manifest.Stage = stringField(data, "stage")
+		manifest.Backend = stringField(data, "backend")
+		manifest.DaemonMode = stringField(data, "daemonMode")
+		for key, field := range map[string]string{
+			"manifest":    "evidenceManifestPath",
+			"agentsRoute": "routeEvidencePath",
+			"probeData":   "probeEvidencePath",
+			"doctor":      "doctorEvidencePath",
+			"repairPlan":  "repairPlanPath",
+		} {
+			if value := stringField(data, field); value != "" {
+				manifest.Artifacts[key] = value
+			}
+		}
+		return manifest, nil
+	}
+	return probeEvidenceManifest{}, fmt.Errorf("evidence manifest must include manifestVersion or summaryVersion")
+}
+
+func loadProbeEvidenceArtifact(path string) (probeEvidenceArtifact, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return probeEvidenceArtifact{}, err
+	}
+	var data map[string]any
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return probeEvidenceArtifact{}, fmt.Errorf("decode evidence artifact %s: %w", path, err)
+	}
+	artifact := probeEvidenceArtifact{Path: path, Kind: probeEvidenceArtifactKind(data)}
+	artifact.RoutePolicy = mapHasNested(data, "routePolicy") || mapHasNested(data, "codex", "routePolicy") || mapHasNested(data, "data", "routePolicy")
+	candidates := firstArray(data, []string{"routeCandidates"}, []string{"data", "routeCandidates"}, []string{"codex", "routeCandidates"})
+	artifact.RouteCandidates = len(candidates)
+	for _, candidate := range candidates {
+		if row, ok := candidate.(map[string]any); ok {
+			if fresh, ok := row["fresh"].(bool); ok && fresh {
+				artifact.FreshCandidates++
+			}
+		}
+	}
+	summary := firstMap(data, []string{"summary"}, []string{"data", "summary"})
+	if summary != nil {
+		checked, _ := intField(summary, "checkedAccounts")
+		fresh, _ := intField(summary, "freshQuotaAccounts")
+		autoFresh, _ := summary["autoRouteFresh"].(bool)
+		artifact.QuotaFresh = checked > 0 && fresh == checked && autoFresh
+	} else if artifact.RouteCandidates > 0 {
+		artifact.QuotaFresh = artifact.FreshCandidates == artifact.RouteCandidates
+	}
+	repair := firstArray(data, []string{"repairPlan"}, []string{"data", "repairPlan"}, []string{"codex", "repairPlan"})
+	artifact.RepairPlanSteps = len(repair)
+	return artifact, nil
+}
+
+func readRoutePolicyFromFile(path string) (*protocol.AccountRoutePolicy, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var holder struct {
+		RoutePolicy *protocol.AccountRoutePolicy `json:"routePolicy"`
+		Codex       struct {
+			RoutePolicy *protocol.AccountRoutePolicy `json:"routePolicy"`
+		} `json:"codex"`
+		Data struct {
+			RoutePolicy *protocol.AccountRoutePolicy `json:"routePolicy"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &holder); err != nil {
+		return nil, err
+	}
+	switch {
+	case holder.RoutePolicy != nil:
+		return holder.RoutePolicy, nil
+	case holder.Data.RoutePolicy != nil:
+		return holder.Data.RoutePolicy, nil
+	case holder.Codex.RoutePolicy != nil:
+		return holder.Codex.RoutePolicy, nil
+	default:
+		return nil, nil
+	}
+}
+
+func probeEvidenceArtifactKind(data map[string]any) string {
+	switch {
+	case mapHasNested(data, "routePolicy") || mapHasNested(data, "routeCandidates"):
+		return "route"
+	case mapHasNested(data, "summary") || mapHasNested(data, "checks"):
+		return "probe"
+	case mapHasNested(data, "codex"):
+		return "doctor"
+	default:
+		return "unknown"
+	}
+}
+
+func probeEvidenceIssues(report probeEvidenceReport) []string {
+	issues := []string{}
+	if report.Manifest.Status != "passed" {
+		issues = append(issues, "selftest status is "+emptyAs(report.Manifest.Status, "missing"))
+	}
+	if report.Manifest.Backend == "" {
+		issues = append(issues, "SecretStore backend missing")
+	}
+	if report.Manifest.DaemonMode == "" {
+		issues = append(issues, "daemon mode missing")
+	}
+	if report.RoutePolicy == nil {
+		issues = append(issues, "routePolicy evidence missing")
+	}
+	if report.RouteCandidates == 0 {
+		issues = append(issues, "routeCandidates evidence missing")
+	}
+	if !report.QuotaFresh {
+		issues = append(issues, "fresh quota evidence missing")
+	}
+	return issues
+}
+
+func printProbeEvidenceReport(cmd *cobra.Command, report probeEvidenceReport) {
+	fmt.Fprintf(cmd.OutOrStdout(), "ok: %t\n", report.OK)
+	fmt.Fprintf(cmd.OutOrStdout(), "manifest: %s %s status=%s stage=%s backend=%s daemon=%s\n", report.Manifest.Source, report.Manifest.Path, report.Manifest.Status, report.Manifest.Stage, report.Manifest.Backend, report.Manifest.DaemonMode)
+	if report.RoutePolicy != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "route policy: %s\n", routePolicyText(*report.RoutePolicy))
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "route candidates: %d fresh=%d\n", report.RouteCandidates, report.FreshCandidates)
+	fmt.Fprintf(cmd.OutOrStdout(), "quota fresh: %t\n", report.QuotaFresh)
+	fmt.Fprintf(cmd.OutOrStdout(), "repair plan: %d steps\n", report.RepairPlanSteps)
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "ARTIFACT\tKIND\tPOLICY\tCANDIDATES\tFRESH\tQUOTA\tREPAIR")
+	for _, artifact := range report.Artifacts {
+		fmt.Fprintf(w, "%s\t%s\t%t\t%d\t%d\t%t\t%d\n", artifact.Path, artifact.Kind, artifact.RoutePolicy, artifact.RouteCandidates, artifact.FreshCandidates, artifact.QuotaFresh, artifact.RepairPlanSteps)
+	}
+	_ = w.Flush()
+	for _, issue := range report.Issues {
+		fmt.Fprintf(cmd.OutOrStdout(), "issue: %s\n", issue)
+	}
+}
+
+func stringField(data map[string]any, key string) string {
+	if value, ok := data[key].(string); ok {
+		return value
+	}
+	return ""
+}
+
+func intField(data map[string]any, key string) (int, bool) {
+	switch value := data[key].(type) {
+	case float64:
+		return int(value), true
+	case int:
+		return value, true
+	default:
+		return 0, false
+	}
+}
+
+func mapHasNested(data map[string]any, path ...string) bool {
+	return nestedValue(data, path...) != nil
+}
+
+func firstMap(data map[string]any, paths ...[]string) map[string]any {
+	for _, path := range paths {
+		if value, ok := nestedValue(data, path...).(map[string]any); ok {
+			return value
+		}
+	}
+	return nil
+}
+
+func firstArray(data map[string]any, paths ...[]string) []any {
+	for _, path := range paths {
+		if value, ok := nestedValue(data, path...).([]any); ok {
+			return value
+		}
+	}
+	return nil
+}
+
+func nestedValue(data map[string]any, path ...string) any {
+	var current any = data
+	for _, key := range path {
+		row, ok := current.(map[string]any)
+		if !ok {
+			return nil
+		}
+		current = row[key]
+	}
+	return current
+}
+
+func emptyAs(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }

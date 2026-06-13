@@ -176,6 +176,7 @@ capd start --secret-backend native # keep running in another terminal for CAP/We
 capd console --probe --require-secret-backend native # simple web data probe; opens with daemon token without printing it
 capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail # same probe diagnostics for automation
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe/data # safe JSON diagnostics
+capd probe evidence --manifest /tmp/capd-live-evidence/manifest.json --fail # validate saved live selftest evidence artifacts
 capd health --json --require-secret-backend native # confirm daemon /healthz plus version/protocol/secret backend
 capd accounts import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # daemon-side CAP import
 CAPD_CODEX_AUTH_PATHS="/tmp/a/auth.json:/tmp/b/auth.json" capd accounts import # daemon-side CAP batch import on macOS/Linux
@@ -295,6 +296,10 @@ Pasting the matching artifact JSON from `agents-route.json`,
 `probe-data-readiness.json`, or `doctor-prompt-free.json` turns that same viewer
 into a compact QA report for route policy, route candidates, quota freshness,
 and repair-plan evidence.
+For CI or long-running tasks, `capd probe evidence --manifest
+/tmp/capd-live-evidence/manifest.json --fail` reads the same manifest and its
+listed artifacts locally, then fails if route policy, route candidates, fresh
+quota evidence, backend, daemon mode, or a passed selftest status is missing.
 The endpoint bounds server-side work too: ordinary probes get 12s and readiness
 probes get 2m. Its JSON includes a compact `summary` for account counts, quota
 freshness, auto-route freshness, route-decision status, and SecretStore backend

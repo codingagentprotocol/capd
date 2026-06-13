@@ -116,6 +116,7 @@ capd start --secret-backend native
 
 capd console --probe --require-secret-backend native
 capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail
+capd probe evidence --manifest /tmp/capd-live-evidence/manifest.json --fail
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe/data
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" "http://127.0.0.1:7777/probe/data?readiness=1&requireSecretBackend=native"
 capd health --json --require-secret-backend native
@@ -142,6 +143,10 @@ doctor, smoke, and SecretStore evidence artifact paths without reading local
 files from the browser.
 Paste the matching artifact JSON into the same viewer to get a compact QA report
 for route policy, route candidates, quota freshness, and repair-plan evidence.
+For automation, `capd probe evidence --manifest
+/tmp/capd-live-evidence/manifest.json --fail` reads the saved manifest plus its
+listed artifacts and exits non-zero when route policy, route candidates, fresh
+quota evidence, backend, daemon mode, or a passed selftest status is missing.
 
 After importing multiple accounts and starting the daemon in another terminal,
 the same live preflight is available without sending a prompt:
