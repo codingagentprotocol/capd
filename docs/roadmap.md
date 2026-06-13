@@ -251,7 +251,8 @@ it is considered supported.
     access-denied counts. Adapter start/failure, route decision, and
     SecretStore access-denied counters are now present in
     `/healthz?format=json`.
-14. Add a Web Console evidence export button that saves the same support bundle
-    shape used by CLI automation.
+14. Done: add a Web Console evidence export button that saves a prompt-free
+    browser package with inline health, probe, route, and account-check
+    artifacts for QA handoff.
 15. Add daemon restart recovery tests that prove stored sessions and replay
     evidence survive process replacement.

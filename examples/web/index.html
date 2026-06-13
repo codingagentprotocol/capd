@@ -127,6 +127,7 @@
   <textarea id="evidenceArtifactsInput" spellcheck="false" placeholder='Optional artifact JSON objects, separated by blank lines. Example: {"routePolicy":{"name":"conservative-quota-pressure"},"routeCandidates":[...]}'></textarea>
   <div class="actions">
     <button id="renderEvidenceManifest">查看诊断包</button>
+    <button id="exportEvidencePackage">导出 Evidence</button>
     <button id="clearEvidenceManifest">清空</button>
   </div>
   <div id="evidenceManifestResult"></div>
@@ -166,6 +167,10 @@ const evidenceArtifactsInputEl = document.getElementById("evidenceArtifactsInput
 const evidenceManifestResultEl = document.getElementById("evidenceManifestResult");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
+let lastHealthInfo = null;
+let lastAccountsCheck = null;
+let lastRouteDecision = null;
+let lastProbeData = null;
 const RPC_TIMEOUT_MS = 12000;
 const LONG_RPC_TIMEOUT_MS = 120000;
 
@@ -427,6 +432,7 @@ async function checkAccounts(readinessGate = false) {
       if (requiredBackend) params.requireSecretBackend = requiredBackend;
     }
     const result = await call("accounts/check", params);
+    lastAccountsCheck = result;
     const route = result.autoRoute ? ` · auto ${result.autoRoute.accountId || ""} ${routeEvidenceSummary(result.autoRoute)}` : "";
     const policy = routePolicySummary(result.routePolicy);
     if (readinessGate) line("ev-sys", `· readiness quota refreshed ${result.quotaRefreshed ? "yes" : "no"}`);
@@ -441,6 +447,7 @@ async function checkAccounts(readinessGate = false) {
     const label = readinessGate ? "就绪门禁失败" : "账号检查失败";
     line("ev-err", `✗ ${label}: ${e.message || JSON.stringify(e)}`);
     if (e.data) {
+      lastAccountsCheck = e.data;
       const route = e.data.autoRoute ? ` · auto ${e.data.autoRoute.accountId || ""} ${routeEvidenceSummary(e.data.autoRoute)}` : "";
       const policy = routePolicySummary(e.data.routePolicy);
       line("ev-sys", `· partial evidence ${e.data.checkedAccounts || 0} 个${route}`);
@@ -483,10 +490,15 @@ async function refreshReadinessDiagnostic(codexListResult = null) {
     let routeError = "";
     try {
       route = await call("agents/route", { accountId: "auto" });
+      lastRouteDecision = route;
     } catch (e) {
       routeError = e.message || JSON.stringify(e);
-      if (e.data) route = e.data;
+      if (e.data) {
+        route = e.data;
+        lastRouteDecision = e.data;
+      }
     }
+    lastAccountsCheck = result;
     renderReadinessDiagnosticResult({ result, route, routeError, requiredSecretBackend: requiredBackend });
   } catch (e) {
     if (e.data) {
@@ -494,10 +506,15 @@ async function refreshReadinessDiagnostic(codexListResult = null) {
       let routeError = "";
       try {
         route = await call("agents/route", { accountId: "auto" });
+        lastRouteDecision = route;
       } catch (routeErr) {
         routeError = routeErr.message || JSON.stringify(routeErr);
-        if (routeErr.data) route = routeErr.data;
+        if (routeErr.data) {
+          route = routeErr.data;
+          lastRouteDecision = routeErr.data;
+        }
       }
+      lastAccountsCheck = e.data;
       renderReadinessDiagnosticResult({ result: e.data, route, routeError, readinessError: e.message || JSON.stringify(e), requiredSecretBackend: requiredSecretBackend() });
       return;
     }
@@ -550,12 +567,15 @@ async function fetchProbeData({ readiness = false, requireSecretBackend = "" } =
 }
 
 function renderProbeDataResult(data) {
+  lastProbeData = data;
   const result = data.accountsCheck || {};
   result.summary = data.summary || result.summary || {};
   result.checkedAccounts = result.checkedAccounts || result.summary.checkedAccounts || 0;
   result.secretBackend = result.secretBackend || result.summary.secretBackend || "";
   if (data.autoRoute && !result.autoRoute) result.autoRoute = data.autoRoute;
   if (data.routeCandidates && !result.routeCandidates) result.routeCandidates = data.routeCandidates;
+  lastAccountsCheck = result;
+  if (data.routeDecision) lastRouteDecision = data.routeDecision;
   renderReadinessDiagnosticResult({
     result,
     route: data.routeDecision || { accountRoute: data.autoRoute, routeCandidates: data.routeCandidates },
@@ -1069,8 +1089,10 @@ async function previewRoute() {
   }
   try {
     const routed = await call("agents/route", params);
+    lastRouteDecision = routed;
     routePreviewEl.textContent = routeDecisionSummary(routed);
   } catch (e) {
+    if (e.data) lastRouteDecision = e.data;
     const partial = e.data ? ` · ${routeDecisionSummary(e.data)}` : "";
     routePreviewEl.textContent = "路由不可用: " + (e.message || JSON.stringify(e)) + partial;
   }
@@ -1209,11 +1231,123 @@ async function checkDaemonHealth(updateStatus = true) {
   try {
     const info = JSON.parse(body);
     if (!info.ok) throw new Error("health ok=false");
+    lastHealthInfo = info;
     return info;
   } catch (err) {
     if (body !== "ok") throw new Error(`CAP health failed: invalid JSON ${body || "empty"}`);
-    return { ok: true };
+    lastHealthInfo = { ok: true };
+    return lastHealthInfo;
   }
+}
+
+async function exportEvidencePackage() {
+  const button = document.getElementById("exportEvidencePackage");
+  button.disabled = true;
+  try {
+    const health = await checkDaemonHealth(false).catch(e => ({ ok:false, source:"health", error:e.message || String(e) }));
+    let probeData = lastProbeData;
+    if (TOKEN) {
+      probeData = await fetchProbeData({ readiness: false }).catch(e => ({ ok:false, source:"probe/data", error:e.message || String(e) }));
+      lastProbeData = probeData;
+    }
+    let route = lastRouteDecision;
+    if (!route && ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        route = await call("agents/route", { accountId: "auto" });
+        lastRouteDecision = route;
+      } catch (e) {
+        route = e.data || { ok:false, source:"agents/route", error:e.message || JSON.stringify(e) };
+        lastRouteDecision = route;
+      }
+    }
+    const accountsCheck = lastAccountsCheck || (probeData && probeData.accountsCheck) || null;
+    const manifest = {
+      manifestVersion: 1,
+      status: packageStatus(probeData, accountsCheck),
+      stage: "web-console-evidence",
+      backend: (health && health.secretBackend) || (probeData && probeData.summary && probeData.summary.secretBackend) || "",
+      daemonMode: "external",
+      checkedAt: Math.floor(Date.now() / 1000),
+      artifacts: {
+        health: "inline:health.json",
+        probeData: "inline:probe-data.json",
+        agentsRoute: "inline:agents-route.json",
+        accountsCheck: "inline:accounts-check.json"
+      }
+    };
+    const files = {
+      "manifest.json": manifest,
+      "health.json": health || {},
+      "probe-data.json": probeData || {},
+      "agents-route.json": route || {},
+      "accounts-check.json": accountsCheck || {}
+    };
+    const pkg = redactEvidence({
+      packageVersion: 1,
+      kind: "capd-web-console-evidence",
+      manifest,
+      files
+    });
+    evidenceManifestInputEl.value = JSON.stringify(pkg.manifest, null, 2);
+    evidenceArtifactsInputEl.value = [
+      pkg.files["health.json"],
+      pkg.files["probe-data.json"],
+      pkg.files["agents-route.json"],
+      pkg.files["accounts-check.json"]
+    ].map(v => JSON.stringify(v, null, 2)).join("\n\n");
+    renderEvidenceManifest();
+    downloadJSON(`capd-web-evidence-${pkg.manifest.checkedAt}.json`, pkg);
+    line("ev-done", "✓ Evidence package exported");
+  } catch (e) {
+    line("ev-err", `✗ Evidence export failed: ${e.message || JSON.stringify(e)}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function packageStatus(probeData, accountsCheck) {
+  if (probeData && probeData.ok === true) return "passed";
+  if (probeData && probeData.ok === false) return "failed";
+  if (accountsCheck && accountsCheck.summary && accountsCheck.summary.ready === true) return "passed";
+  return "collected";
+}
+
+function downloadJSON(name, value) {
+  const blob = new Blob([JSON.stringify(value, null, 2) + "\n"], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function redactEvidence(value) {
+  const forbiddenKeys = [
+    "access" + "Token",
+    "refresh" + "Token",
+    "id" + "Token",
+    "api" + "Key",
+    "raw" + "Auth" + "Json",
+    "secret" + "Ref",
+    "secret" + "_" + "ref",
+    "auth" + "Json",
+    "codex" + "Home",
+    "runtime" + "Root",
+    "env"
+  ].map(k => k.toLowerCase());
+  if (Array.isArray(value)) return value.map(redactEvidence);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [key, item] of Object.entries(value)) {
+      out[key] = forbiddenKeys.includes(key.toLowerCase()) ? "[redacted]" : redactEvidence(item);
+    }
+    return out;
+  }
+  if (typeof value === "string" && TOKEN && value.includes(TOKEN)) return value.split(TOKEN).join("[redacted-token]");
+  return value;
 }
 
 async function refreshQuota(accountId, button) {
@@ -1706,6 +1840,7 @@ document.getElementById("checkReady").onclick = () => checkAccounts(true);
 document.getElementById("refreshSelectedQuota").onclick = refreshSelectedQuota;
 document.getElementById("refreshAllQuota").onclick = refreshAllQuota;
 document.getElementById("renderEvidenceManifest").onclick = renderEvidenceManifest;
+document.getElementById("exportEvidencePackage").onclick = exportEvidencePackage;
 document.getElementById("refreshProfiles").onclick = () => loadProfiles(accountProfileName()).catch(e => line("ev-err", `✗ profile 刷新失败: ${e.message || JSON.stringify(e)}`));
 document.getElementById("saveProfile").onclick = () => saveProfile(false).catch(e => line("ev-err", `✗ profile 保存失败: ${e.message || JSON.stringify(e)}`));
 document.getElementById("setCurrentProfile").onclick = () => saveProfile(true).catch(e => line("ev-err", `✗ profile 当前设置失败: ${e.message || JSON.stringify(e)}`));

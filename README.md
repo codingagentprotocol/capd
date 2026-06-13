@@ -247,6 +247,8 @@ attach `execution.runnable` plus `execution.reason` to repair steps; the Web
 Console and compact Probe render that server-provided classification, with a
 local fallback for older daemons. The Console renders repair plans returned by
 both `/probe/data` deep verification and direct `accounts/check` readiness.
+It can also export a prompt-free browser evidence package with inline health,
+probe, route, and account-check artifacts for local QA handoff.
 For unattended release checks, `make
 live-codex-selftest` starts a temporary daemon when needed, waits for health,
 runs the same preflight, and cleans up only the daemon it started. The final
@@ -575,8 +577,9 @@ Self-evolution backlog for the Codex account plane:
 - SecretStore hardening: add backend migration dry-run reports, stale secret
   detection, and platform-specific recovery hints for macOS Keychain, Windows
   Credential Manager, and Linux Secret Service.
-- Web console operations: add one-click import/check/route workflows over CAP
-  with bounded timeouts, redacted logs, and a downloadable readiness artifact.
+- Web console operations: continue hardening one-click import/check/route
+  workflows over CAP with bounded timeouts, redacted logs, and downloadable
+  browser evidence packages.
 - Release gates: promote live multi-account readiness into a CI-friendly
   selftest artifact that proves account count, fresh quotas, native SecretStore,
   prompt-free Web probe, and fresh auto-route selection before a live run.
