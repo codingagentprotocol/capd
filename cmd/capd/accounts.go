@@ -212,7 +212,7 @@ SecretStore smoke check that does not require the daemon, use
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "secret backend: %s\n", result.SecretBackend)
 			fmt.Fprintf(cmd.OutOrStdout(), "quota refreshed: %t\n", result.QuotaRefreshed)
-			fmt.Fprintf(cmd.OutOrStdout(), "summary: ready=%t accounts=%d/%d missing=%d quota fresh=%d stale=%d missing=%d autoFresh=%t secretOK=%t\n",
+			fmt.Fprintf(cmd.OutOrStdout(), "summary: ready=%t accounts=%d/%d missing=%d quota fresh=%d stale=%d missing=%d autoFresh=%t routeDecision=%t secretOK=%t\n",
 				result.Summary.Ready,
 				result.Summary.CheckedAccounts,
 				result.Summary.RequiredAccounts,
@@ -221,6 +221,7 @@ SecretStore smoke check that does not require the daemon, use
 				result.Summary.StaleQuotaAccounts,
 				result.Summary.MissingQuotaAccounts,
 				result.Summary.AutoRouteFresh,
+				result.Summary.RouteDecisionOK,
 				result.Summary.SecretBackendOK)
 			if result.AutoRoute != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s\n", result.AutoRoute.AccountID, routeEvidenceText(*result.AutoRoute))

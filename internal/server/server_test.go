@@ -907,6 +907,7 @@ func TestConsoleStaticContract(t *testing.T) {
 		"staleQuotaAccounts",
 		"missingQuotaAccounts",
 		"missingAccounts: Math.max(0, required - checked)",
+		"summary.routeDecisionOk",
 		"route decision",
 		"secret ok",
 		"readinessError",

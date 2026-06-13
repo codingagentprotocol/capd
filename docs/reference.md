@@ -448,8 +448,8 @@ quota on every checked account, and a specific SecretStore backend. The
 response-level `summary` is the shared compact readiness view for CLI, Web,
 Probe, and automation clients. It includes `ready`, account counts, quota
 fresh/stale/missing counts, selected auto-route freshness, route-candidate
-count, active and required SecretStore backend, and whether quota was refreshed
-inside the call.
+count, `routeDecisionOk`, active and required SecretStore backend, and whether
+quota was refreshed inside the call.
 `capd accounts check --readiness` is CLI shorthand for setting
 `refreshQuota:true`, `requireMultiple:true`, `requireFreshQuota:true`,
 `requireAllFreshQuota:true`, and `requireSecretBackend:"native"` unless a

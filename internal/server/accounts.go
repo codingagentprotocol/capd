@@ -503,6 +503,7 @@ func accountsCheckSummary(result protocol.AccountsCheckResult, params protocol.A
 	if result.AutoRoute != nil {
 		summary.AutoRouteAccountID = result.AutoRoute.AccountID
 		summary.AutoRouteFresh = result.AutoRoute.Fresh
+		summary.RouteDecisionOK = true
 	}
 	accountsReady := result.CheckedAccounts > 0 && len(result.Accounts) == result.CheckedAccounts
 	for _, row := range result.Accounts {

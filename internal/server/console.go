@@ -256,6 +256,7 @@ func probeDataSummaryFor(result probeDataResult, readiness bool, requireSecretBa
 		MissingQuotaAccounts:  accountSummary.MissingQuotaAccounts,
 		AutoRouteAccountID:    accountSummary.AutoRouteAccountID,
 		AutoRouteFresh:        accountSummary.AutoRouteFresh,
+		RouteDecisionOK:       accountSummary.RouteDecisionOK,
 		RouteCandidates:       accountSummary.RouteCandidates,
 		SecretBackend:         accountSummary.SecretBackend,
 		RequiredSecretBackend: accountSummary.RequiredSecretBackend,

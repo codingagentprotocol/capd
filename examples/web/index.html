@@ -654,7 +654,7 @@ function readinessSummaryText({ result, accounts, freshCount, autoRoute, route, 
   const fresh = summary.freshQuotaAccounts ?? freshCount;
   const secretBackend = summary.secretBackend || result.secretBackend || "unknown";
   const requiredBackend = summary.requiredSecretBackend || requiredSecretBackend;
-  const routeOK = !!(route && route.accountRoute);
+  const routeOK = typeof summary.routeDecisionOk === "boolean" ? summary.routeDecisionOk : !!(route && route.accountRoute);
   const secretOK = typeof summary.secretBackendOk === "boolean" ? summary.secretBackendOk : (!requiredBackend || secretBackend === requiredBackend);
   const autoFresh = typeof summary.autoRouteFresh === "boolean" ? summary.autoRouteFresh : !!(autoRoute && autoRoute.fresh);
   const ready = missing === 0 && checked > 0 && fresh === checked && autoFresh && routeOK && secretOK;

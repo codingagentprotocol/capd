@@ -241,6 +241,7 @@ type AccountsCheckSummary struct {
 	MissingQuotaAccounts  int    `json:"missingQuotaAccounts"`
 	AutoRouteAccountID    string `json:"autoRouteAccountId,omitempty"`
 	AutoRouteFresh        bool   `json:"autoRouteFresh"`
+	RouteDecisionOK       bool   `json:"routeDecisionOk"`
 	RouteCandidates       int    `json:"routeCandidates"`
 	SecretBackend         string `json:"secretBackend,omitempty"`
 	RequiredSecretBackend string `json:"requiredSecretBackend,omitempty"`

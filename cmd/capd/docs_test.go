@@ -25,6 +25,7 @@ func TestReferenceDocsCoverRouteCandidateEvidence(t *testing.T) {
 		"`accountRoute`, `routeCandidates`, and `secretBackend` evidence",
 		"prefer that safe account\nSecretStore backend when present",
 		"`data.routeCandidates`, `data.routePolicy`, and `data.secretBackend` evidence",
+		"`routeDecisionOk`",
 		"`routePolicy` is safe to display",
 		"without exposing token\nmaterial or SecretStore refs",
 		`{"provider", "currentAccountId", "secretBackend", "checkedAccounts", "quotaRefreshed", "summary", "autoRoute", "routeCandidates", "accounts"}`,
