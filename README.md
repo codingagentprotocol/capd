@@ -215,11 +215,14 @@ Web probe URL plus daemon/Web quota/routing/readiness without sending a prompt.
 Doctor JSON also includes `repairPlan`: an ordered, token-redacted list of
 runnable commands plus expected evidence for fixing daemon, account import,
 SecretStore, quota freshness, auto-route freshness, and final live preflight
-gates. Text output prints the same plan under `repair plan:` for copy/paste
-debugging. Use `capd doctor --repair-plan --prompt-free` when CI or a long task
-only needs the ordered repair plan JSON array, or `make live-codex-repair-plan`
-when it should use the same `LIVE_SECRET_BACKEND` and `CAPD_BIN` knobs as the
-live preflight. Use `capd doctor --repair-commands --prompt-free` or
+gates. The plan entries use the public `protocol.RepairStep` shape shared with
+`/probe/data`, so CLI, Web, CI, and future autopilot clients can consume one
+stable contract. Text output prints the same plan under `repair plan:` for
+copy/paste debugging. Use `capd doctor --repair-plan --prompt-free` when CI or a
+long task only needs the ordered repair plan JSON array, or
+`make live-codex-repair-plan` when it should use the same `LIVE_SECRET_BACKEND`
+and `CAPD_BIN` knobs as the live preflight. Use
+`capd doctor --repair-commands --prompt-free` or
 `make live-codex-repair-commands` when a shell log needs one command per line
 without `jq`.
 For unattended release checks, `make
@@ -503,9 +506,9 @@ Self-evolution backlog for the Codex account plane:
 
 - Readiness autopilot: turn `doctor`, `probe/data`, and `accounts/check`
   findings into ranked repair plans with exact commands, expected evidence, and
-  a final gate to rerun. The first doctor-side `repairPlan` is implemented; the
-  next evolution is sharing that plan shape with `/probe/data` and the Web
-  Console.
+  a final gate to rerun. Doctor, `/probe/data`, and the Web Console now share
+  the public `protocol.RepairStep` shape; the next evolution is an explicit
+  approval-gated repair runner that can execute those steps.
 - Account-aware routing policy: add pluggable scoring weights for quota,
   freshness, account health, recent failures, and user intent while keeping the
   conservative default deterministic.

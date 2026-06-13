@@ -15,6 +15,7 @@ import (
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/config"
+	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
 func newProbeCmd() *cobra.Command {
@@ -139,17 +140,9 @@ type probeDataResponse struct {
 		Evidence string `json:"evidence"`
 		NextStep string `json:"nextStep"`
 	} `json:"checks"`
-	NextSteps  []string `json:"nextSteps"`
-	RepairPlan []struct {
-		ID               string `json:"id"`
-		Title            string `json:"title"`
-		Command          string `json:"command"`
-		ExpectedEvidence string `json:"expectedEvidence"`
-		RequiresDaemon   bool   `json:"requiresDaemon"`
-		RequiresSecret   bool   `json:"requiresSecret"`
-		Optional         bool   `json:"optional"`
-	} `json:"repairPlan"`
-	Errors []struct {
+	NextSteps  []string              `json:"nextSteps"`
+	RepairPlan []protocol.RepairStep `json:"repairPlan"`
+	Errors     []struct {
 		Source  string `json:"source"`
 		Code    int    `json:"code"`
 		Message string `json:"message"`

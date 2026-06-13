@@ -122,6 +122,11 @@ The top-level `checks` array is a stable readiness checklist with
 `name`, `ok`, `evidence`, and optional `nextStep` fields for daemon health,
 Codex CLI availability, SecretStore backend, per-account SecretStore credential
 readability, multi-account import, quota freshness, and auto-route freshness.
+The top-level `repairPlan` array uses the public `protocol.RepairStep` shape:
+`id`, `title`, copy/paste `command`, `expectedEvidence`, and optional
+`requiresDaemon`, `requiresSecret`, and `optional` booleans. The same type is
+used by `/probe/data` so browser diagnostics, CLI doctor output, and CI logs can
+agree on the remediation contract without exposing token material.
 When accounts are missing and the daemon is healthy, doctor next steps point to
 `capd accounts import` so the fix exercises the same CAP/WebSocket import path
 as web clients; when a second account is needed, the next step points to

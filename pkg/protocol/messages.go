@@ -269,6 +269,19 @@ type AccountsQuotaResult struct {
 	NextSteps     []string         `json:"nextSteps,omitempty"`
 }
 
+// RepairStep is a safe, machine-readable remediation action clients can render
+// or execute after explicit user approval. It must never include tokens,
+// credentials, local secret material, or private filesystem paths.
+type RepairStep struct {
+	ID               string `json:"id"`
+	Title            string `json:"title"`
+	Command          string `json:"command"`
+	ExpectedEvidence string `json:"expectedEvidence"`
+	RequiresDaemon   bool   `json:"requiresDaemon,omitempty"`
+	RequiresSecret   bool   `json:"requiresSecret,omitempty"`
+	Optional         bool   `json:"optional,omitempty"`
+}
+
 func (r AccountsQuotaResult) MarshalJSON() ([]byte, error) {
 	type quotaResult struct {
 		Account       *AccountSummary  `json:"account,omitempty"`

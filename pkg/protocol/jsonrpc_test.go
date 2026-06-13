@@ -63,3 +63,20 @@ func TestAccountsQuotaResultJSONShapes(t *testing.T) {
 		t.Fatalf("batch = %s", batch)
 	}
 }
+
+func TestRepairStepJSONShape(t *testing.T) {
+	data, err := json.Marshal(RepairStep{
+		ID:               "refresh-quota-readiness",
+		Title:            "Refresh quota and verify daemon-side readiness",
+		Command:          "capd accounts check --json --readiness --timeout 2m",
+		ExpectedEvidence: "autoRouteFresh=true",
+		RequiresDaemon:   true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"id":"refresh-quota-readiness","title":"Refresh quota and verify daemon-side readiness","command":"capd accounts check --json --readiness --timeout 2m","expectedEvidence":"autoRouteFresh=true","requiresDaemon":true}`
+	if string(data) != want {
+		t.Fatalf("repair step = %s", data)
+	}
+}

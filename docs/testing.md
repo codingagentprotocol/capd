@@ -260,6 +260,9 @@ JSON also includes the same `routeCandidates` ordering used by
 account would be selected. The top-level `repairPlan` is the ordered autopilot
 view: each entry has an `id`, copy/paste `command`, expected evidence, and
 daemon/SecretStore requirements without token material or local runtime paths.
+Doctor, `/probe/data`, and the Web Console consume the shared
+`protocol.RepairStep` shape so automation can validate one remediation contract
+instead of separate CLI and browser-only structures.
 Use `capd doctor --repair-plan --prompt-free --require-secret-backend native`
 when automation only needs the ordered repair commands and should avoid native
 SecretStore credential prompts. Use `make live-codex-repair-plan` when the

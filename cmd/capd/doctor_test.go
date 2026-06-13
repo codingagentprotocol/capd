@@ -55,7 +55,7 @@ func TestDoctorJSONReportsMissingReadinessWithoutSecrets(t *testing.T) {
 	if len(got.Checks) == 0 {
 		t.Fatalf("missing readiness checks: %+v", got)
 	}
-	for _, want := range []doctorRepairStep{
+	for _, want := range []protocol.RepairStep{
 		{ID: "start-daemon", Command: "capd start"},
 		{ID: "import-codex-accounts", Command: "capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json", RequiresDaemon: true, RequiresSecret: true},
 		{ID: "final-live-preflight", Command: "make live-codex-preflight", RequiresDaemon: true, RequiresSecret: true},
@@ -133,14 +133,14 @@ func TestDoctorRepairPlanOnlyJSON(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	var steps []doctorRepairStep
+	var steps []protocol.RepairStep
 	if err := json.Unmarshal(out.Bytes(), &steps); err != nil {
 		t.Fatalf("repair plan JSON = %q: %v", out.String(), err)
 	}
-	if !containsDoctorRepairStep(steps, doctorRepairStep{ID: "start-daemon", Command: "capd start --secret-backend native"}) {
+	if !containsDoctorRepairStep(steps, protocol.RepairStep{ID: "start-daemon", Command: "capd start --secret-backend native"}) {
 		t.Fatalf("repair plan = %+v", steps)
 	}
-	if !containsDoctorRepairStep(steps, doctorRepairStep{ID: "import-codex-accounts", Command: "capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json", RequiresDaemon: true, RequiresSecret: true}) {
+	if !containsDoctorRepairStep(steps, protocol.RepairStep{ID: "import-codex-accounts", Command: "capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json", RequiresDaemon: true, RequiresSecret: true}) {
 		t.Fatalf("repair plan = %+v", steps)
 	}
 	text := out.String()
@@ -165,7 +165,7 @@ func TestDoctorRepairPlanOnlyHonorsFailFlag(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "readiness issue") {
 		t.Fatalf("err = %v output=%s", err, out.String())
 	}
-	var steps []doctorRepairStep
+	var steps []protocol.RepairStep
 	if jsonErr := json.Unmarshal(out.Bytes(), &steps); jsonErr != nil {
 		t.Fatalf("repair plan JSON = %q: %v", out.String(), jsonErr)
 	}
@@ -702,7 +702,7 @@ func TestDoctorReportsStaleAndMissingAccountQuota(t *testing.T) {
 	}) {
 		t.Fatalf("missing quota freshness check: %+v", report.Checks)
 	}
-	if !containsDoctorRepairStep(report.RepairPlan, doctorRepairStep{
+	if !containsDoctorRepairStep(report.RepairPlan, protocol.RepairStep{
 		ID:               "refresh-quota-readiness",
 		Command:          "capd accounts check --json --readiness --require-secret-backend file --timeout 2m",
 		RequiresDaemon:   true,
@@ -1025,7 +1025,7 @@ func containsDoctorCheck(values []doctorCheckReport, want doctorCheckReport) boo
 	return false
 }
 
-func containsDoctorRepairStep(values []doctorRepairStep, want doctorRepairStep) bool {
+func containsDoctorRepairStep(values []protocol.RepairStep, want protocol.RepairStep) bool {
 	for _, value := range values {
 		if want.ID != "" && value.ID != want.ID {
 			continue

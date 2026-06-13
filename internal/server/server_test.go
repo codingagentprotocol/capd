@@ -359,7 +359,7 @@ func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
 	if !probeNextStepsContain(got.NextSteps, wantNext) {
 		t.Fatalf("nextSteps missing %q: %+v", wantNext, got.NextSteps)
 	}
-	for _, want := range []probeRepairStep{
+	for _, want := range []protocol.RepairStep{
 		{ID: "import-codex-accounts", Command: "capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json", RequiresDaemon: true, RequiresSecret: true},
 		{ID: "final-live-preflight", Command: "make live-codex-preflight", RequiresDaemon: true, RequiresSecret: true},
 	} {
@@ -378,7 +378,7 @@ func probeNextStepsContain(steps []string, want string) bool {
 	return false
 }
 
-func probeRepairPlanContains(steps []probeRepairStep, want probeRepairStep) bool {
+func probeRepairPlanContains(steps []protocol.RepairStep, want protocol.RepairStep) bool {
 	for _, step := range steps {
 		if want.ID != "" && step.ID != want.ID {
 			continue
