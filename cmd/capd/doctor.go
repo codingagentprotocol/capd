@@ -30,6 +30,7 @@ func newDoctorCmd() *cobra.Command {
 			jsonOut, _ := cmd.Flags().GetBool("json")
 			failOnIssues, _ := cmd.Flags().GetBool("fail")
 			verifySecretStore, _ := cmd.Flags().GetBool("verify-secretstore")
+			promptFree, _ := cmd.Flags().GetBool("prompt-free")
 			requireSecretBackend, _ := cmd.Flags().GetString("require-secret-backend")
 			timeout, _ := cmd.Flags().GetDuration("timeout")
 			requireSecretBackend, err := secret.NormalizeBackend(requireSecretBackend)
@@ -45,6 +46,7 @@ func newDoctorCmd() *cobra.Command {
 			report, err := buildDoctorReport(checkCtx, doctorOptions{
 				RequireSecretBackend: requireSecretBackend,
 				VerifySecretStore:    verifySecretStore,
+				PromptFree:           promptFree,
 			})
 			if err != nil {
 				return err
@@ -67,6 +69,7 @@ func newDoctorCmd() *cobra.Command {
 	cmd.Flags().Bool("json", false, "print machine-readable readiness evidence without token material")
 	cmd.Flags().Bool("fail", false, "return a non-zero exit code when readiness issues are found, including with --json")
 	cmd.Flags().Bool("verify-secretstore", false, "write, read, and delete a diagnostic secret to verify the active SecretStore backend")
+	cmd.Flags().Bool("prompt-free", false, "skip account SecretStore credential reads for a fast metadata/quota/routing preflight")
 	cmd.Flags().String("require-secret-backend", "", "fail unless this SecretStore backend is active (file or native)")
 	cmd.Flags().Duration("timeout", 2*time.Minute, "maximum time to wait for doctor checks, including native SecretStore access")
 	return cmd
@@ -75,10 +78,12 @@ func newDoctorCmd() *cobra.Command {
 type doctorOptions struct {
 	RequireSecretBackend string
 	VerifySecretStore    bool
+	PromptFree           bool
 }
 
 type doctorReport struct {
 	OK         bool                `json:"ok"`
+	PromptFree bool                `json:"promptFree,omitempty"`
 	Summary    doctorSummaryReport `json:"summary"`
 	Daemon     doctorDaemonReport  `json:"daemon"`
 	Agents     []doctorAgentReport `json:"agents"`
@@ -92,6 +97,7 @@ type doctorReport struct {
 
 type doctorSummaryReport struct {
 	Ready                    bool   `json:"ready"`
+	PromptFree               bool   `json:"promptFree,omitempty"`
 	ImportedAccounts         int    `json:"importedAccounts"`
 	RequiredAccounts         int    `json:"requiredAccounts"`
 	MissingAccounts          int    `json:"missingAccounts"`
@@ -126,6 +132,7 @@ type doctorAgentReport struct {
 
 type doctorCodexReport struct {
 	CLIAvailable             bool                            `json:"cliAvailable"`
+	PromptFree               bool                            `json:"promptFree,omitempty"`
 	ImportedAccounts         int                             `json:"importedAccounts"`
 	CurrentAccountID         string                          `json:"currentAccountId,omitempty"`
 	SecretBackend            string                          `json:"secretBackend,omitempty"`
@@ -184,6 +191,7 @@ const (
 func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, error) {
 	cfg := config.Load()
 	report := doctorReport{
+		PromptFree: opts.PromptFree,
 		CheckedAt:  time.Now().Unix(),
 		HealthAddr: daemonAddr(cfg),
 		Daemon: doctorDaemonReport{
@@ -250,7 +258,16 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		Evidence: fmt.Sprintf("secret backend %s", report.Codex.SecretBackend),
 		NextStep: doctorCheckNextStep(!secretOK, fmt.Sprintf("set CAPD_SECRET_BACKEND=%s or pass --secret-backend %s for account commands", opts.RequireSecretBackend, opts.RequireSecretBackend)),
 	})
-	if opts.VerifySecretStore {
+	if opts.VerifySecretStore && opts.PromptFree {
+		report.Issues = append(report.Issues, "--prompt-free cannot be combined with --verify-secretstore")
+		report.NextSteps = append(report.NextSteps, "remove --prompt-free when running --verify-secretstore")
+		report.Checks = append(report.Checks, doctorCheckReport{
+			Name:     "SecretStore roundtrip",
+			OK:       false,
+			Evidence: "skipped because --prompt-free was requested",
+			NextStep: "remove --prompt-free when running --verify-secretstore",
+		})
+	} else if opts.VerifySecretStore {
 		evidence := fmt.Sprintf("roundtrip ok for backend %s", report.Codex.SecretBackend)
 		roundTripOK := true
 		if err := doctorSecretStoreRoundTrip(ctx, secrets); err != nil {
@@ -271,6 +288,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		return doctorReport{}, err
 	}
 	report.Codex.CurrentAccountID = current
+	report.Codex.PromptFree = opts.PromptFree
 	list, err := accounts.ListAccounts(codexauth.Provider)
 	if err != nil {
 		return doctorReport{}, err
@@ -300,15 +318,20 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			Plan:       acc.Plan,
 			QuotaState: protocol.AccountQuotaStateMissing,
 		}
-		row.SecretBackendOK, row.SecretReadable, row.SecretState = doctorAccountSecretReadiness(ctx, secrets, acc.SecretRef)
-		if report.Codex.SecretStates == nil {
-			report.Codex.SecretStates = map[string]int{}
-		}
-		report.Codex.SecretStates[row.SecretState]++
-		if row.SecretReadable {
-			report.Codex.SecretReadableAccounts++
+		if opts.PromptFree {
+			row.SecretBackendOK = true
+			row.SecretState = "not-checked"
 		} else {
-			report.Codex.SecretUnreadableAccounts++
+			row.SecretBackendOK, row.SecretReadable, row.SecretState = doctorAccountSecretReadiness(ctx, secrets, acc.SecretRef)
+			if report.Codex.SecretStates == nil {
+				report.Codex.SecretStates = map[string]int{}
+			}
+			report.Codex.SecretStates[row.SecretState]++
+			if row.SecretReadable {
+				report.Codex.SecretReadableAccounts++
+			} else {
+				report.Codex.SecretUnreadableAccounts++
+			}
 		}
 		q, err := accounts.LoadQuota(acc.ID)
 		if err != nil {
@@ -333,7 +356,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 		}
 		report.Codex.Accounts = append(report.Codex.Accounts, row)
 	}
-	allSecretsReadable := len(list) > 0 && report.Codex.SecretReadableAccounts == len(list)
+	allSecretsReadable := opts.PromptFree || (len(list) > 0 && report.Codex.SecretReadableAccounts == len(list))
 	if len(list) > 0 && !allSecretsReadable {
 		report.Issues = append(report.Issues, "not every imported Codex account has readable SecretStore credentials")
 		report.NextSteps = append(report.NextSteps, doctorSecretReadinessNextStep(report.Daemon.OK, report.Codex.SecretStates, opts.RequireSecretBackend))
@@ -341,7 +364,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	report.Checks = append(report.Checks, doctorCheckReport{
 		Name:     "Codex SecretStore credentials",
 		OK:       allSecretsReadable,
-		Evidence: doctorSecretReadinessEvidence(report.Codex.SecretReadableAccounts, len(list), report.Codex.SecretUnreadableAccounts, report.Codex.SecretStates),
+		Evidence: doctorPromptFreeEvidence(opts.PromptFree, doctorSecretReadinessEvidence(report.Codex.SecretReadableAccounts, len(list), report.Codex.SecretUnreadableAccounts, report.Codex.SecretStates)),
 		NextStep: doctorCheckNextStep(!allSecretsReadable, doctorSecretReadinessNextStep(report.Daemon.OK, report.Codex.SecretStates, opts.RequireSecretBackend)),
 	})
 	autoRouteFreshIssue := false
@@ -432,6 +455,7 @@ func doctorSummary(report doctorReport, opts doctorOptions) doctorSummaryReport 
 	secretBackendOK := opts.RequireSecretBackend == "" || opts.RequireSecretBackend == report.Codex.SecretBackend
 	summary := doctorSummaryReport{
 		Ready:                    report.OK,
+		PromptFree:               opts.PromptFree,
 		ImportedAccounts:         report.Codex.ImportedAccounts,
 		RequiredAccounts:         2,
 		MissingAccounts:          missingAccounts,
@@ -460,6 +484,13 @@ func doctorSummary(report doctorReport, opts doctorOptions) doctorSummaryReport 
 		summary.SecretStoreRoundTripOK = &roundTripOK
 	}
 	return summary
+}
+
+func doctorPromptFreeEvidence(promptFree bool, evidence string) string {
+	if promptFree {
+		return "not checked in prompt-free doctor"
+	}
+	return evidence
 }
 
 func doctorDaemonAccountsCheck(ctx context.Context, requireSecretBackend string) (protocol.AccountsCheckResult, string) {
@@ -717,6 +748,9 @@ func printDoctorReport(cmd *cobra.Command, report doctorReport) {
 		status = "needs attention"
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "capd doctor: %s\n", status)
+	if report.PromptFree {
+		fmt.Fprintln(cmd.OutOrStdout(), "mode: prompt-free account metadata (SecretStore credentials not checked)")
+	}
 	fmt.Fprintf(cmd.OutOrStdout(), "daemon: %s", report.Daemon.Addr)
 	if report.Daemon.OK {
 		fmt.Fprintln(cmd.OutOrStdout(), " ok")

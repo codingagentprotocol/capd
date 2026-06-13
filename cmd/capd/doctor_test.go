@@ -750,6 +750,74 @@ func TestDoctorReportsUnreadableAccountSecretsSafely(t *testing.T) {
 	}
 }
 
+func TestDoctorPromptFreeSkipsAccountSecretReads(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	acc, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc.SecretRef = secret.BackendNative + ":codex-test"
+	if err := accounts.UpsertAccount(acc); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := buildDoctorReport(t.Context(), doctorOptions{PromptFree: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.PromptFree || !report.Summary.PromptFree || !report.Codex.PromptFree {
+		t.Fatalf("promptFree flags missing: %+v", report)
+	}
+	if report.Codex.SecretReadableAccounts != 0 || report.Codex.SecretUnreadableAccounts != 0 || len(report.Codex.SecretStates) != 0 {
+		t.Fatalf("prompt-free doctor should not read account secrets: %+v", report.Codex)
+	}
+	if len(report.Codex.Accounts) != 1 || report.Codex.Accounts[0].SecretState != "not-checked" || !report.Codex.Accounts[0].SecretBackendOK || report.Codex.Accounts[0].SecretReadable {
+		t.Fatalf("prompt-free account evidence = %+v", report.Codex.Accounts)
+	}
+	if containsString(report.Issues, "not every imported Codex account has readable SecretStore credentials") {
+		t.Fatalf("prompt-free doctor reported SecretStore issue: %+v", report.Issues)
+	}
+	if !containsDoctorCheck(report.Checks, doctorCheckReport{
+		Name:     "Codex SecretStore credentials",
+		OK:       true,
+		Evidence: "not checked in prompt-free doctor",
+	}) {
+		t.Fatalf("missing prompt-free secret check: %+v", report.Checks)
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leaked := range []string{"secretRef", "native:codex-test", "access-secret", "refresh-secret", home} {
+		if strings.Contains(string(data), leaked) {
+			t.Fatalf("prompt-free doctor leaked %q: %s", leaked, data)
+		}
+	}
+}
+
+func TestDoctorPromptFreeRejectsSecretStoreRoundTrip(t *testing.T) {
+	report, err := buildDoctorReport(t.Context(), doctorOptions{PromptFree: true, VerifySecretStore: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(report.Issues, "--prompt-free cannot be combined with --verify-secretstore") {
+		t.Fatalf("issues = %+v", report.Issues)
+	}
+	if !containsDoctorCheck(report.Checks, doctorCheckReport{
+		Name:     "SecretStore roundtrip",
+		OK:       false,
+		Evidence: "skipped because --prompt-free was requested",
+		NextStep: "remove --prompt-free when running --verify-secretstore",
+	}) {
+		t.Fatalf("missing prompt-free roundtrip check: %+v", report.Checks)
+	}
+}
+
 func TestDoctorReportsMalformedSecretRefsSafely(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -100,6 +100,7 @@ and next steps; token material and backend debug fields stay redacted.
 For multi-account routing readiness:
 
 ```bash
+CAPD_SECRET_BACKEND=native capd doctor --prompt-free --json --fail --require-secret-backend native
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all --timeout 2m
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native --timeout 2m
 CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native --timeout 2m
@@ -229,9 +230,12 @@ local imports when the daemon is not running.
 smallest direct native SecretStore gate. It opens the active backend, writes,
 reads, and deletes a diagnostic secret, and fails before account checks if the
 daemon/live shell is using the wrong backend or an OS credential prompt stalls
-native access. `capd doctor --json --fail
+native access. `capd doctor --prompt-free --json --fail
+--require-secret-backend native` is the fastest preflight before the live chain
+when you only need daemon, metadata, cached quota, and route evidence without
+SecretStore prompts. `capd doctor --json --fail
 --verify-secretstore --require-secret-backend native --timeout 2m`
-is the recommended preflight before the live chain. It does not refresh quota or
+is the deeper preflight before the live chain. It does not refresh quota or
 read token material into the output; it reports daemon health, Codex CLI
 availability, imported account count, cached quota freshness, auto-route
 freshness, SecretStore backend, per-account SecretStore credential readability

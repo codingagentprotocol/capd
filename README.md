@@ -185,13 +185,14 @@ Console/Probe prompt-free refresh contract, Web probe summaries, probe
 readiness SecretStore defaults, SecretStore recovery next steps, `/healthz`
 backend requirement, and direct SecretStore JSON roundtrip without touching live
 Codex accounts.
-`capd doctor --json --fail --timeout 2m` is a safe
-readiness audit for live Codex work: it checks daemon health, Codex CLI
-availability, imported account count, per-account SecretStore credential
-readability, quota freshness, auto-route freshness, the active SecretStore
-backend, and daemon-side CAP `accounts/check` reachability without printing
-token material. Add `--verify-secretstore` before native live runs to write,
-read, and delete a diagnostic secret in the active backend. When `secretState`
+`capd doctor --prompt-free --json --fail` is the fastest safe metadata/quota/routing
+audit for live Codex work; it does not read account SecretStore credentials.
+`capd doctor --json --fail --timeout 2m` is the deeper audit: it checks daemon
+health, Codex CLI availability, imported account count, per-account SecretStore
+credential readability, quota freshness, auto-route freshness, the active
+SecretStore backend, and daemon-side CAP `accounts/check` reachability without
+printing token material. Add `--verify-secretstore` before native live runs to
+write, read, and delete a diagnostic secret in the active backend. When `secretState`
 is `access-denied`, macOS denied or canceled Keychain access; approve the prompt,
 or use the file SecretStore for local no-prompt testing. When accounts are
 missing, use
