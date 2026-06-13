@@ -134,6 +134,11 @@ function doctorCommand(requiredBackend = "") {
   return `capd doctor --json --fail --verify-secretstore${backend ? ` --require-secret-backend ${backend}` : ""} --timeout 2m`;
 }
 
+function promptFreeDoctorCommand(requiredBackend = "") {
+  const backend = normalizeSecretBackend(requiredBackend);
+  return `capd doctor --prompt-free --json --fail${backend ? ` --require-secret-backend ${backend}` : ""}`;
+}
+
 function requiredSecretBackend() {
   return REQUIRED_SECRET_BACKEND || (document.getElementById("requireNativeSecret").checked ? "native" : "");
 }
@@ -562,16 +567,22 @@ function readinessSummaryText({ result, accounts, freshCount, autoRoute, route, 
 function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, routeError, readinessError = "", requiredSecretBackend = "" }) {
   const checked = result.checkedAccounts || 0;
   const secretBackend = result.secretBackend || "unknown";
+  const promptFree = !!result.promptFree;
   const requiredBackend = (result.summary && result.summary.requiredSecretBackend) || requiredSecretBackend;
   const secretOK = !requiredBackend || secretBackend === requiredBackend;
-  const secretNextStep = !secretOK ? `restart daemon with: capd start --secret-backend ${requiredBackend}` : (requiredBackend === "native" ? `deep verify with: ${doctorCommand(requiredBackend)}` : "");
+  const promptFreeDoctor = promptFreeDoctorCommand(requiredBackend);
+  const secretNextStep = !secretOK ? `restart daemon with: capd start --secret-backend ${requiredBackend}` : (requiredBackend === "native" && !promptFree ? `deep verify with: ${doctorCommand(requiredBackend)}` : "");
   const readinessNextStep = readinessCommand(requiredBackend);
+  const quotaNextStep = promptFree ? `safe no-prompt audit: ${promptFreeDoctor}; deep quota refresh: ${readinessNextStep}` : `运行就绪门禁或 ${readinessNextStep}`;
+  const routeFreshNextStep = promptFree ? `safe no-prompt audit: ${promptFreeDoctor}; deep route gate: capd agents route --account auto --require-fresh-quota --json` : "刷新 quota 后运行 capd agents route --account auto --require-fresh-quota --json";
+  const readinessEvidence = promptFree ? "prompt-free diagnostic; SecretStore credentials and runtime not checked" : (readinessError || "no blocking readiness error");
+  const readinessNext = promptFree ? `run explicit readiness when ready for SecretStore access: ${readinessNextStep}` : (readinessError ? "按 partial evidence 修复账号、quota 或 SecretStore 后重跑就绪门禁" : "");
   return [
     { name: "daemon health", ok: true, evidence: "health ok", nextStep: "" },
     { name: "Codex multi-account import", ok: checked >= 2, evidence: `checked ${checked}, need 2`, nextStep: checked >= 2 ? "" : "导入至少两个账号: capd accounts import --auth /path/a --auth /path/b" },
-    { name: "Codex quota freshness", ok: accounts.length > 0 && freshCount === accounts.length, evidence: `fresh ${freshCount}/${accounts.length}`, nextStep: accounts.length > 0 && freshCount === accounts.length ? "" : `运行就绪门禁或 ${readinessNextStep}` },
-    { name: "Codex auto route freshness", ok: !!(autoRoute && autoRoute.fresh), evidence: autoRoute ? routeEvidenceSummary(autoRoute) : "auto route missing", nextStep: autoRoute && autoRoute.fresh ? "" : "刷新 quota 后运行 capd agents route --account auto --require-fresh-quota --json" },
-    { name: "readiness gate", ok: !readinessError, evidence: readinessError || "no blocking readiness error", nextStep: readinessError ? "按 partial evidence 修复账号、quota 或 SecretStore 后重跑就绪门禁" : "" },
+    { name: "Codex quota freshness", ok: accounts.length > 0 && freshCount === accounts.length, evidence: `fresh ${freshCount}/${accounts.length}`, nextStep: accounts.length > 0 && freshCount === accounts.length ? "" : quotaNextStep },
+    { name: "Codex auto route freshness", ok: !!(autoRoute && autoRoute.fresh), evidence: autoRoute ? routeEvidenceSummary(autoRoute) : "auto route missing", nextStep: autoRoute && autoRoute.fresh ? "" : routeFreshNextStep },
+    { name: "readiness gate", ok: !readinessError && !promptFree, evidence: readinessEvidence, nextStep: readinessNext },
     { name: "route decision", ok: !!route, evidence: route ? routeDecisionSummary(route) : routeError || "route missing", nextStep: route ? "" : "运行 capd agents route --account auto --require-fresh-quota --json" },
     { name: "route candidates", ok: !!routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)), evidence: routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)) || "no routeCandidates evidence", nextStep: routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates)) ? "" : "刷新诊断或运行 capd agents route --account auto --json" },
     { name: "SecretStore backend", ok: secretOK, evidence: requiredBackend ? `secret ${secretBackend}, want ${requiredBackend}` : `secret ${secretBackend}`, nextStep: requiredBackend ? secretNextStep : "" }
@@ -673,8 +684,9 @@ function accountDiagnosticCard(account, promptFree = false) {
 }
 
 function accountPromptFreeNextStep(account) {
-  if (!account.quotaFresh) return "refresh quota or run 就绪门禁; use 深度验证 for SecretStore credentials";
-  return "use 就绪门禁 or 深度验证 to check SecretStore credentials and projected runtime";
+  const audit = promptFreeDoctorCommand(requiredSecretBackend());
+  if (!account.quotaFresh) return `safe no-prompt audit: ${audit}; refresh quota only when ready for SecretStore access`;
+  return `safe no-prompt audit: ${audit}; explicit readiness checks may read SecretStore credentials`;
 }
 
 function accountQuotaDiagnosticText(account) {
@@ -702,10 +714,15 @@ function secretAccessNextStep(state) {
 function accountDiagnosticNextStep(result) {
   const accounts = result.accounts || [];
   const summary = result.summary || {};
-  if ((result.checkedAccounts || 0) < 2) return "import a second Codex account, then run 就绪门禁";
+  if ((result.checkedAccounts || 0) < 2) {
+    const audit = promptFreeDoctorCommand(summary.requiredSecretBackend || requiredSecretBackend());
+    if (result.promptFree) return `import a second Codex account, then run safe no-prompt audit: ${audit}`;
+    return "import a second Codex account, then run 就绪门禁";
+  }
   if (result.promptFree) {
-    if (accounts.some(a => !a.quotaFresh)) return "refresh quota for all accounts or run 就绪门禁";
-    return "use 就绪门禁 or 深度验证 to check SecretStore credentials and projected runtimes";
+    const audit = promptFreeDoctorCommand(summary.requiredSecretBackend || requiredSecretBackend());
+    if (accounts.some(a => !a.quotaFresh)) return `safe no-prompt audit: ${audit}; refresh quota for all accounts only when ready for SecretStore access`;
+    return `safe no-prompt audit: ${audit}; use explicit readiness only when ready for SecretStore credential checks`;
   }
   if (summary.requiredSecretBackend && !summary.secretBackendOk) return `restart daemon with capd start --secret-backend ${summary.requiredSecretBackend}`;
   if (accounts.some(a => !a.secretBackendOk || !a.credentialReadable)) return "approve macOS Keychain access, or restart with file SecretStore and re-import failing accounts";
