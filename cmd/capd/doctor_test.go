@@ -55,6 +55,15 @@ func TestDoctorJSONReportsMissingReadinessWithoutSecrets(t *testing.T) {
 	if len(got.Checks) == 0 {
 		t.Fatalf("missing readiness checks: %+v", got)
 	}
+	for _, want := range []doctorRepairStep{
+		{ID: "start-daemon", Command: "capd start"},
+		{ID: "import-codex-accounts", Command: "capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json", RequiresDaemon: true, RequiresSecret: true},
+		{ID: "final-live-preflight", Command: "make live-codex-preflight", RequiresDaemon: true, RequiresSecret: true},
+	} {
+		if !containsDoctorRepairStep(got.RepairPlan, want) {
+			t.Fatalf("missing repair step %+v in %+v", want, got.RepairPlan)
+		}
+	}
 	for _, want := range []doctorCheckReport{
 		{Name: "daemon health", OK: false, Evidence: "daemon /healthz failed", NextStep: "start the daemon with: capd start"},
 		{Name: "Codex multi-account import", OK: false, Evidence: "imported 0 Codex account(s)", NextStep: "start the daemon with: capd start, then import through CAP with: capd accounts import (local fallback: capd accounts codex import)"},
@@ -101,7 +110,7 @@ func TestDoctorTextReturnsErrorWhenNotReady(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	text := out.String()
-	for _, want := range []string{"capd doctor: needs attention", "daemon:", "codex:", "secretReadable=", "CHECK", "daemon health", "fail", "issues:", "next steps:"} {
+	for _, want := range []string{"capd doctor: needs attention", "daemon:", "codex:", "secretReadable=", "CHECK", "daemon health", "fail", "issues:", "next steps:", "repair plan:", "command: capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("doctor text missing %q: %s", want, text)
 		}
@@ -583,6 +592,15 @@ func TestDoctorReportsStaleAndMissingAccountQuota(t *testing.T) {
 	}) {
 		t.Fatalf("missing quota freshness check: %+v", report.Checks)
 	}
+	if !containsDoctorRepairStep(report.RepairPlan, doctorRepairStep{
+		ID:               "refresh-quota-readiness",
+		Command:          "capd accounts check --json --readiness --require-secret-backend file --timeout 2m",
+		RequiresDaemon:   true,
+		RequiresSecret:   true,
+		ExpectedEvidence: "accounts/check summary shows ready=true, quotaRefreshed=true, autoRouteFresh=true",
+	}) {
+		t.Fatalf("missing quota repair step: %+v", report.RepairPlan)
+	}
 }
 
 func TestDoctorQuotaNextStepsPreferRouteSecretBackend(t *testing.T) {
@@ -893,6 +911,31 @@ func containsDoctorCheck(values []doctorCheckReport, want doctorCheckReport) boo
 		if value == want {
 			return true
 		}
+	}
+	return false
+}
+
+func containsDoctorRepairStep(values []doctorRepairStep, want doctorRepairStep) bool {
+	for _, value := range values {
+		if want.ID != "" && value.ID != want.ID {
+			continue
+		}
+		if want.Command != "" && value.Command != want.Command {
+			continue
+		}
+		if want.ExpectedEvidence != "" && value.ExpectedEvidence != want.ExpectedEvidence {
+			continue
+		}
+		if want.RequiresDaemon && !value.RequiresDaemon {
+			continue
+		}
+		if want.RequiresSecret && !value.RequiresSecret {
+			continue
+		}
+		if want.Optional && !value.Optional {
+			continue
+		}
+		return true
 	}
 	return false
 }

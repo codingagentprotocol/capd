@@ -91,6 +91,7 @@ type doctorReport struct {
 	Checks     []doctorCheckReport `json:"checks"`
 	Issues     []string            `json:"issues,omitempty"`
 	NextSteps  []string            `json:"nextSteps,omitempty"`
+	RepairPlan []doctorRepairStep  `json:"repairPlan,omitempty"`
 	CheckedAt  int64               `json:"checkedAt"`
 	HealthAddr string              `json:"healthAddr"`
 }
@@ -176,6 +177,16 @@ type doctorCheckReport struct {
 	OK       bool   `json:"ok"`
 	Evidence string `json:"evidence"`
 	NextStep string `json:"nextStep,omitempty"`
+}
+
+type doctorRepairStep struct {
+	ID               string `json:"id"`
+	Title            string `json:"title"`
+	Command          string `json:"command"`
+	ExpectedEvidence string `json:"expectedEvidence"`
+	RequiresDaemon   bool   `json:"requiresDaemon,omitempty"`
+	RequiresSecret   bool   `json:"requiresSecret,omitempty"`
+	Optional         bool   `json:"optional,omitempty"`
 }
 
 const (
@@ -444,6 +455,7 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 	report.Issues = compactStrings(report.Issues)
 	report.OK = len(report.Issues) == 0
 	report.Summary = doctorSummary(report, opts)
+	report.RepairPlan = doctorRepairPlan(report, opts)
 	return report, nil
 }
 
@@ -484,6 +496,75 @@ func doctorSummary(report doctorReport, opts doctorOptions) doctorSummaryReport 
 		summary.SecretStoreRoundTripOK = &roundTripOK
 	}
 	return summary
+}
+
+func doctorRepairPlan(report doctorReport, opts doctorOptions) []doctorRepairStep {
+	if report.OK {
+		return nil
+	}
+	backend := opts.RequireSecretBackend
+	if backend == "" {
+		backend = report.Codex.SecretBackend
+	}
+	steps := []doctorRepairStep{}
+	if !report.Daemon.OK {
+		steps = append(steps, doctorRepairStep{
+			ID:               "start-daemon",
+			Title:            "Start capd with the target SecretStore backend",
+			Command:          doctorStartDaemonCommand(opts.RequireSecretBackend),
+			ExpectedEvidence: "doctor summary shows daemonHealthy=true",
+		})
+	}
+	if !report.Summary.SecretBackendOK && opts.RequireSecretBackend != "" {
+		steps = append(steps, doctorRepairStep{
+			ID:               "align-secret-backend",
+			Title:            "Align local account commands with the required SecretStore backend",
+			Command:          "export CAPD_SECRET_BACKEND=" + opts.RequireSecretBackend,
+			ExpectedEvidence: "doctor summary shows secretBackend=" + opts.RequireSecretBackend + " and secretBackendOk=true",
+			RequiresSecret:   true,
+		})
+	}
+	if report.Summary.MissingAccounts > 0 {
+		command := "capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json"
+		steps = append(steps, doctorRepairStep{
+			ID:               "import-codex-accounts",
+			Title:            "Import enough Codex accounts through CAP",
+			Command:          command,
+			ExpectedEvidence: "doctor summary shows importedAccounts>=2 and missingAccounts=0",
+			RequiresDaemon:   true,
+			RequiresSecret:   true,
+		})
+	}
+	if !opts.PromptFree && report.Codex.ImportedAccounts > 0 && report.Codex.SecretUnreadableAccounts > 0 {
+		steps = append(steps, doctorRepairStep{
+			ID:               "repair-secretstore",
+			Title:            "Repair unreadable Codex account credentials",
+			Command:          doctorSecretStoreCheckCommand(backend),
+			ExpectedEvidence: "doctor summary shows secretUnreadableAccounts=0",
+			RequiresSecret:   true,
+		})
+	}
+	if report.Codex.ImportedAccounts > 0 && (report.Codex.FreshQuotaAccounts < report.Codex.ImportedAccounts || !report.Codex.AutoRouteFresh) {
+		steps = append(steps, doctorRepairStep{
+			ID:               "refresh-quota-readiness",
+			Title:            "Refresh quota and verify daemon-side readiness",
+			Command:          doctorAccountsCheckReadinessCommand(backend),
+			ExpectedEvidence: "accounts/check summary shows ready=true, quotaRefreshed=true, autoRouteFresh=true",
+			RequiresDaemon:   true,
+			RequiresSecret:   true,
+		})
+	}
+	if len(steps) > 0 {
+		steps = append(steps, doctorRepairStep{
+			ID:               "final-live-preflight",
+			Title:            "Run the full live Codex preflight",
+			Command:          "make live-codex-preflight",
+			ExpectedEvidence: "preflight exits 0 and routeCandidates show a fresh auto route",
+			RequiresDaemon:   true,
+			RequiresSecret:   true,
+		})
+	}
+	return steps
 }
 
 func doctorPromptFreeEvidence(promptFree bool, evidence string) string {
@@ -736,10 +817,14 @@ func doctorSecretStoreCheckCommand(requireSecretBackend string) string {
 }
 
 func doctorStartDaemonNextStep(requireSecretBackend string) string {
+	return "start the daemon with: " + doctorStartDaemonCommand(requireSecretBackend)
+}
+
+func doctorStartDaemonCommand(requireSecretBackend string) string {
 	if requireSecretBackend == "" {
-		return "start the daemon with: capd start"
+		return "capd start"
 	}
-	return "start the daemon with: capd start --secret-backend " + requireSecretBackend
+	return "capd start --secret-backend " + requireSecretBackend
 }
 
 func printDoctorReport(cmd *cobra.Command, report doctorReport) {
@@ -834,6 +919,14 @@ func printDoctorReport(cmd *cobra.Command, report doctorReport) {
 		fmt.Fprintln(cmd.OutOrStdout(), "next steps:")
 		for _, step := range report.NextSteps {
 			fmt.Fprintf(cmd.OutOrStdout(), "- %s\n", step)
+		}
+	}
+	if len(report.RepairPlan) > 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "repair plan:")
+		for i, step := range report.RepairPlan {
+			fmt.Fprintf(cmd.OutOrStdout(), "%d. %s\n", i+1, step.Title)
+			fmt.Fprintf(cmd.OutOrStdout(), "   command: %s\n", step.Command)
+			fmt.Fprintf(cmd.OutOrStdout(), "   expect: %s\n", step.ExpectedEvidence)
 		}
 	}
 }

@@ -250,7 +250,10 @@ an explicit SecretStore write/read/delete roundtrip, daemon-side CAP
 `accounts/check` reachability, readiness issues, and concrete next steps. Its
 JSON also includes the same `routeCandidates` ordering used by
 `agents/route --account auto`, so live preflight evidence explains why one
-account would be selected. The top-level `summary` object is the compact
+account would be selected. The top-level `repairPlan` is the ordered autopilot
+view: each entry has an `id`, copy/paste `command`, expected evidence, and
+daemon/SecretStore requirements without token material or local runtime paths.
+The top-level `summary` object is the compact
 CI/Web view of missing accounts, account credential readability, quota
 freshness, auto-route freshness, SecretStore backend status, and daemon CAP
 reachability. After fixing account or quota issues, use

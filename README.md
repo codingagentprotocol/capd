@@ -209,6 +209,11 @@ account metadata and fails fast on missing second accounts before native
 SecretStore roundtrip prompts. It then verifies SecretStore, refreshes every
 Codex quota, runs doctor against fresh local evidence, and checks the tokenized
 Web probe URL plus daemon/Web quota/routing/readiness without sending a prompt.
+Doctor JSON also includes `repairPlan`: an ordered, token-redacted list of
+runnable commands plus expected evidence for fixing daemon, account import,
+SecretStore, quota freshness, auto-route freshness, and final live preflight
+gates. Text output prints the same plan under `repair plan:` for copy/paste
+debugging.
 For unattended release checks, `make
 live-codex-selftest` starts a temporary daemon when needed, waits for health,
 runs the same preflight, and cleans up only the daemon it started. The final
@@ -484,7 +489,9 @@ Self-evolution backlog for the Codex account plane:
 
 - Readiness autopilot: turn `doctor`, `probe/data`, and `accounts/check`
   findings into ranked repair plans with exact commands, expected evidence, and
-  a final gate to rerun.
+  a final gate to rerun. The first doctor-side `repairPlan` is implemented; the
+  next evolution is sharing that plan shape with `/probe/data` and the Web
+  Console.
 - Account-aware routing policy: add pluggable scoring weights for quota,
   freshness, account health, recent failures, and user intent while keeping the
   conservative default deterministic.
