@@ -329,6 +329,7 @@ func TestTestingDocsCoverLiveSelftestDaemonSafety(t *testing.T) {
 		"`CAPD_LIVE_EVIDENCE_DIR=/tmp/capd-live-evidence`",
 		"`manifest.json` index",
 		"primary evidence paths",
+		"validate\nthat package with `capd probe evidence --manifest ... --fail`",
 	} {
 		if !strings.Contains(testingDoc, want) {
 			t.Fatalf("testing docs missing live selftest daemon safety contract %q", want)

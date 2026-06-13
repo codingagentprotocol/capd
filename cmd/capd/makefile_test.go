@@ -226,6 +226,8 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`"$bin" agents route --account auto --require-fresh-quota --json >"$evidence_route" || return $?`,
 		`"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail >"$evidence_probe" || return $?`,
 		`"$bin" doctor --prompt-free --json --fail --require-secret-backend "$backend" --timeout 2m >"$evidence_doctor" || return $?`,
+		"verify_success_evidence()",
+		`"$bin" probe evidence --manifest "$evidence_manifest" --fail`,
 		`write_summary "running" "initializing"`,
 		`go build -o "$bin" ./cmd/capd`,
 		`write_summary "running" "daemon-health"`,
@@ -273,6 +275,8 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`write_summary "failed" "evidence"`,
 		`if ! write_evidence_manifest "passed" "complete"`,
 		`failed to write live Codex evidence manifest`,
+		`if ! verify_success_evidence; then`,
+		`failed to validate live Codex evidence manifest`,
 		`write_summary "passed" "complete"`,
 	} {
 		if !strings.Contains(script, want) {

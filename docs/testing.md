@@ -201,7 +201,9 @@ evidence artifacts. On success the directory receives the final
 outputs, plus a `manifest.json` index. The summary JSON records the manifest and
 primary evidence paths. Those files prove the live account count, fresh quota
 gate, active `routePolicy`, route-candidate ordering, and SecretStore backend
-without exposing tokens or reading shell logs. On
+without exposing tokens or reading shell logs. Successful selftest runs validate
+that package with `capd probe evidence --manifest ... --fail` before reporting
+`status:"passed"`. On
 preflight failure, the same directory captures prompt-free failure diagnostics
 such as `accounts-list.json`, `agents-route.json`, `probe-data-prompt-free.json`,
 and `accounts-smoke.json`; enabling `LIVE_DIAGNOSE_SECRETSTORE=1` also captures

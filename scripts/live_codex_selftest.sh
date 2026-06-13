@@ -182,6 +182,13 @@ write_success_evidence() {
 	"$bin" doctor --prompt-free --json --fail --require-secret-backend "$backend" --timeout 2m >"$evidence_doctor" || return $?
 }
 
+verify_success_evidence() {
+	if [ -z "$evidence_dir" ]; then
+		return 0
+	fi
+	"$bin" probe evidence --manifest "$evidence_manifest" --fail
+}
+
 cleanup() {
 	if [ -n "$daemon_pid" ]; then
 		kill "$daemon_pid" >/dev/null 2>&1 || true
@@ -311,6 +318,11 @@ fi
 if ! write_evidence_manifest "passed" "complete" "live Codex selftest completed"; then
 	write_repair_plan
 	write_summary "failed" "evidence" "failed to write live Codex evidence manifest"
+	exit 1
+fi
+if ! verify_success_evidence; then
+	write_repair_plan
+	write_summary "failed" "evidence" "failed to validate live Codex evidence manifest"
 	exit 1
 fi
 write_summary "passed" "complete" "live Codex selftest completed"
