@@ -38,6 +38,7 @@ func routeParamsForCreate(params protocol.SessionCreateParams) protocol.AgentRou
 		Effort:            effort,
 		AccountID:         strings.TrimSpace(params.AccountID),
 		Profile:           strings.TrimSpace(params.Profile),
+		TaskClass:         strings.TrimSpace(params.TaskClass),
 		Capabilities:      required,
 		RequireFreshQuota: params.RequireFreshQuota,
 	}
@@ -57,8 +58,13 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 	params.Effort = strings.TrimSpace(params.Effort)
 	params.AccountID = strings.TrimSpace(params.AccountID)
 	params.Profile = strings.TrimSpace(params.Profile)
+	params.TaskClass = account.NormalizeRouteTaskClass(params.TaskClass)
 	params.Prefer = trimRoutePreference(params.Prefer)
 	required := routeRequirements(params)
+	if params.TaskClass == "" {
+		params.TaskClass = account.InferRouteTaskClass(params.Prompt, required, params.Attachments)
+	}
+	routePolicy := account.RoutePolicyForTaskClass(params.TaskClass)
 	prefer := params.Prefer
 	if len(prefer) == 0 {
 		prefer = defaultRoutePreference
@@ -81,13 +87,13 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 		required.Usage = true
 		required.Resume = true
 		if accountID == protocol.AccountAuto {
-			acc, reason, perr := s.selectCodexAccountForRoute(params.Profile)
+			acc, reason, perr := s.selectCodexAccountForRoute(params.Profile, routePolicy)
 			if perr != nil {
 				return protocol.AgentRouteResult{}, perr
 			}
 			if params.RequireFreshQuota {
-				if q, err := s.opts.Accounts.LoadQuota(acc.ID); err != nil || !account.QuotaSnapshotFresh(q, time.Now()) {
-					return protocol.AgentRouteResult{}, s.routeFreshQuotaError(acc, params.Profile)
+				if q, err := s.opts.Accounts.LoadQuota(acc.ID); err != nil || !routePolicy.QuotaSnapshotFresh(q, time.Now()) {
+					return protocol.AgentRouteResult{}, s.routeFreshQuotaError(acc, params.Profile, routePolicy)
 				}
 			}
 			selectedAccountID = acc.ID
@@ -130,13 +136,13 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 			reason += "; " + accountReason
 		}
 	}
-	result = protocol.AgentRouteResult{Agent: best, AccountID: selectedAccountID, Reason: reason}
+	result = protocol.AgentRouteResult{Agent: best, AccountID: selectedAccountID, TaskClass: params.TaskClass, Reason: reason}
 	if selectedAccount.ID != "" && s.opts.Accounts != nil {
-		evidence := account.QuotaRouteEvidence(s.opts.Accounts, selectedAccount)
+		evidence := account.QuotaRouteEvidenceWithPolicy(s.opts.Accounts, selectedAccount, routePolicy)
 		result.AccountRoute = &evidence
-		policy := account.DefaultRoutePolicyEvidence()
+		policy := routePolicy.EvidenceSummary()
 		result.RoutePolicy = &policy
-		if candidates, err := s.codexRouteCandidates(params.Profile); err == nil {
+		if candidates, err := s.codexRouteCandidates(params.Profile, routePolicy); err == nil {
 			result.RouteCandidates = candidates
 		}
 	}
@@ -157,7 +163,7 @@ func (s *Server) loadCodexAccountForRoute(accountID string) (account.Account, *p
 	return acc, nil
 }
 
-func (s *Server) selectCodexAccountForRoute(profile string) (account.Account, string, *protocol.Error) {
+func (s *Server) selectCodexAccountForRoute(profile string, policy account.RoutePolicy) (account.Account, string, *protocol.Error) {
 	if s.opts.Accounts == nil {
 		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
 	}
@@ -165,9 +171,9 @@ func (s *Server) selectCodexAccountForRoute(profile string) (account.Account, st
 	var best account.Account
 	var err error
 	if profile == "" {
-		best, err = account.SelectQuotaRouteAccount(s.opts.Accounts, codexauth.Provider)
+		best, err = account.SelectQuotaRouteAccountWithPolicy(s.opts.Accounts, codexauth.Provider, policy)
 	} else {
-		best, err = s.selectCodexProfileAccountForRoute(profile)
+		best, err = s.selectCodexProfileAccountForRoute(profile, policy)
 	}
 	if err != nil {
 		if profile != "" {
@@ -175,14 +181,14 @@ func (s *Server) selectCodexAccountForRoute(profile string) (account.Account, st
 		}
 		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
 	}
-	reason := account.QuotaRouteReason(s.opts.Accounts, best)
+	reason := account.QuotaRouteReasonWithPolicy(s.opts.Accounts, best, policy)
 	if profile != "" {
 		reason += "; profile " + profile
 	}
 	return best, reason, nil
 }
 
-func (s *Server) selectCodexProfileAccountForRoute(profile string) (account.Account, error) {
+func (s *Server) selectCodexProfileAccountForRoute(profile string, policy account.RoutePolicy) (account.Account, error) {
 	members, err := s.opts.Accounts.ProfileAccounts(codexauth.Provider, profile)
 	if err != nil {
 		return account.Account{}, err
@@ -192,9 +198,9 @@ func (s *Server) selectCodexProfileAccountForRoute(profile string) (account.Acco
 	}
 	current, _ := s.opts.Accounts.CurrentAccount(codexauth.Provider)
 	best := members[0]
-	bestScore := account.QuotaRouteScore(s.opts.Accounts, best, current)
+	bestScore := account.QuotaRouteScoreWithPolicy(s.opts.Accounts, best, current, policy)
 	for _, member := range members[1:] {
-		score := account.QuotaRouteScore(s.opts.Accounts, member, current)
+		score := account.QuotaRouteScoreWithPolicy(s.opts.Accounts, member, current, policy)
 		if score < bestScore || (score == bestScore && member.ID < best.ID) {
 			best = member
 			bestScore = score
@@ -203,10 +209,10 @@ func (s *Server) selectCodexProfileAccountForRoute(profile string) (account.Acco
 	return best, nil
 }
 
-func (s *Server) codexRouteCandidates(profile string) ([]protocol.AccountRouteEvidence, error) {
+func (s *Server) codexRouteCandidates(profile string, policy account.RoutePolicy) ([]protocol.AccountRouteEvidence, error) {
 	profile = strings.TrimSpace(profile)
 	if profile == "" {
-		return account.QuotaRouteCandidates(s.opts.Accounts, codexauth.Provider)
+		return account.QuotaRouteCandidatesWithPolicy(s.opts.Accounts, codexauth.Provider, policy)
 	}
 	members, err := s.opts.Accounts.ProfileAccounts(codexauth.Provider, profile)
 	if err != nil {
@@ -214,8 +220,8 @@ func (s *Server) codexRouteCandidates(profile string) ([]protocol.AccountRouteEv
 	}
 	current, _ := s.opts.Accounts.CurrentAccount(codexauth.Provider)
 	sort.Slice(members, func(i, j int) bool {
-		leftScore := account.QuotaRouteScore(s.opts.Accounts, members[i], current)
-		rightScore := account.QuotaRouteScore(s.opts.Accounts, members[j], current)
+		leftScore := account.QuotaRouteScoreWithPolicy(s.opts.Accounts, members[i], current, policy)
+		rightScore := account.QuotaRouteScoreWithPolicy(s.opts.Accounts, members[j], current, policy)
 		if leftScore != rightScore {
 			return leftScore < rightScore
 		}
@@ -223,23 +229,23 @@ func (s *Server) codexRouteCandidates(profile string) ([]protocol.AccountRouteEv
 	})
 	candidates := make([]protocol.AccountRouteEvidence, 0, len(members))
 	for _, member := range members {
-		candidates = append(candidates, account.QuotaRouteEvidence(s.opts.Accounts, member))
+		candidates = append(candidates, account.QuotaRouteEvidenceWithPolicy(s.opts.Accounts, member, policy))
 	}
 	return candidates, nil
 }
 
-func (s *Server) routeFreshQuotaError(acc account.Account, profile string) *protocol.Error {
+func (s *Server) routeFreshQuotaError(acc account.Account, profile string, policy account.RoutePolicy) *protocol.Error {
 	perr := protocol.NewError(protocol.CodeInvalidParams, freshQuotaRefreshHint)
 	if s.opts.Accounts == nil || acc.ID == "" {
 		return perr
 	}
-	evidence := account.QuotaRouteEvidence(s.opts.Accounts, acc)
-	policy := account.DefaultRoutePolicyEvidence()
-	data := protocol.AgentRouteErrorData{AccountRoute: &evidence, RoutePolicy: &policy}
+	evidence := account.QuotaRouteEvidenceWithPolicy(s.opts.Accounts, acc, policy)
+	policyEvidence := policy.EvidenceSummary()
+	data := protocol.AgentRouteErrorData{AccountRoute: &evidence, RoutePolicy: &policyEvidence, TaskClass: policy.TaskClass}
 	if ref, err := secret.ParseRef(acc.SecretRef); err == nil {
 		data.SecretBackend = ref.Backend
 	}
-	if candidates, err := s.codexRouteCandidates(profile); err == nil {
+	if candidates, err := s.codexRouteCandidates(profile, policy); err == nil {
 		data.RouteCandidates = candidates
 	}
 	perr.Data = data

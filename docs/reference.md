@@ -249,6 +249,15 @@ running in the daemon), find it with `capd sessions`, re-join with
 | `capd agents usage <id>` | account snapshot JSON: plan, 5h/weekly window used %, reset timestamps, credits (codex) |
 | `capd agents usage codex --account <id\|auto>` | usage for an imported Codex account, or the account selected by conservative quota scoring with `auto`; also refreshes the local quota snapshot |
 
+`agents/route` also accepts `--task-class review|long-running|interactive|vision`.
+The JSON-RPC `agents/route.taskClass` and `session/create.taskClass` fields are
+optional and backward compatible. Empty task class keeps the conservative
+default; `capd run` infers task intent from the prompt and image flags before
+creating a session. Long-running and review tasks penalize stale or missing
+quota evidence, and interactive tasks increase recent-failure penalty. Route
+JSON includes the chosen `taskClass` plus `routePolicy.taskClass` and
+`accountRoute.taskClass` evidence.
+
 ### `capd accounts` — local account control plane
 
 Common flag: `--secret-backend <file|native>` selects where account token

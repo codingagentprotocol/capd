@@ -12,6 +12,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/spf13/cobra"
 
+	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/config"
 	"github.com/codingagentprotocol/capd/internal/daemon"
@@ -174,7 +175,8 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 		}
 		res, err := call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
 			AgentID: agentID, AccountID: accountID, Profile: profile, RequireFreshQuota: o.requireFreshQuota,
-			Cwd: cwd, PermissionMode: permission, Model: model, Effort: effort,
+			TaskClass: account.InferRouteTaskClass(prompt, protocol.AgentCapabilities{Images: len(o.images) > 0}, nil),
+			Cwd:       cwd, PermissionMode: permission, Model: model, Effort: effort,
 		})
 		if err != nil {
 			return runTaskErrorWithNextStep(err, o)

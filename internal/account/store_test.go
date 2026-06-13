@@ -548,8 +548,9 @@ func TestRoutePolicyEvidenceSummary(t *testing.T) {
 		CurrentAccountTieBreak: 0.25,
 		RecentFailureTTL:       2 * time.Hour,
 		RecentFailurePenalty:   7,
+		TaskClass:              TaskClassLongRunning,
 	}).EvidenceSummary()
-	if summary.Name != "conservative-quota-pressure" || summary.FreshTTLSeconds != 2700 || summary.UnknownScore != 82 || summary.CurrentAccountTieBreak != 0.25 || summary.RecentFailurePenalty != 7 || summary.RecentFailureTTLSeconds != 7200 {
+	if summary.Name != "conservative-quota-pressure" || summary.TaskClass != TaskClassLongRunning || summary.FreshTTLSeconds != 2700 || summary.UnknownScore != 82 || summary.CurrentAccountTieBreak != 0.25 || summary.RecentFailurePenalty != 7 || summary.RecentFailureTTLSeconds != 7200 {
 		t.Fatalf("summary = %+v", summary)
 	}
 	if strings.Join(summary.QuotaWindows, ",") != "primary,secondary,code_review" {
@@ -557,6 +558,42 @@ func TestRoutePolicyEvidenceSummary(t *testing.T) {
 	}
 	if !strings.Contains(summary.Scoring, "limiting quota pressure") {
 		t.Fatalf("scoring = %q", summary.Scoring)
+	}
+	if !strings.Contains(summary.TaskClassScoring, "long-running") {
+		t.Fatalf("task class scoring = %q", summary.TaskClassScoring)
+	}
+}
+
+func TestRoutePolicyLongRunningPrefersFreshEvidenceOverUnknown(t *testing.T) {
+	st := newStore(t)
+	for _, acc := range []Account{
+		{ID: "fresh-high", Provider: "codex", AuthMode: "oauth"},
+		{ID: "missing", Provider: "codex", AuthMode: "oauth"},
+	} {
+		if err := st.UpsertAccount(acc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "fresh-high", PrimaryUsedPercent: 78}); err != nil {
+		t.Fatal(err)
+	}
+	defaultPick, err := SelectQuotaRouteAccount(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaultPick.ID != "missing" {
+		t.Fatalf("default pick = %+v", defaultPick)
+	}
+	pick, err := SelectQuotaRouteAccountWithPolicy(st, "codex", RoutePolicyForTaskClass(TaskClassLongRunning))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pick.ID != "fresh-high" {
+		t.Fatalf("long-running pick = %+v", pick)
+	}
+	evidence := QuotaRouteEvidenceWithPolicy(st, Account{ID: "missing", Provider: "codex"}, RoutePolicyForTaskClass(TaskClassLongRunning))
+	if evidence.TaskClass != TaskClassLongRunning || evidence.Score != quotaUnknownScore+5 {
+		t.Fatalf("evidence = %+v", evidence)
 	}
 }
 

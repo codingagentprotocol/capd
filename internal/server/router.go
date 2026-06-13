@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/discovery"
 	"github.com/codingagentprotocol/capd/internal/security"
@@ -83,7 +84,7 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		effectiveAccountID := params.AccountID
 		if params.AccountID != "" {
 			if params.AccountID == protocol.AccountAuto {
-				acc, _, perr := s.selectCodexAccountForRoute("")
+				acc, _, perr := s.selectCodexAccountForRoute("", account.DefaultQuotaRoutePolicy)
 				if perr != nil {
 					return nil, perr
 				}
@@ -223,6 +224,7 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 			routed, perr := s.routeAgent(ctx, protocol.AgentRouteParams{
 				AccountID:         protocol.AccountAuto,
 				Profile:           params.Profile,
+				TaskClass:         params.TaskClass,
 				Model:             params.Model,
 				Effort:            params.Effort,
 				Capabilities:      routeRequirements(routeParamsForCreate(params)),

@@ -279,6 +279,27 @@ func TestReferenceDocsCoverRunFreshQuotaRecovery(t *testing.T) {
 	}
 }
 
+func TestReferenceDocsCoverTaskAwareRouting(t *testing.T) {
+	data, err := os.ReadFile("../../docs/reference.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := string(data)
+
+	for _, want := range []string{
+		"`--task-class review|long-running|interactive|vision`",
+		"`agents/route.taskClass`",
+		"`session/create.taskClass`",
+		"`capd run` infers task intent",
+		"`routePolicy.taskClass`",
+		"`accountRoute.taskClass`",
+	} {
+		if !strings.Contains(reference, want) {
+			t.Fatalf("reference docs missing task-aware routing contract %q", want)
+		}
+	}
+}
+
 func TestReferenceDocsCoverBrowserTokenCleanup(t *testing.T) {
 	data, err := os.ReadFile("../../docs/reference.md")
 	if err != nil {

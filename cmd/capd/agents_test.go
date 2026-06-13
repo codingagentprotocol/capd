@@ -350,6 +350,43 @@ func TestRouteCLIAccountAutoRequireFreshQuotaPassesWithFreshCache(t *testing.T) 
 	}
 }
 
+func TestRouteCLILongRunningTaskPrefersFreshEvidenceOverUnknown(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	if err := accounts.UpsertAccount(account.Account{
+		ID:        "codex-missing",
+		Provider:  codexauth.Provider,
+		AuthMode:  "chatgpt",
+		Email:     "missing@example.com",
+		SecretRef: "file:codex-missing",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 78}); err != nil {
+		t.Fatal(err)
+	}
+	infos := []protocol.AgentInfo{
+		{ID: "codex", Available: true, Capabilities: protocol.AgentCapabilities{Usage: true, Resume: true}},
+	}
+	result, err := routeCLI(infos, accounts, routeCLIParams{
+		AccountID: protocol.AccountAuto,
+		TaskClass: account.TaskClassLongRunning,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AccountID != "codex-test" || result.TaskClass != account.TaskClassLongRunning {
+		t.Fatalf("result = %+v", result)
+	}
+	if result.AccountRoute == nil || result.AccountRoute.TaskClass != account.TaskClassLongRunning || result.RoutePolicy == nil || result.RoutePolicy.TaskClass != account.TaskClassLongRunning {
+		t.Fatalf("route evidence = %+v policy=%+v", result.AccountRoute, result.RoutePolicy)
+	}
+	if len(result.RouteCandidates) != 2 || result.RouteCandidates[0].AccountID != "codex-test" || result.RouteCandidates[1].AccountID != "codex-missing" {
+		t.Fatalf("route candidates = %+v", result.RouteCandidates)
+	}
+}
+
 func TestRouteCLITextIncludesAccountRouteEvidence(t *testing.T) {
 	primary := 8.0
 	text := routeCLIText(protocol.AgentRouteResult{

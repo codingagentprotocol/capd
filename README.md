@@ -524,7 +524,12 @@ flowchart TB
   `CODEX_HOME`. `agents/route` and `accounts/check` return `routeCandidates`
   sorted by the same score rule with safe `reason`, limiting quota-window
   evidence, a safe `routePolicy` summary, and safe `secretBackend` enum for
-  each parseable candidate, and `session/create` returns the resolved `accountId` so
+  each parseable candidate. `agents/route --task-class` and
+  `session/create.taskClass` can pass task intent (`review`, `long-running`,
+  `interactive`, or `vision`); `capd run` infers a conservative task class from
+  the prompt and image flags. Long-running and review tasks penalize stale or
+  missing quota, while interactive tasks increase recent-failure penalty.
+  `session/create` returns the resolved `accountId` so
   clients can audit auto-route choices without another lookup. The Codex app-server profile pool
   keeps it isolated from other accounts.
 
@@ -573,10 +578,10 @@ Self-evolution backlog for the Codex account plane:
   runner, and browser diagnostics classify each step as runnable or manual. The
   next evolution is wiring the console to trigger approved repair runs directly.
 - Account-aware routing policy: `internal/account.RoutePolicy` now centralizes
-  quota freshness, unknown-score risk, and current-account tie-break tuning.
-  Next, add configurable scoring weights for account health, recent failures,
-  task class, and user intent while keeping the conservative default
-  deterministic.
+  quota freshness, unknown-score risk, recent-failure health, task class, and
+  current-account tie-break tuning while keeping the conservative default
+  deterministic. Next, persist route decisions as a timeline and make the Web
+  Console expose task intent controls.
 - Token health timeline: persist safe quota and route decisions as time-series
   metadata so the console can show freshness, drift, and repeated failure
   patterns without storing token material.

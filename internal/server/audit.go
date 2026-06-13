@@ -17,6 +17,7 @@ func (s *Server) recordRouteAudit(params protocol.AgentRouteParams, result proto
 	data := map[string]any{
 		"accountMode":       params.AccountID,
 		"profile":           params.Profile,
+		"taskClass":         params.TaskClass,
 		"requireFreshQuota": params.RequireFreshQuota,
 	}
 	if result.Agent.ID != "" {

@@ -1087,10 +1087,14 @@ func TestAgentsRouteAutoAccountRequireFreshQuota(t *testing.T) {
 	var routed protocol.AgentRouteResult
 	c.mustResult(c.call(protocol.MethodAgentsRoute, protocol.AgentRouteParams{
 		AccountID:         protocol.AccountAuto,
+		Prompt:            "深度测试这个长任务",
 		RequireFreshQuota: true,
 	}), &routed)
 	if routed.AccountID != "codex-test" || routed.AccountRoute == nil || routed.AccountRoute.AccountID != "codex-test" || routed.AccountRoute.SecretBackend != secret.BackendFile || !routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 7 {
 		t.Fatalf("route = %+v", routed)
+	}
+	if routed.TaskClass != account.TaskClassLongRunning || routed.RoutePolicy == nil || routed.RoutePolicy.TaskClass != account.TaskClassLongRunning || routed.AccountRoute.TaskClass != account.TaskClassLongRunning {
+		t.Fatalf("task route = %+v policy=%+v", routed.AccountRoute, routed.RoutePolicy)
 	}
 }
 

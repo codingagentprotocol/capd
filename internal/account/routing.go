@@ -21,6 +21,14 @@ const (
 	recentFailureScorePenalty = 10.0
 )
 
+const (
+	TaskClassDefault     = "default"
+	TaskClassReview      = "review"
+	TaskClassLongRunning = "long-running"
+	TaskClassInteractive = "interactive"
+	TaskClassVision      = "vision"
+)
+
 // RoutePolicy is the account-aware scheduler policy. It is intentionally small
 // while routing is still deterministic, but gives future model/task-aware
 // schedulers one place to tune freshness, unknown-risk, and stability weights.
@@ -30,6 +38,7 @@ type RoutePolicy struct {
 	CurrentAccountTieBreak float64
 	RecentFailureTTL       time.Duration
 	RecentFailurePenalty   float64
+	TaskClass              string
 }
 
 // DefaultQuotaRoutePolicy is conservative: stale or missing quota receives a
@@ -47,11 +56,62 @@ func DefaultRoutePolicyEvidence() protocol.AccountRoutePolicy {
 	return DefaultQuotaRoutePolicy.EvidenceSummary()
 }
 
+func RoutePolicyForTaskClass(taskClass string) RoutePolicy {
+	policy := DefaultQuotaRoutePolicy
+	policy.TaskClass = NormalizeRouteTaskClass(taskClass)
+	return policy
+}
+
+func NormalizeRouteTaskClass(taskClass string) string {
+	switch strings.ToLower(strings.TrimSpace(taskClass)) {
+	case "", TaskClassDefault:
+		return ""
+	case "code-review", "pr-review", "review":
+		return TaskClassReview
+	case "long", "long-running", "long_task", "long-task":
+		return TaskClassLongRunning
+	case "interactive", "chat", "quick":
+		return TaskClassInteractive
+	case "image", "images", "vision":
+		return TaskClassVision
+	default:
+		return ""
+	}
+}
+
+func InferRouteTaskClass(prompt string, capabilities protocol.AgentCapabilities, attachments []protocol.Attachment) string {
+	if capabilities.Review {
+		return TaskClassReview
+	}
+	if capabilities.Images || len(attachments) > 0 {
+		return TaskClassVision
+	}
+	text := strings.ToLower(prompt)
+	for _, token := range []string{"code review", "review this", "review", "pull request", "pr ", "diff"} {
+		if strings.Contains(text, token) {
+			return TaskClassReview
+		}
+	}
+	for _, token := range []string{"long task", "long-running", "deep", "thorough", "全面", "深度", "长任务", "完整测试", "性能", "安全"} {
+		if strings.Contains(text, token) {
+			return TaskClassLongRunning
+		}
+	}
+	for _, token := range []string{"today", "weather", "quick", "status", "现在", "今天", "状态"} {
+		if strings.Contains(text, token) {
+			return TaskClassInteractive
+		}
+	}
+	return ""
+}
+
 func (p RoutePolicy) EvidenceSummary() protocol.AccountRoutePolicy {
 	p = p.normalized()
 	return protocol.AccountRoutePolicy{
 		Name:                    "conservative-quota-pressure",
 		Scoring:                 "lowest fresh limiting quota pressure plus recent-failure health penalty; stale or missing quota uses unknownScore; current account receives a small tie-break",
+		TaskClass:               p.TaskClass,
+		TaskClassScoring:        routeTaskClassScoring(p.TaskClass),
 		QuotaWindows:            []string{"primary", "secondary", "code_review"},
 		FreshTTLSeconds:         int64(p.FreshTTL / time.Second),
 		UnknownScore:            p.UnknownScore,
@@ -108,27 +168,41 @@ func QuotaRouteScore(st *Store, acc Account, current string) float64 {
 	return DefaultQuotaRoutePolicy.Score(st, acc, current, time.Now())
 }
 
+func QuotaRouteScoreWithPolicy(st *Store, acc Account, current string, policy RoutePolicy) float64 {
+	return policy.Score(st, acc, current, time.Now())
+}
+
 // QuotaRouteEvidence returns the protocol-safe route evidence for an account.
 // It is the shared source for CLI and JSON-RPC routing responses so score,
 // quota freshness, and state labels cannot drift between surfaces.
 func QuotaRouteEvidence(st *Store, acc Account) protocol.AccountRouteEvidence {
+	return QuotaRouteEvidenceWithPolicy(st, acc, DefaultQuotaRoutePolicy)
+}
+
+func QuotaRouteEvidenceWithPolicy(st *Store, acc Account, policy RoutePolicy) protocol.AccountRouteEvidence {
 	if st == nil {
+		policy = policy.normalized()
 		return protocol.AccountRouteEvidence{
 			AccountID:     acc.ID,
 			SecretBackend: routeSecretBackend(acc),
-			Score:         DefaultQuotaRoutePolicy.normalized().UnknownScore,
+			TaskClass:     policy.TaskClass,
+			Score:         policy.UnknownScore,
 			QuotaState:    protocol.AccountQuotaStateMissing,
 			Reason:        "missing cached quota",
 		}
 	}
 	current, _ := st.CurrentAccount(acc.Provider)
-	return DefaultQuotaRoutePolicy.Evidence(st, acc, current, time.Now())
+	return policy.Evidence(st, acc, current, time.Now())
 }
 
 // QuotaRouteCandidates returns every provider account with the same
 // protocol-safe evidence used by auto routing, sorted in the order the router
 // would consider them: lowest score first, then the stable tie-breaker.
 func QuotaRouteCandidates(st *Store, provider string) ([]protocol.AccountRouteEvidence, error) {
+	return QuotaRouteCandidatesWithPolicy(st, provider, DefaultQuotaRoutePolicy)
+}
+
+func QuotaRouteCandidatesWithPolicy(st *Store, provider string, policy RoutePolicy) ([]protocol.AccountRouteEvidence, error) {
 	if st == nil {
 		return nil, fmt.Errorf("account store is required")
 	}
@@ -141,7 +215,7 @@ func QuotaRouteCandidates(st *Store, provider string) ([]protocol.AccountRouteEv
 	}
 	current, _ := st.CurrentAccount(provider)
 	now := time.Now()
-	policy := DefaultQuotaRoutePolicy.normalized()
+	policy = policy.normalized()
 	sort.Slice(accounts, func(i, j int) bool {
 		leftScore := quotaRouteScoreAt(st, accounts[i], current, now, policy)
 		rightScore := quotaRouteScoreAt(st, accounts[j], current, now, policy)
@@ -160,11 +234,15 @@ func QuotaRouteCandidates(st *Store, provider string) ([]protocol.AccountRouteEv
 // QuotaRouteReason gives a short human-readable explanation for auto account
 // routing. It intentionally mirrors QuotaRouteEvidence's freshness semantics.
 func QuotaRouteReason(st *Store, acc Account) string {
+	return QuotaRouteReasonWithPolicy(st, acc, DefaultQuotaRoutePolicy)
+}
+
+func QuotaRouteReasonWithPolicy(st *Store, acc Account, policy RoutePolicy) string {
 	if st == nil {
 		return fmt.Sprintf("auto account %s without fresh cached quota", acc.ID)
 	}
 	current, _ := st.CurrentAccount(acc.Provider)
-	return DefaultQuotaRoutePolicy.Reason(st, acc, current, time.Now())
+	return policy.Reason(st, acc, current, time.Now())
 }
 
 func (p RoutePolicy) Evidence(st *Store, acc Account, current string, now time.Time) protocol.AccountRouteEvidence {
@@ -172,6 +250,7 @@ func (p RoutePolicy) Evidence(st *Store, acc Account, current string, now time.T
 	evidence := protocol.AccountRouteEvidence{
 		AccountID:     acc.ID,
 		SecretBackend: routeSecretBackend(acc),
+		TaskClass:     p.TaskClass,
 		Score:         p.Score(st, acc, current, now),
 		QuotaState:    protocol.AccountQuotaStateMissing,
 		Reason:        p.Reason(st, acc, current, now),
@@ -246,6 +325,11 @@ func quotaRouteScoreAt(st *Store, acc Account, current string, now time.Time, po
 	score := policy.UnknownScore
 	if q, err := st.LoadQuota(acc.ID); err == nil && policy.QuotaSnapshotFresh(q, now) {
 		score, _, _ = quotaRoutePressure(q)
+		if policy.TaskClass == TaskClassReview && quotaPercentUsable(q.CodeReviewUsedPercent) && q.CodeReviewUsedPercent+5 > score {
+			score = q.CodeReviewUsedPercent + 5
+		}
+	} else {
+		score += routeTaskClassUnknownPenalty(policy.TaskClass)
 	}
 	_, healthPenalty := policy.healthPenalty(st, acc, now)
 	score += healthPenalty
@@ -306,6 +390,7 @@ func (p RoutePolicy) normalized() RoutePolicy {
 	if p.RecentFailurePenalty <= 0 {
 		p.RecentFailurePenalty = recentFailureScorePenalty
 	}
+	p.TaskClass = NormalizeRouteTaskClass(p.TaskClass)
 	return p
 }
 
@@ -321,7 +406,35 @@ func (p RoutePolicy) healthPenalty(st *Store, acc Account, now time.Time) (Accou
 	if age < 0 || time.Duration(age)*time.Second > p.RecentFailureTTL {
 		return health, 0
 	}
-	return health, float64(health.RecentFailures) * p.RecentFailurePenalty
+	penalty := float64(health.RecentFailures) * p.RecentFailurePenalty
+	if p.TaskClass == TaskClassInteractive {
+		penalty *= 2
+	}
+	return health, penalty
+}
+
+func routeTaskClassUnknownPenalty(taskClass string) float64 {
+	switch NormalizeRouteTaskClass(taskClass) {
+	case TaskClassReview, TaskClassLongRunning:
+		return 5
+	default:
+		return 0
+	}
+}
+
+func routeTaskClassScoring(taskClass string) string {
+	switch NormalizeRouteTaskClass(taskClass) {
+	case TaskClassReview:
+		return "review tasks add pressure to accounts with high code_review quota usage and penalize unknown quota"
+	case TaskClassLongRunning:
+		return "long-running tasks penalize stale or missing quota to prefer accounts with fresh evidence"
+	case TaskClassInteractive:
+		return "interactive tasks double recent-failure penalty to prefer stable accounts"
+	case TaskClassVision:
+		return "vision tasks keep conservative quota pressure while exposing task intent"
+	default:
+		return ""
+	}
 }
 
 func usablePercentPtr(n float64) *float64 {

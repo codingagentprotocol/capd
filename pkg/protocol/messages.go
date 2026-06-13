@@ -108,6 +108,7 @@ type AgentRouteParams struct {
 	Attachments       []Attachment      `json:"attachments,omitempty"`
 	AccountID         string            `json:"accountId,omitempty"`
 	Profile           string            `json:"profile,omitempty"`
+	TaskClass         string            `json:"taskClass,omitempty"`
 	Model             string            `json:"model,omitempty"`
 	Effort            string            `json:"effort,omitempty"`
 	Capabilities      AgentCapabilities `json:"capabilities,omitempty"`
@@ -118,6 +119,7 @@ type AgentRouteParams struct {
 type AgentRouteResult struct {
 	Agent           AgentInfo              `json:"agent"`
 	AccountID       string                 `json:"accountId,omitempty"`
+	TaskClass       string                 `json:"taskClass,omitempty"`
 	AccountRoute    *AccountRouteEvidence  `json:"accountRoute,omitempty"`
 	RouteCandidates []AccountRouteEvidence `json:"routeCandidates,omitempty"`
 	RoutePolicy     *AccountRoutePolicy    `json:"routePolicy,omitempty"`
@@ -128,12 +130,15 @@ type AgentRouteErrorData struct {
 	AccountRoute    *AccountRouteEvidence  `json:"accountRoute,omitempty"`
 	RouteCandidates []AccountRouteEvidence `json:"routeCandidates,omitempty"`
 	RoutePolicy     *AccountRoutePolicy    `json:"routePolicy,omitempty"`
+	TaskClass       string                 `json:"taskClass,omitempty"`
 	SecretBackend   string                 `json:"secretBackend,omitempty"`
 }
 
 type AccountRoutePolicy struct {
 	Name                    string   `json:"name"`
 	Scoring                 string   `json:"scoring"`
+	TaskClass               string   `json:"taskClass,omitempty"`
+	TaskClassScoring        string   `json:"taskClassScoring,omitempty"`
 	QuotaWindows            []string `json:"quotaWindows,omitempty"`
 	FreshTTLSeconds         int64    `json:"freshTtlSeconds"`
 	UnknownScore            float64  `json:"unknownScore"`
@@ -145,6 +150,7 @@ type AccountRoutePolicy struct {
 type AccountRouteEvidence struct {
 	AccountID              string   `json:"accountId,omitempty"`
 	SecretBackend          string   `json:"secretBackend,omitempty"`
+	TaskClass              string   `json:"taskClass,omitempty"`
 	Score                  float64  `json:"score"`
 	QuotaState             string   `json:"quotaState"`
 	Fresh                  bool     `json:"fresh"`
@@ -486,6 +492,7 @@ type SessionCreateParams struct {
 	AgentID           string `json:"agentId"`                     // use "auto" to let capd choose
 	AccountID         string `json:"accountId,omitempty"`         // optional provider account id, currently supported by codex
 	Profile           string `json:"profile,omitempty"`           // optional account profile for accountId:auto
+	TaskClass         string `json:"taskClass,omitempty"`         // optional task class hint for account-aware routing
 	RequireFreshQuota bool   `json:"requireFreshQuota,omitempty"` // with accountId:auto, fail unless auto routing has fresh quota
 	Cwd               string `json:"cwd,omitempty"`               // working directory for the agent
 	Resume            string `json:"resume,omitempty"`            // agent-native session id to resume
