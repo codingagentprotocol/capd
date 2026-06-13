@@ -580,11 +580,11 @@ Self-evolution backlog for the Codex account plane:
 - Account-aware routing policy: `internal/account.RoutePolicy` now centralizes
   quota freshness, unknown-score risk, recent-failure health, task class, and
   current-account tie-break tuning while keeping the conservative default
-  deterministic. Next, persist route decisions as a timeline and make the Web
-  Console expose task intent controls.
-- Token health timeline: persist safe quota and route decisions as time-series
-  metadata so the console can show freshness, drift, and repeated failure
-  patterns without storing token material.
+  deterministic. Next, make the Web Console expose task intent controls.
+- Token health timeline: recent route decisions are now projected into
+  `/probe/data` and the Console as safe `routeHistory` from append-only audit
+  metadata, without token material. Next, persist richer quota drift snapshots
+  and add trend UI for repeated failures.
 - SecretStore hardening: add backend migration dry-run reports, stale secret
   detection, and platform-specific recovery hints for macOS Keychain, Windows
   Credential Manager, and Linux Secret Service.

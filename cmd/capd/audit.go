@@ -17,6 +17,7 @@ func recordAgentRouteAudit(params routeCLIParams, result protocol.AgentRouteResu
 	data := map[string]any{
 		"accountMode":       params.AccountID,
 		"profile":           params.Profile,
+		"taskClass":         params.TaskClass,
 		"requireFreshQuota": params.RequireFresh,
 	}
 	if result.Agent.ID != "" {

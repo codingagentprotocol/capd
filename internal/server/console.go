@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
+	"github.com/codingagentprotocol/capd/internal/audit"
 	"github.com/codingagentprotocol/capd/internal/repairplan"
 	"github.com/codingagentprotocol/capd/internal/security"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
@@ -49,6 +50,7 @@ type probeDataResult struct {
 	AutoRoute       *protocol.AccountRouteEvidence  `json:"autoRoute,omitempty"`
 	RouteCandidates []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
 	RoutePolicy     *protocol.AccountRoutePolicy    `json:"routePolicy,omitempty"`
+	RouteHistory    []probeRouteAuditEvidence       `json:"routeHistory,omitempty"`
 	Checks          []probeDataCheck                `json:"checks"`
 	NextSteps       []string                        `json:"nextSteps,omitempty"`
 	RepairPlan      []protocol.RepairStep           `json:"repairPlan,omitempty"`
@@ -72,6 +74,22 @@ type probeDataSummary struct {
 	RequiredSecretBackend string `json:"requiredSecretBackend,omitempty"`
 	SecretBackendOK       bool   `json:"secretBackendOk"`
 	QuotaRefreshed        bool   `json:"quotaRefreshed,omitempty"`
+	RouteHistoryEvents    int    `json:"routeHistoryEvents,omitempty"`
+}
+
+type probeRouteAuditEvidence struct {
+	Time              int64  `json:"time"`
+	Actor             string `json:"actor,omitempty"`
+	Outcome           string `json:"outcome,omitempty"`
+	Agent             string `json:"agent,omitempty"`
+	AccountID         string `json:"accountId,omitempty"`
+	AccountMode       string `json:"accountMode,omitempty"`
+	Profile           string `json:"profile,omitempty"`
+	TaskClass         string `json:"taskClass,omitempty"`
+	RequireFreshQuota bool   `json:"requireFreshQuota,omitempty"`
+	QuotaState        string `json:"quotaState,omitempty"`
+	QuotaFresh        bool   `json:"quotaFresh,omitempty"`
+	RouteCandidates   int64  `json:"routeCandidates,omitempty"`
 }
 
 type probeDataCheck struct {
@@ -205,6 +223,7 @@ func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBac
 			result.RoutePolicy = route.RoutePolicy
 		}
 	}
+	result.RouteHistory = recentProbeRouteHistory(10)
 	result.Checks = probeDataChecks(result, readiness, requireSecretBackend)
 	result.NextSteps = probeDataNextSteps(result.Checks, result.Errors)
 	result.OK = len(result.Errors) == 0 && allProbeChecksOK(result.Checks)
@@ -278,6 +297,9 @@ func probeDataSummaryFor(result probeDataResult, readiness bool, requireSecretBa
 	summary.RouteDecisionOK = result.RouteDecision != nil
 	if len(result.RouteCandidates) > 0 {
 		summary.RouteCandidates = len(result.RouteCandidates)
+	}
+	if len(result.RouteHistory) > 0 {
+		summary.RouteHistoryEvents = len(result.RouteHistory)
 	}
 	if result.AutoRoute != nil {
 		summary.AutoRouteAccountID = result.AutoRoute.AccountID
@@ -423,6 +445,7 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 		{Name: "route decision", OK: result.RouteDecision != nil, Evidence: routeDecisionEvidence(result.RouteDecision), NextStep: missingStep(result.RouteDecision != nil, "preview routing with: capd agents route --account auto --require-fresh-quota --json")},
 		{Name: "route candidates", OK: candidates > 0, Evidence: countEvidence(candidates, 1), NextStep: missingStep(candidates > 0, "refresh diagnostics or run: capd agents route --account auto --json")},
 		{Name: "route policy", OK: routePolicy != nil, Evidence: routePolicyEvidenceText(routePolicy), NextStep: missingStep(routePolicy != nil, "refresh diagnostics or run: capd agents route --account auto --json")},
+		{Name: "route audit history", OK: true, Evidence: routeHistoryEvidence(result.RouteHistory)},
 	}
 	if requireSecretBackend != "" {
 		checks = append(checks, probeDataCheck{
@@ -433,6 +456,93 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 		})
 	}
 	return checks
+}
+
+func recentProbeRouteHistory(limit int) []probeRouteAuditEvidence {
+	events, err := audit.Recent("", limit*3)
+	if err != nil {
+		return nil
+	}
+	out := make([]probeRouteAuditEvidence, 0, limit)
+	for i := len(events) - 1; i >= 0 && len(out) < limit; i-- {
+		ev := events[i]
+		if ev.Type != "agents.route" {
+			continue
+		}
+		row := probeRouteAuditEvidence{
+			Time:              ev.Time,
+			Actor:             ev.Actor,
+			Outcome:           ev.Outcome,
+			Agent:             auditString(ev.Data, "agent"),
+			AccountID:         auditString(ev.Data, "account"),
+			AccountMode:       auditString(ev.Data, "accountMode"),
+			Profile:           auditString(ev.Data, "profile"),
+			TaskClass:         auditString(ev.Data, "taskClass"),
+			RequireFreshQuota: auditBool(ev.Data, "requireFreshQuota"),
+			QuotaState:        auditString(ev.Data, "quotaState"),
+			QuotaFresh:        auditBool(ev.Data, "quotaFresh"),
+			RouteCandidates:   auditInt64(ev.Data, "routeCandidates"),
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func auditString(data map[string]any, key string) string {
+	if data == nil {
+		return ""
+	}
+	if value, ok := data[key].(string); ok {
+		return value
+	}
+	return ""
+}
+
+func auditBool(data map[string]any, key string) bool {
+	if data == nil {
+		return false
+	}
+	if value, ok := data[key].(bool); ok {
+		return value
+	}
+	return false
+}
+
+func auditInt64(data map[string]any, key string) int64 {
+	if data == nil {
+		return 0
+	}
+	switch value := data[key].(type) {
+	case int64:
+		return value
+	case int:
+		return int64(value)
+	case float64:
+		return int64(value)
+	default:
+		return 0
+	}
+}
+
+func routeHistoryEvidence(history []probeRouteAuditEvidence) string {
+	if len(history) == 0 {
+		return "missing"
+	}
+	latest := history[0]
+	parts := []string{strconv.Itoa(len(history)) + " events"}
+	if latest.AccountID != "" {
+		parts = append(parts, "latest "+latest.AccountID)
+	}
+	if latest.Outcome != "" {
+		parts = append(parts, latest.Outcome)
+	}
+	if latest.TaskClass != "" {
+		parts = append(parts, "task "+latest.TaskClass)
+	}
+	if latest.QuotaState != "" {
+		parts = append(parts, "quota "+latest.QuotaState)
+	}
+	return strings.Join(parts, " ")
 }
 
 func multiAccountImportNextStep() string {
@@ -686,6 +796,9 @@ func routeEvidenceTextPtr(route *protocol.AccountRouteEvidence) string {
 	if route.SecretBackend != "" {
 		parts = append(parts, "secret "+route.SecretBackend)
 	}
+	if route.TaskClass != "" {
+		parts = append(parts, "task "+route.TaskClass)
+	}
 	if route.PrimaryUsedPercent != nil {
 		parts = append(parts, "primary "+strconv.FormatFloat(*route.PrimaryUsedPercent, 'f', -1, 64)+"%")
 	}
@@ -718,6 +831,9 @@ func routePolicyEvidenceText(policy *protocol.AccountRoutePolicy) string {
 	parts := []string{policy.Name}
 	if policy.FreshTTLSeconds > 0 {
 		parts = append(parts, "ttl "+strconv.FormatInt(policy.FreshTTLSeconds, 10)+"s")
+	}
+	if policy.TaskClass != "" {
+		parts = append(parts, "task "+policy.TaskClass)
 	}
 	parts = append(parts, "unknown "+strconv.FormatFloat(policy.UnknownScore, 'f', -1, 64))
 	parts = append(parts, "tie "+strconv.FormatFloat(policy.CurrentAccountTieBreak, 'f', -1, 64))

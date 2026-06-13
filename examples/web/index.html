@@ -574,6 +574,7 @@ function renderProbeDataResult(data) {
   result.secretBackend = result.secretBackend || result.summary.secretBackend || "";
   if (data.autoRoute && !result.autoRoute) result.autoRoute = data.autoRoute;
   if (data.routeCandidates && !result.routeCandidates) result.routeCandidates = data.routeCandidates;
+  result.routeHistory = data.routeHistory || [];
   lastAccountsCheck = result;
   if (data.routeDecision) lastRouteDecision = data.routeDecision;
   renderReadinessDiagnosticResult({
@@ -585,7 +586,7 @@ function renderProbeDataResult(data) {
   });
   renderRepairPlan(data.repairPlan || []);
   const summary = data.summary || {};
-  line("ev-sys", `· probe summary ready=${!!summary.ready} accounts=${summary.checkedAccounts || 0}/${summary.requiredAccounts || 0} fresh=${summary.freshQuotaAccounts || 0} routeCandidates=${summary.routeCandidates || 0} secretOK=${!!summary.secretBackendOk}`);
+  line("ev-sys", `· probe summary ready=${!!summary.ready} accounts=${summary.checkedAccounts || 0}/${summary.requiredAccounts || 0} fresh=${summary.freshQuotaAccounts || 0} routeCandidates=${summary.routeCandidates || 0} routeHistory=${summary.routeHistoryEvents || 0} secretOK=${!!summary.secretBackendOk}`);
   for (const check of data.checks || []) {
     line(check.ok ? "ev-done" : "ev-err", `${check.ok ? "✓" : "✗"} ${check.name}: ${check.evidence || ""}${check.nextStep ? ` · next ${check.nextStep}` : ""}`);
   }
@@ -715,6 +716,8 @@ function renderReadinessDiagnosticResult({ result, route, routeError = "", readi
   if (route) parts.push(`route ${routeDecisionSummary(route)}`);
   const candidates = routeCandidateSummary(result.routeCandidates || (route && route.routeCandidates));
   if (candidates) parts.push(`candidates ${candidates}`);
+  const routeAudit = routeHistoryLabel(result.routeHistory || []);
+  if (routeAudit) parts.push(`routeHistory ${routeAudit}`);
   if (readinessError) parts.push(`readiness error ${readinessError}`);
   if (routeError) parts.push(`route error ${routeError}`);
   readinessEl.className = issues.length ? "warn" : "ok";
@@ -1148,6 +1151,7 @@ function routeDecisionSummary(routed) {
   const agent = routed.agent || {};
   const parts = [`agent ${agent.id || "unknown"}`];
   if (routed.accountId) parts.push(`account ${routed.accountId}`);
+  if (routed.taskClass) parts.push(`task ${routed.taskClass}`);
   if (routed.accountRoute) parts.push(routeEvidenceSummary(routed.accountRoute));
   const candidates = routeCandidateSummary(routed.routeCandidates);
   if (candidates) parts.push(`candidates ${candidates}`);
@@ -1165,6 +1169,7 @@ function routeCandidateSummary(candidates) {
 function routeEvidenceSummary(route) {
   const parts = [`quota ${route.quotaState || "missing"}`];
   if (typeof route.fresh === "boolean") parts.push(route.fresh ? "fresh" : "not-fresh");
+  if (route.taskClass) parts.push(`task ${route.taskClass}`);
   if (route.secretBackend) parts.push(`secret ${route.secretBackend}`);
   if (hasNumber(route.primaryUsedPercent)) parts.push(`primary ${route.primaryUsedPercent}%`);
   if (hasNumber(route.secondaryUsedPercent)) parts.push(`secondary ${route.secondaryUsedPercent}%`);
@@ -1180,6 +1185,7 @@ function routePolicySummary(policy) {
   if (!policy) return "";
   const parts = [];
   if (policy.name) parts.push(policy.name);
+  if (policy.taskClass) parts.push(`task ${policy.taskClass}`);
   if (hasNumber(policy.freshTtlSeconds)) parts.push(`ttl ${policy.freshTtlSeconds}s`);
   if (hasNumber(policy.unknownScore)) parts.push(`unknown ${policy.unknownScore}`);
   if (hasNumber(policy.currentAccountTieBreak)) parts.push(`tie ${policy.currentAccountTieBreak}`);
@@ -1217,6 +1223,18 @@ function routeAuditLabel(a) {
   if (hasNumber(a.routeScore)) parts.push(`route score ${a.routeScore}`);
   if (a.routeReason) parts.push(a.routeReason);
   return parts.join(" · ");
+}
+
+function routeHistoryLabel(history) {
+  if (!Array.isArray(history) || history.length === 0) return "";
+  const latest = history[0] || {};
+  const parts = [`${history.length} events`];
+  if (latest.accountId) parts.push(`latest ${latest.accountId}`);
+  if (latest.outcome) parts.push(latest.outcome);
+  if (latest.taskClass) parts.push(`task ${latest.taskClass}`);
+  if (latest.quotaState) parts.push(`quota ${latest.quotaState}`);
+  if (latest.routeCandidates) parts.push(`candidates ${latest.routeCandidates}`);
+  return parts.join(" ");
 }
 
 function accountHealthLabel(a) {

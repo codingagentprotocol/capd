@@ -16,7 +16,7 @@ func TestRecordAgentRouteAuditWritesSafeRouteMetadata(t *testing.T) {
 		Fresh:      true,
 	}
 	recordAgentRouteAudit(
-		routeCLIParams{AccountID: protocol.AccountAuto, Profile: "work", RequireFresh: true},
+		routeCLIParams{AccountID: protocol.AccountAuto, Profile: "work", TaskClass: "long-running", RequireFresh: true},
 		protocol.AgentRouteResult{
 			Agent:           protocol.AgentInfo{ID: "codex"},
 			AccountID:       "codex-low",
@@ -36,7 +36,7 @@ func TestRecordAgentRouteAuditWritesSafeRouteMetadata(t *testing.T) {
 	if ev.Type != "agents.route" || ev.Actor != "cli" || ev.Outcome != "ok" {
 		t.Fatalf("event = %+v", ev)
 	}
-	if ev.Data["agent"] != "codex" || ev.Data["account"] != "codex-low" || ev.Data["accountMode"] != protocol.AccountAuto || ev.Data["profile"] != "work" || ev.Data["quotaState"] != string(protocol.AccountQuotaStateFresh) || ev.Data["quotaFresh"] != true || ev.Data["routeCandidates"] != float64(2) {
+	if ev.Data["agent"] != "codex" || ev.Data["account"] != "codex-low" || ev.Data["accountMode"] != protocol.AccountAuto || ev.Data["profile"] != "work" || ev.Data["taskClass"] != "long-running" || ev.Data["quotaState"] != string(protocol.AccountQuotaStateFresh) || ev.Data["quotaFresh"] != true || ev.Data["routeCandidates"] != float64(2) {
 		t.Fatalf("data = %+v", ev.Data)
 	}
 }
