@@ -14,6 +14,7 @@ import (
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
 	"github.com/codingagentprotocol/capd/internal/account/codexquota"
 	"github.com/codingagentprotocol/capd/internal/account/secret"
+	"github.com/codingagentprotocol/capd/internal/repairplan"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
@@ -394,7 +395,7 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 	if perr := validateAccountsCheckResult(result, params); perr != nil {
 		return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result, params)
 	}
-	result.Summary = accountsCheckSummary(result, params)
+	result = accountsCheckWithSummaryAndRepairPlan(result, params)
 	return result, nil
 }
 
@@ -450,7 +451,7 @@ func (s *Server) cachedAccountsCheck(provider string) (protocol.AccountsCheckRes
 	if len(accounts) > 0 {
 		result = s.withCachedAccountsCheckEvidence(result, accounts, current, provider)
 	}
-	result.Summary = accountsCheckSummary(result, protocol.AccountsCheckParams{Provider: provider})
+	result = accountsCheckWithSummaryAndRepairPlan(result, protocol.AccountsCheckParams{Provider: provider})
 	return result, nil
 }
 
@@ -458,9 +459,15 @@ func accountsCheckErrorWithEvidence(perr *protocol.Error, result protocol.Accoun
 	if perr == nil {
 		return nil
 	}
-	result.Summary = accountsCheckSummary(result, params)
+	result = accountsCheckWithSummaryAndRepairPlan(result, params)
 	perr.Data = result
 	return perr
+}
+
+func accountsCheckWithSummaryAndRepairPlan(result protocol.AccountsCheckResult, params protocol.AccountsCheckParams) protocol.AccountsCheckResult {
+	result.Summary = accountsCheckSummary(result, params)
+	result.RepairPlan = accountsCheckRepairPlan(result, params)
+	return result
 }
 
 func accountsCheckSummary(result protocol.AccountsCheckResult, params protocol.AccountsCheckParams) protocol.AccountsCheckSummary {
@@ -508,6 +515,100 @@ func accountsCheckSummary(result protocol.AccountsCheckResult, params protocol.A
 		summary.Ready = summary.Ready && result.CheckedAccounts > 0 && summary.FreshQuotaAccounts == result.CheckedAccounts
 	}
 	return summary
+}
+
+func accountsCheckRepairPlan(result protocol.AccountsCheckResult, params protocol.AccountsCheckParams) []protocol.RepairStep {
+	if result.Summary.Ready {
+		return nil
+	}
+	backend := params.RequireSecretBackend
+	if backend == "" {
+		backend = result.SecretBackend
+	}
+	steps := []protocol.RepairStep{}
+	if params.RequireSecretBackend != "" && !result.Summary.SecretBackendOK {
+		steps = append(steps, protocol.RepairStep{
+			ID:               "restart-daemon-secret-backend",
+			Title:            "Restart capd with the required SecretStore backend",
+			Command:          "capd start --secret-backend " + params.RequireSecretBackend,
+			ExpectedEvidence: "accounts/check summary shows secretBackendOk=true",
+			RequiresSecret:   true,
+		})
+	}
+	if result.Summary.MissingAccounts > 0 {
+		steps = append(steps, protocol.RepairStep{
+			ID:               "import-codex-accounts",
+			Title:            "Import enough Codex accounts through CAP",
+			Command:          "capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json",
+			ExpectedEvidence: "accounts/check summary shows checkedAccounts>=2 and missingAccounts=0",
+			RequiresDaemon:   true,
+			RequiresSecret:   true,
+		})
+	}
+	if accountsCheckHasUnreadableCredentials(result) {
+		steps = append(steps, protocol.RepairStep{
+			ID:               "repair-secretstore",
+			Title:            "Repair unreadable Codex account credentials",
+			Command:          accountsCheckSecretStoreCommand(backend),
+			ExpectedEvidence: "accounts/check account credentials are readable",
+			RequiresSecret:   true,
+		})
+	}
+	if result.CheckedAccounts > 0 && (result.Summary.FreshQuotaAccounts < result.CheckedAccounts || !result.Summary.AutoRouteFresh || params.RequireFreshQuota || params.RequireAllFreshQuota) {
+		steps = append(steps, protocol.RepairStep{
+			ID:               "refresh-quota-readiness",
+			Title:            "Refresh quota and verify daemon-side readiness",
+			Command:          accountsCheckReadinessRepairCommand(backend),
+			ExpectedEvidence: "accounts/check summary shows ready=true, quotaRefreshed=true, autoRouteFresh=true",
+			RequiresDaemon:   true,
+			RequiresSecret:   true,
+		})
+	}
+	if params.RequireFreshQuota && !result.Summary.AutoRouteFresh {
+		steps = append(steps, protocol.RepairStep{
+			ID:               "preview-auto-route",
+			Title:            "Preview fresh quota-aware Codex routing",
+			Command:          "capd agents route --account auto --require-fresh-quota --json",
+			ExpectedEvidence: "route decision returns ok=true with a fresh accountRoute",
+			RequiresDaemon:   true,
+		})
+	}
+	if len(steps) > 0 {
+		steps = append(steps, protocol.RepairStep{
+			ID:               "final-live-preflight",
+			Title:            "Run the full live Codex preflight",
+			Command:          "make live-codex-preflight",
+			ExpectedEvidence: "preflight exits 0 and routeCandidates show a fresh auto route",
+			RequiresDaemon:   true,
+			RequiresSecret:   true,
+		})
+	}
+	return repairplan.Annotate(steps, repairplan.Options{})
+}
+
+func accountsCheckHasUnreadableCredentials(result protocol.AccountsCheckResult) bool {
+	for _, row := range result.Accounts {
+		if !row.SecretBackendOK || !row.CredentialReadable {
+			return true
+		}
+	}
+	return false
+}
+
+func accountsCheckSecretStoreCommand(backend string) string {
+	cmd := "capd secretstore check --json --roundtrip"
+	if backend != "" {
+		cmd += " --secret-backend " + backend + " --require-backend " + backend
+	}
+	return cmd + " --timeout 2m"
+}
+
+func accountsCheckReadinessRepairCommand(backend string) string {
+	cmd := "capd accounts check --json --readiness"
+	if backend != "" {
+		cmd += " --require-secret-backend " + backend
+	}
+	return cmd + " --timeout 2m"
 }
 
 func validateAccountsCheckPreflight(secretBackend string, checkedAccounts int, params protocol.AccountsCheckParams) *protocol.Error {

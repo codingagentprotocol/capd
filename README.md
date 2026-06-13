@@ -181,7 +181,7 @@ capd accounts import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # daemon-si
 CAPD_CODEX_AUTH_PATHS="/tmp/a/auth.json:/tmp/b/auth.json" capd accounts import # daemon-side CAP batch import on macOS/Linux
 CAPD_CODEX_AUTH_PATHS="C:\tmp\a\auth.json;C:\tmp\b\auth.json" capd accounts import # daemon-side CAP batch import on Windows
 capd accounts check --json   # daemon-side accounts/check smoke evidence with compact summary
-capd accounts check --json --readiness # daemon-side multi-account readiness gate
+capd accounts check --json --readiness # daemon-side multi-account readiness gate with repairPlan on failure
 capd agents route --account auto --require-fresh-quota --json
 ```
 

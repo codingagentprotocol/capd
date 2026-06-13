@@ -211,6 +211,7 @@ type AccountsCheckResult struct {
 	Summary          AccountsCheckSummary   `json:"summary"`
 	AutoRoute        *AccountRouteEvidence  `json:"autoRoute,omitempty"`
 	RouteCandidates  []AccountRouteEvidence `json:"routeCandidates,omitempty"`
+	RepairPlan       []RepairStep           `json:"repairPlan,omitempty"`
 	Accounts         []AccountCheckEvidence `json:"accounts"`
 }
 

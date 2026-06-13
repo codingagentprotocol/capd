@@ -244,3 +244,28 @@ func printRepairRunReport(w io.Writer, report repairRunReport) {
 		}
 	}
 }
+
+func printRepairPlanText(w io.Writer, steps []protocol.RepairStep) {
+	if len(steps) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "repair plan:")
+	for i, step := range steps {
+		fmt.Fprintf(w, "%d. %s\n", i+1, step.Title)
+		fmt.Fprintf(w, "   command: %s\n", step.Command)
+		if step.Execution != nil {
+			label := "manual"
+			if step.Execution.Runnable {
+				label = "runnable"
+			}
+			fmt.Fprintf(w, "   execution: %s", label)
+			if step.Execution.Reason != "" {
+				fmt.Fprintf(w, " (%s)", step.Execution.Reason)
+			}
+			fmt.Fprintln(w)
+		}
+		if step.ExpectedEvidence != "" {
+			fmt.Fprintf(w, "   expect: %s\n", step.ExpectedEvidence)
+		}
+	}
+}

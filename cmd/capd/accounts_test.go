@@ -747,6 +747,9 @@ func TestAccountsCheckCallsDaemonRPCWithoutLeakingSecrets(t *testing.T) {
 	if partial.CheckedAccounts != 1 || partial.SecretBackend != secret.BackendFile || len(partial.Accounts) != 1 || partial.AutoRoute == nil || len(partial.RouteCandidates) != 1 {
 		t.Fatalf("partial = %+v", partial)
 	}
+	if len(partial.RepairPlan) == 0 || !containsRepairPlanStep(partial.RepairPlan, "restart-daemon-secret-backend") {
+		t.Fatalf("partial repair plan = %+v", partial.RepairPlan)
+	}
 	if partial.Accounts[0].ID != "codex-test" || partial.Accounts[0].SecretBackendOK || partial.Accounts[0].CredentialReadable || partial.Accounts[0].RuntimeReady {
 		t.Fatalf("partial cached account should not read secret or project runtime: %+v", partial.Accounts[0])
 	}
@@ -3024,4 +3027,13 @@ func waitForHealthz(t *testing.T, port int) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+func containsRepairPlanStep(steps []protocol.RepairStep, id string) bool {
+	for _, step := range steps {
+		if step.ID == id {
+			return true
+		}
+	}
+	return false
 }

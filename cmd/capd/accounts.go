@@ -243,7 +243,11 @@ SecretStore smoke check that does not require the daemon, use
 				fmt.Fprintf(w, "%s\t%s\t%s\t%t\t%s\t%t\t%t\t%t\t%t\t%s\t%t\t%s\t%s\n",
 					mark, row.ID, row.Email, row.SecretBackendOK, row.SecretState, row.CredentialReadable, row.RuntimeReady, row.AuthJSONPrivate, row.ProjectionMarkerOK, row.QuotaState, row.QuotaFresh, primary, checkedAt)
 			}
-			return w.Flush()
+			if err := w.Flush(); err != nil {
+				return err
+			}
+			printRepairPlanText(cmd.OutOrStdout(), result.RepairPlan)
+			return nil
 		},
 	}
 	checkCmd.Flags().String("provider", "codex", "account provider to check")

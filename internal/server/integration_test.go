@@ -1582,6 +1582,9 @@ func TestAccountsCheckCanRefreshQuotaAndEnforceReadiness(t *testing.T) {
 	if !result.Summary.Ready || result.Summary.CheckedAccounts != 2 || result.Summary.MissingAccounts != 0 || result.Summary.FreshQuotaAccounts != 2 || !result.Summary.AutoRouteFresh || result.Summary.RequiredSecretBackend != secret.BackendFile || !result.Summary.SecretBackendOK {
 		t.Fatalf("summary = %+v", result.Summary)
 	}
+	if len(result.RepairPlan) != 0 {
+		t.Fatalf("successful readiness should not include repair plan: %+v", result.RepairPlan)
+	}
 	if len(result.Accounts) != 2 || result.Accounts[0].ID != "codex-low" || result.Accounts[1].ID != "codex-test" {
 		t.Fatalf("accounts not sorted by account id: %+v", result.Accounts)
 	}
@@ -1634,12 +1637,28 @@ func TestAccountsCheckReadinessFailureIsDaemonSideAndSafe(t *testing.T) {
 	if partial.Summary.Ready || partial.Summary.CheckedAccounts != 1 || partial.Summary.MissingAccounts != 1 || partial.Summary.RouteCandidates != 1 {
 		t.Fatalf("partial summary = %+v", partial.Summary)
 	}
+	if len(partial.RepairPlan) == 0 {
+		t.Fatalf("partial evidence missing repair plan: %+v", partial)
+	}
+	if !repairPlanContains(partial.RepairPlan, "import-codex-accounts", "command contains placeholders") || !repairPlanContains(partial.RepairPlan, "final-live-preflight", "--include-final") {
+		t.Fatalf("partial repair plan = %+v", partial.RepairPlan)
+	}
 	data, _ := json.Marshal(partial)
 	for _, leaked := range []string{"test-token", "backend-secret", "secretRef", "file:codex-test", "CODEX_HOME", s.opts.RuntimeRoot} {
 		if strings.Contains(string(data), leaked) {
 			t.Fatalf("accounts/check readiness error data leaked %q: %s", leaked, data)
 		}
 	}
+}
+
+func repairPlanContains(steps []protocol.RepairStep, id, reason string) bool {
+	for _, step := range steps {
+		if step.ID != id {
+			continue
+		}
+		return step.Execution != nil && strings.Contains(step.Execution.Reason, reason)
+	}
+	return false
 }
 
 func TestAccountsCheckRefreshFailureKeepsSuccessfulQuotaEvidence(t *testing.T) {

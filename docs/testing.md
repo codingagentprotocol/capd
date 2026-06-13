@@ -324,7 +324,9 @@ runtime paths or token material.
 Use `capd accounts check --json --readiness` when you want a single daemon-side
 readiness gate to refresh every imported Codex account through `accounts/quota`
 before checking cached freshness, without printing raw backend usage JSON. The
-JSON form preserves safe partial evidence when a gate fails.
+JSON form preserves safe partial evidence when a gate fails, including the
+shared `repairPlan` with `execution.runnable` and `execution.reason` so it can
+be compared directly with `/probe/data` and `capd repair run --json`.
 If quota refresh fails midway, the partial evidence reflects any quota snapshots
 successfully refreshed before the failing account, so readiness logs show which
 accounts are already fresh and which account blocked the run.
