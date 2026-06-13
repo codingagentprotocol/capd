@@ -245,8 +245,10 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		}
 		sess, err := s.opts.Sessions.Create(ctx, agentID, opts)
 		if err != nil {
+			s.metrics.recordAdapterStart(false)
 			return nil, asProtocolError(err)
 		}
+		s.metrics.recordAdapterStart(true)
 		if params.AccountID != "" && s.opts.Accounts != nil {
 			if err := s.opts.Accounts.BindSessionAccount(sess.ID, params.AccountID); err != nil {
 				return nil, protocol.NewError(protocol.CodeInternalError, "bind session account: %v", err)

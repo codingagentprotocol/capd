@@ -45,10 +45,11 @@ type Server struct {
 	accountMu  sync.Mutex
 	accountMux map[string]*sync.Mutex
 	clients    atomic.Int64
+	metrics    *runtimeMetrics
 }
 
 func New(opts Options) *Server {
-	return &Server{opts: opts, log: opts.Log, policy: newPolicyEngine(), accountMux: map[string]*sync.Mutex{}}
+	return &Server{opts: opts, log: opts.Log, policy: newPolicyEngine(), accountMux: map[string]*sync.Mutex{}, metrics: newRuntimeMetrics()}
 }
 
 // Run serves until ctx is cancelled.
@@ -115,6 +116,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 func (s *Server) runtimeHealth() map[string]any {
 	runtime := map[string]any{
 		"connectedClients": s.clients.Load(),
+		"metrics":          s.metrics.snapshot(),
 	}
 	if s.opts.Sessions == nil {
 		return runtime

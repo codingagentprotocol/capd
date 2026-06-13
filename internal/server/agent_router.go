@@ -43,7 +43,14 @@ func routeParamsForCreate(params protocol.SessionCreateParams) protocol.AgentRou
 	}
 }
 
-func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParams) (protocol.AgentRouteResult, *protocol.Error) {
+func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParams) (result protocol.AgentRouteResult, perr *protocol.Error) {
+	defer func() {
+		if perr != nil {
+			s.metrics.recordRouteDecision("", false)
+			return
+		}
+		s.metrics.recordRouteDecision(result.Agent.ID, true)
+	}()
 	params.Model = strings.TrimSpace(params.Model)
 	params.Effort = strings.TrimSpace(params.Effort)
 	params.AccountID = strings.TrimSpace(params.AccountID)
@@ -121,7 +128,7 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 			reason += "; " + accountReason
 		}
 	}
-	result := protocol.AgentRouteResult{Agent: best, AccountID: selectedAccountID, Reason: reason}
+	result = protocol.AgentRouteResult{Agent: best, AccountID: selectedAccountID, Reason: reason}
 	if selectedAccount.ID != "" && s.opts.Accounts != nil {
 		evidence := account.QuotaRouteEvidence(s.opts.Accounts, selectedAccount)
 		result.AccountRoute = &evidence

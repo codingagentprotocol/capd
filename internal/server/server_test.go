@@ -63,6 +63,10 @@ func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	s.clients.Add(2)
+	s.metrics.recordAdapterStart(true)
+	s.metrics.recordAdapterStart(false)
+	s.metrics.recordRouteDecision("codex", true)
+	s.metrics.recordRouteDecision("", false)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz?format=json", nil)
 	rec := httptest.NewRecorder()
@@ -97,6 +101,12 @@ func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
 			ActiveSessions   int `json:"activeSessions"`
 			StoredSessions   int `json:"storedSessions"`
 			EndedSessions    int `json:"endedSessions"`
+			Metrics          struct {
+				AdapterStarts        int64            `json:"adapterStarts"`
+				AdapterStartFailures int64            `json:"adapterStartFailures"`
+				RouteFailures        int64            `json:"routeFailures"`
+				RouteDecisions       map[string]int64 `json:"routeDecisions"`
+			} `json:"metrics"`
 		} `json:"runtime"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
@@ -107,6 +117,9 @@ func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
 	}
 	if got.Runtime.ConnectedClients != 2 || got.Runtime.SessionsListed != 0 || got.Runtime.ActiveSessions != 0 || got.Runtime.StoredSessions != 0 || got.Runtime.EndedSessions != 0 {
 		t.Fatalf("runtime health = %+v", got.Runtime)
+	}
+	if got.Runtime.Metrics.AdapterStarts != 2 || got.Runtime.Metrics.AdapterStartFailures != 1 || got.Runtime.Metrics.RouteFailures != 1 || got.Runtime.Metrics.RouteDecisions["codex"] != 1 {
+		t.Fatalf("runtime metrics = %+v", got.Runtime.Metrics)
 	}
 	for _, leaked := range []string{"test-token", secretRoot, "secretRef", "rawAuthJson"} {
 		if strings.Contains(rec.Body.String(), leaked) {

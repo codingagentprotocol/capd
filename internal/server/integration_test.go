@@ -539,6 +539,71 @@ func TestAgentsRouteAndAutoCreate(t *testing.T) {
 	}
 }
 
+func TestHealthRuntimeMetricsTrackRoutesAndSessionStarts(t *testing.T) {
+	fake := &scriptedAdapter{}
+	reg := adapter.NewRegistry(fake)
+	st, err := session.OpenStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	s := New(Options{
+		Token:    "it-token",
+		Version:  "it",
+		Registry: reg,
+		Sessions: session.NewManager(reg, st),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.HandleFunc("/", s.handleWS)
+	ts := httptest.NewServer(mux)
+	t.Cleanup(ts.Close)
+	c := initialized(t, ts)
+
+	var routed protocol.AgentRouteResult
+	c.mustResult(c.call(protocol.MethodAgentsRoute, protocol.AgentRouteParams{
+		Effort:       "high",
+		Capabilities: protocol.AgentCapabilities{Review: true},
+	}), &routed)
+	if routed.Agent.ID != "fake" {
+		t.Fatalf("route = %+v", routed)
+	}
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake"}), &created)
+	if created.SessionID == "" {
+		t.Fatalf("created = %+v", created)
+	}
+
+	resp, err := http.Get(ts.URL + "/healthz?format=json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got struct {
+		Runtime struct {
+			ConnectedClients int `json:"connectedClients"`
+			SessionsListed   int `json:"sessionsListed"`
+			ActiveSessions   int `json:"activeSessions"`
+			Metrics          struct {
+				AdapterStarts        int64            `json:"adapterStarts"`
+				AdapterStartFailures int64            `json:"adapterStartFailures"`
+				RouteFailures        int64            `json:"routeFailures"`
+				RouteDecisions       map[string]int64 `json:"routeDecisions"`
+			} `json:"metrics"`
+		} `json:"runtime"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Runtime.ConnectedClients != 1 || got.Runtime.SessionsListed != 1 || got.Runtime.ActiveSessions != 1 {
+		t.Fatalf("runtime = %+v", got.Runtime)
+	}
+	if got.Runtime.Metrics.AdapterStarts != 1 || got.Runtime.Metrics.AdapterStartFailures != 0 || got.Runtime.Metrics.RouteFailures != 0 || got.Runtime.Metrics.RouteDecisions["fake"] != 1 {
+		t.Fatalf("metrics = %+v", got.Runtime.Metrics)
+	}
+}
+
 func TestAgentsRouteTrimsPreference(t *testing.T) {
 	reg := adapter.NewRegistry(&scriptedAdapter{id: "alpha"}, &scriptedAdapter{id: "beta"})
 	s := New(Options{
