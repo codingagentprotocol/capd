@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -78,6 +79,7 @@ func newAgentsCmd() *cobra.Command {
 		},
 	}
 	routeCmd.Flags().String("account", "", "imported account id, or auto for conservative Codex quota scoring")
+	routeCmd.Flags().String("profile", "", "account profile to constrain --account auto candidate selection")
 	routeCmd.Flags().String("model", "", "model requirement; routes to agents with model support")
 	routeCmd.Flags().String("effort", "", "effort requirement; routes to agents with effort support")
 	routeCmd.Flags().StringSlice("capability", nil, "required capability name; repeat or comma-separate")
@@ -272,6 +274,7 @@ func saveUsageQuota(ctx context.Context, accounts *account.Store, secrets secret
 
 type routeCLIParams struct {
 	AccountID    string
+	Profile      string
 	Model        string
 	Effort       string
 	Capabilities protocol.AgentCapabilities
@@ -290,6 +293,7 @@ var cliDefaultRoutePreference = []string{
 
 func routeCLIParamsFromFlags(cmd *cobra.Command) (routeCLIParams, error) {
 	accountID, _ := cmd.Flags().GetString("account")
+	profile, _ := cmd.Flags().GetString("profile")
 	model, _ := cmd.Flags().GetString("model")
 	effort, _ := cmd.Flags().GetString("effort")
 	prefer, _ := cmd.Flags().GetStringSlice("prefer")
@@ -310,6 +314,7 @@ func routeCLIParamsFromFlags(cmd *cobra.Command) (routeCLIParams, error) {
 	}
 	return routeCLIParams{
 		AccountID:    strings.TrimSpace(accountID),
+		Profile:      strings.TrimSpace(profile),
 		Model:        model,
 		Effort:       effort,
 		Capabilities: required,
@@ -362,6 +367,7 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 	params.Model = strings.TrimSpace(params.Model)
 	params.Effort = strings.TrimSpace(params.Effort)
 	params.AccountID = strings.TrimSpace(params.AccountID)
+	params.Profile = strings.TrimSpace(params.Profile)
 	params.Prefer = trimCLIStringList(params.Prefer)
 	required := params.Capabilities
 	prefer := params.Prefer
@@ -380,8 +386,11 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 			return protocol.AgentRouteResult{}, fmt.Errorf("account support is not configured")
 		}
 		if accountID == protocol.AccountAuto {
-			acc, err := account.SelectQuotaRouteAccount(accounts, codexauth.Provider)
+			acc, err := routeCLISelectAutoAccount(accounts, params.Profile)
 			if errors.Is(err, account.ErrUnknownAccount) {
+				if params.Profile != "" {
+					return protocol.AgentRouteResult{}, fmt.Errorf("no Codex accounts in profile %q; add accounts with: capd accounts profile add %s <account-id>", params.Profile, params.Profile)
+				}
 				return protocol.AgentRouteResult{}, fmt.Errorf("no imported Codex accounts; run capd accounts codex import first")
 			}
 			if err != nil {
@@ -391,10 +400,13 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 			selectedAccount = acc
 			if params.RequireFresh {
 				if q, err := accounts.LoadQuota(acc.ID); err != nil || !account.QuotaSnapshotFresh(q, time.Now()) {
-					return protocol.AgentRouteResult{}, routeCLIFreshQuotaError(accounts, acc)
+					return protocol.AgentRouteResult{}, routeCLIFreshQuotaError(accounts, acc, params.Profile)
 				}
 			}
 			accountReason = account.QuotaRouteReason(accounts, acc)
+			if params.Profile != "" {
+				accountReason += "; profile " + params.Profile
+			}
 		} else {
 			acc, err := resolveUsageAccount(accounts, accountID)
 			if err != nil {
@@ -437,14 +449,62 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 		result.AccountRoute = &evidence
 		policy := account.DefaultRoutePolicyEvidence()
 		result.RoutePolicy = &policy
-		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil {
+		if candidates, err := routeCLICandidates(accounts, params.Profile); err == nil {
 			result.RouteCandidates = candidates
 		}
 	}
 	return result, nil
 }
 
-func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error {
+func routeCLISelectAutoAccount(accounts *account.Store, profile string) (account.Account, error) {
+	if profile == "" {
+		return account.SelectQuotaRouteAccount(accounts, codexauth.Provider)
+	}
+	members, err := accounts.ProfileAccounts(codexauth.Provider, profile)
+	if err != nil {
+		return account.Account{}, err
+	}
+	if len(members) == 0 {
+		return account.Account{}, account.ErrUnknownAccount
+	}
+	current, _ := accounts.CurrentAccount(codexauth.Provider)
+	best := members[0]
+	bestScore := account.QuotaRouteScore(accounts, best, current)
+	for _, member := range members[1:] {
+		score := account.QuotaRouteScore(accounts, member, current)
+		if score < bestScore || (score == bestScore && member.ID < best.ID) {
+			best = member
+			bestScore = score
+		}
+	}
+	return best, nil
+}
+
+func routeCLICandidates(accounts *account.Store, profile string) ([]protocol.AccountRouteEvidence, error) {
+	if profile == "" {
+		return account.QuotaRouteCandidates(accounts, codexauth.Provider)
+	}
+	members, err := accounts.ProfileAccounts(codexauth.Provider, profile)
+	if err != nil {
+		return nil, err
+	}
+	current, _ := accounts.CurrentAccount(codexauth.Provider)
+	sort.Slice(members, func(i, j int) bool {
+		leftScore := account.QuotaRouteScore(accounts, members[i], current)
+		rightScore := account.QuotaRouteScore(accounts, members[j], current)
+		if leftScore != rightScore {
+			return leftScore < rightScore
+		}
+		return members[i].ID < members[j].ID
+	})
+	candidates := make([]protocol.AccountRouteEvidence, 0, len(members))
+	for _, member := range members {
+		candidates = append(candidates, account.QuotaRouteEvidence(accounts, member))
+	}
+	return candidates, nil
+}
+
+func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account, profile string) error {
 	lines := []string{"auto route does not have fresh cached quota"}
 	data := protocol.AgentRouteErrorData{}
 	if accounts != nil && acc.ID != "" {
@@ -454,7 +514,7 @@ func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error
 		data.RoutePolicy = &policy
 		lines = append(lines, "route: "+routeEvidenceText(route))
 		lines = append(lines, "route policy: "+routePolicyText(policy))
-		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil && len(candidates) > 0 {
+		if candidates, err := routeCLICandidates(accounts, profile); err == nil && len(candidates) > 0 {
 			data.RouteCandidates = candidates
 			parts := make([]string, 0, len(candidates))
 			for _, candidate := range candidates {
@@ -469,7 +529,7 @@ func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error
 	}
 	nextSteps := []string{
 		"refresh and verify daemon-side readiness with: " + accountsCheckReadinessCommand(routeReadinessBackendHint(acc)),
-		"preview routing with: capd agents route --account auto --require-fresh-quota --json",
+		"preview routing with: " + routeFreshQuotaPreviewCommand(profile),
 	}
 	lines = append(lines, "next: "+nextSteps[0], "next: "+nextSteps[1])
 	return &routeCLIFreshQuotaFailure{
@@ -477,6 +537,14 @@ func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error
 		data:      data,
 		nextSteps: nextSteps,
 	}
+}
+
+func routeFreshQuotaPreviewCommand(profile string) string {
+	cmd := "capd agents route --account auto"
+	if strings.TrimSpace(profile) != "" {
+		cmd += " --profile " + strings.TrimSpace(profile)
+	}
+	return cmd + " --require-fresh-quota --json"
 }
 
 func routeReadinessBackendHint(acc account.Account) string {

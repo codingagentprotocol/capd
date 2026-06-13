@@ -1009,6 +1009,98 @@ func TestAccountsImportNextStepPreservesEnvBackend(t *testing.T) {
 	}
 }
 
+func TestAccountsProfileCLIManagesSafeGroups(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".capd"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := account.OpenStore(filepath.Join(home, ".capd", "accounts.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, acc := range []account.Account{
+		{ID: "codex-one", Provider: codexauth.Provider, AuthMode: "oauth", Email: "one@example.com", SecretRef: "native:codex-one"},
+		{ID: "codex-two", Provider: codexauth.Provider, AuthMode: "oauth", Email: "two@example.com", SecretRef: "native:codex-two"},
+	} {
+		if err := store.UpsertAccount(acc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SetCurrentAccount(codexauth.Provider, "codex-one"); err != nil {
+		t.Fatal(err)
+	}
+	store.Close()
+
+	var out bytes.Buffer
+	cmd := newAccountsCmd()
+	cmd.SetArgs([]string{"profile", "create", "work", "--description", "Work pool"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "profile codex/work") {
+		t.Fatalf("create output = %s", out.String())
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"profile", "add", "work", "codex-one", "codex-two"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "native:") {
+		t.Fatalf("add leaked secret ref: %s", out.String())
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"profile", "current", "work"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out.String()) != "work" {
+		t.Fatalf("current output = %s", out.String())
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"profile", "show", "work", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{`"name": "work"`, `"accounts": 2`, `"id": "codex-one"`, `"secretBackend": "native"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("show json missing %q: %s", want, text)
+		}
+	}
+	for _, leaked := range []string{"native:codex-one", "native:codex-two", "secretRef", "secret_ref"} {
+		if strings.Contains(text, leaked) {
+			t.Fatalf("show json leaked %q: %s", leaked, text)
+		}
+	}
+
+	out.Reset()
+	cmd = newAccountsCmd()
+	cmd.SetArgs([]string{"profile", "list", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"current": true`) || !strings.Contains(out.String(), `"description": "Work pool"`) {
+		t.Fatalf("list json = %s", out.String())
+	}
+}
+
 func TestAccountsCheckReadinessShortcutSetsDaemonGateParams(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

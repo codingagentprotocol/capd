@@ -41,6 +41,14 @@ type QuotaSnapshot struct {
 	RawJSON               string
 }
 
+type Profile struct {
+	Provider    string
+	Name        string
+	Description string
+	CreatedAt   int64
+	UpdatedAt   int64
+}
+
 const schema = `
 CREATE TABLE IF NOT EXISTS accounts (
 	id          TEXT PRIMARY KEY,
@@ -72,6 +80,25 @@ CREATE TABLE IF NOT EXISTS session_accounts (
 	session_id TEXT PRIMARY KEY,
 	account_id TEXT NOT NULL,
 	created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+CREATE TABLE IF NOT EXISTS account_profiles (
+	provider    TEXT NOT NULL,
+	name        TEXT NOT NULL,
+	description TEXT NOT NULL DEFAULT '',
+	created_at  INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+	updated_at  INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+	PRIMARY KEY (provider, name)
+);
+CREATE TABLE IF NOT EXISTS account_profile_members (
+	provider   TEXT NOT NULL,
+	name       TEXT NOT NULL,
+	account_id TEXT NOT NULL,
+	created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+	PRIMARY KEY (provider, name, account_id)
+);
+CREATE TABLE IF NOT EXISTS account_profile_state (
+	provider TEXT PRIMARY KEY,
+	name     TEXT NOT NULL DEFAULT ''
 );`
 
 func OpenStore(path string) (*Store, error) {
@@ -181,6 +208,9 @@ func (st *Store) DeleteAccount(id string) error {
 	if _, err := tx.Exec("DELETE FROM session_accounts WHERE account_id = ?", id); err != nil {
 		return err
 	}
+	if _, err := tx.Exec("DELETE FROM account_profile_members WHERE account_id = ?", id); err != nil {
+		return err
+	}
 	if _, err := tx.Exec("DELETE FROM accounts WHERE id = ?", id); err != nil {
 		return err
 	}
@@ -204,6 +234,179 @@ ON CONFLICT(provider) DO UPDATE SET current_account_id = excluded.current_accoun
 		return err
 	}
 	return st.afterWrite(nil)
+}
+
+func (st *Store) UpsertProfile(profile Profile) error {
+	if profile.Provider == "" {
+		return fmt.Errorf("provider is required")
+	}
+	if profile.Name == "" {
+		return fmt.Errorf("profile name is required")
+	}
+	_, err := st.db.Exec(`
+INSERT INTO account_profiles (provider, name, description)
+VALUES (?, ?, ?)
+ON CONFLICT(provider, name) DO UPDATE SET
+	description = excluded.description,
+	updated_at = strftime('%s','now')`,
+		profile.Provider, profile.Name, profile.Description)
+	return st.afterWrite(err)
+}
+
+func (st *Store) ListProfiles(provider string) ([]Profile, error) {
+	query := `
+SELECT provider, name, description, created_at, updated_at
+FROM account_profiles`
+	var args []any
+	if provider != "" {
+		query += " WHERE provider = ?"
+		args = append(args, provider)
+	}
+	query += " ORDER BY provider, name"
+	rows, err := st.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Profile
+	for rows.Next() {
+		var profile Profile
+		if err := rows.Scan(&profile.Provider, &profile.Name, &profile.Description, &profile.CreatedAt, &profile.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, profile)
+	}
+	return out, rows.Err()
+}
+
+func (st *Store) LoadProfile(provider, name string) (Profile, error) {
+	var profile Profile
+	err := st.db.QueryRow(`
+SELECT provider, name, description, created_at, updated_at
+FROM account_profiles WHERE provider = ? AND name = ?`, provider, name).Scan(
+		&profile.Provider, &profile.Name, &profile.Description, &profile.CreatedAt, &profile.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return profile, ErrUnknownAccount
+	}
+	return profile, err
+}
+
+func (st *Store) DeleteProfile(provider, name string) error {
+	if provider == "" {
+		return fmt.Errorf("provider is required")
+	}
+	if name == "" {
+		return fmt.Errorf("profile name is required")
+	}
+	tx, err := st.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("DELETE FROM account_profile_members WHERE provider = ? AND name = ?", provider, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM account_profiles WHERE provider = ? AND name = ?", provider, name); err != nil {
+		return err
+	}
+	current, err := currentProfileTx(tx, provider)
+	if err != nil {
+		return err
+	}
+	if current == name {
+		next, err := nextProviderProfileTx(tx, provider)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`
+INSERT INTO account_profile_state (provider, name) VALUES (?, ?)
+ON CONFLICT(provider) DO UPDATE SET name = excluded.name`, provider, next); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return st.afterWrite(nil)
+}
+
+func (st *Store) AddProfileAccount(provider, name, accountID string) error {
+	if _, err := st.LoadProfile(provider, name); err != nil {
+		return err
+	}
+	acc, err := st.LoadAccount(accountID)
+	if err != nil {
+		return err
+	}
+	if acc.Provider != provider {
+		return fmt.Errorf("account %q belongs to provider %q, not %q", accountID, acc.Provider, provider)
+	}
+	_, err = st.db.Exec(`
+INSERT INTO account_profile_members (provider, name, account_id)
+VALUES (?, ?, ?)
+ON CONFLICT(provider, name, account_id) DO NOTHING`, provider, name, accountID)
+	return st.afterWrite(err)
+}
+
+func (st *Store) RemoveProfileAccount(provider, name, accountID string) error {
+	if provider == "" {
+		return fmt.Errorf("provider is required")
+	}
+	if name == "" {
+		return fmt.Errorf("profile name is required")
+	}
+	if accountID == "" {
+		return fmt.Errorf("account id is required")
+	}
+	_, err := st.db.Exec(`
+DELETE FROM account_profile_members
+WHERE provider = ? AND name = ? AND account_id = ?`, provider, name, accountID)
+	return st.afterWrite(err)
+}
+
+func (st *Store) ProfileAccounts(provider, name string) ([]Account, error) {
+	if _, err := st.LoadProfile(provider, name); err != nil {
+		return nil, err
+	}
+	rows, err := st.db.Query(`
+SELECT a.id, a.provider, a.auth_mode, a.email, a.account_id, a.plan, a.secret_ref, a.created_at, a.updated_at
+FROM accounts a
+JOIN account_profile_members m ON m.account_id = a.id
+WHERE m.provider = ? AND m.name = ?
+ORDER BY a.provider, a.id`, provider, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Account
+	for rows.Next() {
+		var acc Account
+		if err := rows.Scan(&acc.ID, &acc.Provider, &acc.AuthMode, &acc.Email, &acc.AccountID, &acc.Plan, &acc.SecretRef, &acc.CreatedAt, &acc.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, acc)
+	}
+	return out, rows.Err()
+}
+
+func (st *Store) SetCurrentProfile(provider, name string) error {
+	if provider == "" {
+		return fmt.Errorf("provider is required")
+	}
+	if name == "" {
+		return fmt.Errorf("profile name is required")
+	}
+	if _, err := st.LoadProfile(provider, name); err != nil {
+		return err
+	}
+	_, err := st.db.Exec(`
+INSERT INTO account_profile_state (provider, name) VALUES (?, ?)
+ON CONFLICT(provider) DO UPDATE SET name = excluded.name`, provider, name)
+	return st.afterWrite(err)
+}
+
+func (st *Store) CurrentProfile(provider string) (string, error) {
+	return currentProfileQuery(st.db, provider)
 }
 
 func (st *Store) SetCurrentAccount(provider, accountID string) error {
@@ -312,6 +515,10 @@ func currentAccountTx(tx *sql.Tx, provider string) (string, error) {
 	return currentAccountQuery(tx, provider)
 }
 
+func currentProfileTx(tx *sql.Tx, provider string) (string, error) {
+	return currentProfileQuery(tx, provider)
+}
+
 func currentAccountQuery(q queryer, provider string) (string, error) {
 	var id string
 	err := q.QueryRow("SELECT current_account_id FROM account_state WHERE provider = ?", provider).Scan(&id)
@@ -319,6 +526,15 @@ func currentAccountQuery(q queryer, provider string) (string, error) {
 		return "", nil
 	}
 	return id, err
+}
+
+func currentProfileQuery(q queryer, provider string) (string, error) {
+	var name string
+	err := q.QueryRow("SELECT name FROM account_profile_state WHERE provider = ?", provider).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return name, err
 }
 
 func nextProviderAccountTx(tx *sql.Tx, provider string) (string, error) {
@@ -332,6 +548,19 @@ LIMIT 1`, provider).Scan(&id)
 		return "", nil
 	}
 	return id, err
+}
+
+func nextProviderProfileTx(tx *sql.Tx, provider string) (string, error) {
+	var name string
+	err := tx.QueryRow(`
+SELECT name FROM account_profiles
+WHERE provider = ?
+ORDER BY updated_at DESC, name
+LIMIT 1`, provider).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return name, err
 }
 
 func (st *Store) tightenFilePermissions() error {

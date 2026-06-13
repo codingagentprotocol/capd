@@ -93,6 +93,51 @@ func TestRouteCLIAccountAutoSelectsFreshLowestQuotaCodex(t *testing.T) {
 	}
 }
 
+func TestRouteCLIAccountAutoProfileConstrainsCandidates(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	accounts, _ := seedCodexAccount(t)
+	defer accounts.Close()
+	for _, acc := range []account.Account{
+		{ID: "codex-low-outside", Provider: codexauth.Provider, AuthMode: "chatgpt", Email: "low@example.com", SecretRef: "file:codex-low-outside"},
+		{ID: "codex-work", Provider: codexauth.Provider, AuthMode: "chatgpt", Email: "work@example.com", SecretRef: "file:codex-work"},
+	} {
+		if err := accounts.UpsertAccount(acc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 40}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low-outside", PrimaryUsedPercent: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-work", PrimaryUsedPercent: 20}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertProfile(account.Profile{Provider: codexauth.Provider, Name: "work"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.AddProfileAccount(codexauth.Provider, "work", "codex-work"); err != nil {
+		t.Fatal(err)
+	}
+	infos := []protocol.AgentInfo{
+		{ID: "codex", Available: true, Capabilities: protocol.AgentCapabilities{Usage: true, Resume: true}},
+	}
+	result, err := routeCLI(infos, accounts, routeCLIParams{AccountID: protocol.AccountAuto, Profile: "work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AccountID != "codex-work" || result.AccountRoute == nil || result.AccountRoute.AccountID != "codex-work" {
+		t.Fatalf("result = %+v", result)
+	}
+	if len(result.RouteCandidates) != 1 || result.RouteCandidates[0].AccountID != "codex-work" {
+		t.Fatalf("route candidates = %+v", result.RouteCandidates)
+	}
+	if !strings.Contains(result.Reason, "profile work") {
+		t.Fatalf("reason = %q", result.Reason)
+	}
+}
+
 func TestRouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)

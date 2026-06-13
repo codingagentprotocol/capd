@@ -124,6 +124,10 @@ capd health --json --require-secret-backend native
 capd accounts import --auth /tmp/acct-a/auth.json --auth /tmp/acct-b/auth.json
 CAPD_CODEX_AUTH_PATHS="/tmp/acct-a/auth.json:/tmp/acct-b/auth.json" capd accounts import
 CAPD_CODEX_AUTH_PATHS="C:\tmp\acct-a\auth.json;C:\tmp\acct-b\auth.json" capd accounts import
+capd accounts profile create work --description "Work Codex accounts"
+capd accounts profile add work codex-acct-a codex-acct-b
+capd accounts profile show work --json
+capd agents route --account auto --profile work --json
 capd accounts check --json
 capd accounts check --json --readiness
 capd agents usage codex --account auto

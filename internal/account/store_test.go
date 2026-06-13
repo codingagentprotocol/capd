@@ -178,6 +178,12 @@ func TestDeleteAccountRemovesRelatedStateAndPromotesCurrent(t *testing.T) {
 	if err := st.BindSessionAccount("s_1", "codex-one"); err != nil {
 		t.Fatal(err)
 	}
+	if err := st.UpsertProfile(Profile{Provider: "codex", Name: "work", Description: "Work accounts"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddProfileAccount("codex", "work", "codex-one"); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := st.DeleteAccount("codex-one"); err != nil {
 		t.Fatal(err)
@@ -194,6 +200,13 @@ func TestDeleteAccountRemovesRelatedStateAndPromotesCurrent(t *testing.T) {
 	}
 	if sessionAccount != "" {
 		t.Fatalf("session account = %q", sessionAccount)
+	}
+	members, err := st.ProfileAccounts("codex", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 0 {
+		t.Fatalf("profile members after delete = %+v", members)
 	}
 	current, err := st.CurrentAccount("codex")
 	if err != nil {
@@ -212,6 +225,71 @@ func TestDeleteAccountRemovesRelatedStateAndPromotesCurrent(t *testing.T) {
 	}
 	if current != "" {
 		t.Fatalf("current after deleting last account = %q", current)
+	}
+}
+
+func TestAccountStoreProfiles(t *testing.T) {
+	st := newStore(t)
+	for _, acc := range []Account{
+		{ID: "codex-one", Provider: "codex", AuthMode: "oauth", Email: "one@example.com"},
+		{ID: "codex-two", Provider: "codex", AuthMode: "oauth", Email: "two@example.com"},
+		{ID: "gemini-one", Provider: "gemini", AuthMode: "oauth"},
+	} {
+		if err := st.UpsertAccount(acc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.UpsertProfile(Profile{Provider: "codex", Name: "work", Description: "Work pool"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertProfile(Profile{Provider: "codex", Name: "personal"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddProfileAccount("codex", "work", "codex-one"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddProfileAccount("codex", "work", "codex-two"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddProfileAccount("codex", "work", "gemini-one"); err == nil || !strings.Contains(err.Error(), "belongs to provider") {
+		t.Fatalf("cross-provider add err = %v", err)
+	}
+	members, err := st.ProfileAccounts("codex", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 2 || members[0].ID != "codex-one" || members[1].ID != "codex-two" {
+		t.Fatalf("members = %+v", members)
+	}
+	if err := st.SetCurrentProfile("codex", "work"); err != nil {
+		t.Fatal(err)
+	}
+	current, err := st.CurrentProfile("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != "work" {
+		t.Fatalf("current profile = %q", current)
+	}
+	if err := st.RemoveProfileAccount("codex", "work", "codex-one"); err != nil {
+		t.Fatal(err)
+	}
+	members, err = st.ProfileAccounts("codex", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 1 || members[0].ID != "codex-two" {
+		t.Fatalf("members after remove = %+v", members)
+	}
+	if err := st.DeleteProfile("codex", "work"); err != nil {
+		t.Fatal(err)
+	}
+	current, err = st.CurrentProfile("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != "personal" {
+		t.Fatalf("current after delete = %q", current)
 	}
 }
 

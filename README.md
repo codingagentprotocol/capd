@@ -154,12 +154,17 @@ capd agents usage codex   # plan, rate-limit windows, reset times
 capd agents usage codex --account codex-acct
 capd agents usage codex --account auto
 capd agents route --account auto --require-fresh-quota --json
+capd agents route --account auto --profile work --json # route inside a named account profile
 
 capd accounts codex import   # import local ~/.codex/auth.json into capd
 capd accounts codex import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # batch import explicit paths
 CAPD_CODEX_AUTH_PATHS="/tmp/a/auth.json:/tmp/b/auth.json" capd accounts codex import # batch import on macOS/Linux
 CAPD_CODEX_AUTH_PATHS="C:\tmp\a\auth.json;C:\tmp\b\auth.json" capd accounts codex import # batch import on Windows
 capd accounts codex list --json # imported accounts, current marker, safe secret backend and quota metadata
+capd accounts profile create work --description "Work Codex accounts"
+capd accounts profile add work codex-acct-a codex-acct-b
+capd accounts profile current work
+capd accounts profile show work --json # safe profile members for account-pool routing
 capd accounts codex project  # create a per-account CODEX_HOME projection
 capd accounts codex migrate-secrets --from file --to native --dry-run # preview moving older imports to native SecretStore
 capd accounts codex migrate-secrets --from file --to native --timeout 2m # update refs after native secrets are written and read back

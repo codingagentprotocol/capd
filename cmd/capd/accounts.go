@@ -261,7 +261,201 @@ SecretStore smoke check that does not require the daemon, use
 	checkCmd.Flags().Duration("timeout", 2*time.Minute, "maximum time to wait for daemon-side accounts/check")
 	checkCmd.Flags().Bool("json", false, "print accounts/check result as JSON without token material")
 
-	cmd.AddCommand(listCmd, importCmd, checkCmd, newCodexAccountsCmd())
+	cmd.AddCommand(listCmd, importCmd, checkCmd, newAccountProfileCmd(), newCodexAccountsCmd())
+	return cmd
+}
+
+func newAccountProfileCmd() *cobra.Command {
+	var provider string
+	cmd := &cobra.Command{
+		Use:   "profile",
+		Short: "Manage account profile groups",
+	}
+	cmd.PersistentFlags().StringVar(&provider, "provider", codexauth.Provider, "account provider for the profile")
+
+	createCmd := &cobra.Command{
+		Use:   "create <name>",
+		Short: "Create or update an account profile",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			description, _ := cmd.Flags().GetString("description")
+			accounts, _, err := accountDepsFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			profile := account.Profile{Provider: strings.TrimSpace(provider), Name: strings.TrimSpace(args[0]), Description: description}
+			if err := accounts.UpsertProfile(profile); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "profile %s/%s\n", profile.Provider, profile.Name)
+			return nil
+		},
+	}
+	createCmd.Flags().String("description", "", "profile description")
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List account profiles",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			accounts, _, err := accountDepsFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			rows, err := profileRows(accounts, strings.TrimSpace(provider))
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				out, _ := json.MarshalIndent(rows, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+				return nil
+			}
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
+			fmt.Fprintln(w, "CURRENT\tPROVIDER\tNAME\tACCOUNTS\tDESCRIPTION")
+			for _, row := range rows {
+				mark := ""
+				if row.Current {
+					mark = "*"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", mark, row.Provider, row.Name, row.Accounts, row.Description)
+			}
+			return w.Flush()
+		},
+	}
+	listCmd.Flags().Bool("json", false, "print account profiles as JSON")
+
+	showCmd := &cobra.Command{
+		Use:   "show <name>",
+		Short: "Show account profile members",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			accounts, _, err := accountDepsFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			row, members, err := profileDetail(accounts, strings.TrimSpace(provider), strings.TrimSpace(args[0]))
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				out, _ := json.MarshalIndent(struct {
+					Profile  accountProfileRow `json:"profile"`
+					Accounts []accountListRow  `json:"accounts"`
+				}{Profile: row, Accounts: members}, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+				return nil
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "profile %s/%s accounts=%d\n", row.Provider, row.Name, row.Accounts)
+			if row.Description != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "description: %s\n", row.Description)
+			}
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
+			fmt.Fprintln(w, "CURRENT\tID\tEMAIL\tPLAN\tSECRET_BACKEND\tQUOTA_STATE\tFRESH\tROUTE_SCORE")
+			for _, member := range members {
+				mark := ""
+				if member.Current {
+					mark = "*"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%t\t%s\n", mark, member.ID, member.Email, member.Plan, member.SecretBackend, member.QuotaState, member.QuotaFresh, routeScoreText(member.RouteScore))
+			}
+			return w.Flush()
+		},
+	}
+	showCmd.Flags().Bool("json", false, "print account profile members as JSON")
+
+	addCmd := &cobra.Command{
+		Use:   "add <name> <account-id>...",
+		Short: "Add accounts to a profile",
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			accounts, _, err := accountDepsFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			name := strings.TrimSpace(args[0])
+			for _, id := range args[1:] {
+				if err := accounts.AddProfileAccount(strings.TrimSpace(provider), name, strings.TrimSpace(id)); err != nil {
+					return err
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "added %s to %s/%s\n", strings.TrimSpace(id), strings.TrimSpace(provider), name)
+			}
+			return nil
+		},
+	}
+
+	removeCmd := &cobra.Command{
+		Use:   "remove <name> <account-id>...",
+		Short: "Remove accounts from a profile",
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			accounts, _, err := accountDepsFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			name := strings.TrimSpace(args[0])
+			for _, id := range args[1:] {
+				if err := accounts.RemoveProfileAccount(strings.TrimSpace(provider), name, strings.TrimSpace(id)); err != nil {
+					return err
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "removed %s from %s/%s\n", strings.TrimSpace(id), strings.TrimSpace(provider), name)
+			}
+			return nil
+		},
+	}
+
+	currentCmd := &cobra.Command{
+		Use:   "current [name]",
+		Short: "Show or set the current account profile",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			accounts, _, err := accountDepsFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			if len(args) == 1 {
+				if err := accounts.SetCurrentProfile(strings.TrimSpace(provider), strings.TrimSpace(args[0])); err != nil {
+					return err
+				}
+			}
+			current, err := accounts.CurrentProfile(strings.TrimSpace(provider))
+			if err != nil {
+				return err
+			}
+			if current == "" {
+				return fmt.Errorf("no current %s profile", strings.TrimSpace(provider))
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), current)
+			return nil
+		},
+	}
+
+	deleteCmd := &cobra.Command{
+		Use:   "delete <name>",
+		Short: "Delete an account profile",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			accounts, _, err := accountDepsFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			defer accounts.Close()
+			if err := accounts.DeleteProfile(strings.TrimSpace(provider), strings.TrimSpace(args[0])); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "deleted %s/%s\n", strings.TrimSpace(provider), strings.TrimSpace(args[0]))
+			return nil
+		},
+	}
+
+	cmd.AddCommand(createCmd, listCmd, showCmd, addCmd, removeCmd, currentCmd, deleteCmd)
 	return cmd
 }
 
@@ -1671,6 +1865,72 @@ type accountListRow struct {
 	QuotaCheckedAt int64    `json:"quotaCheckedAt,omitempty"`
 	RouteScore     *float64 `json:"routeScore,omitempty"`
 	RouteReason    string   `json:"routeReason,omitempty"`
+}
+
+type accountProfileRow struct {
+	Current     bool   `json:"current"`
+	Provider    string `json:"provider"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Accounts    int    `json:"accounts"`
+}
+
+func profileRows(accounts *account.Store, provider string) ([]accountProfileRow, error) {
+	profiles, err := accounts.ListProfiles(provider)
+	if err != nil {
+		return nil, err
+	}
+	currentByProvider := map[string]string{}
+	rows := make([]accountProfileRow, 0, len(profiles))
+	for _, profile := range profiles {
+		current, ok := currentByProvider[profile.Provider]
+		if !ok {
+			current, err = accounts.CurrentProfile(profile.Provider)
+			if err != nil {
+				return nil, err
+			}
+			currentByProvider[profile.Provider] = current
+		}
+		members, err := accounts.ProfileAccounts(profile.Provider, profile.Name)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, accountProfileRow{
+			Current:     profile.Name == current,
+			Provider:    profile.Provider,
+			Name:        profile.Name,
+			Description: profile.Description,
+			Accounts:    len(members),
+		})
+	}
+	return rows, nil
+}
+
+func profileDetail(accounts *account.Store, provider, name string) (accountProfileRow, []accountListRow, error) {
+	profile, err := accounts.LoadProfile(provider, name)
+	if err != nil {
+		return accountProfileRow{}, nil, err
+	}
+	currentProfile, err := accounts.CurrentProfile(provider)
+	if err != nil {
+		return accountProfileRow{}, nil, err
+	}
+	currentAccount, err := accounts.CurrentAccount(provider)
+	if err != nil {
+		return accountProfileRow{}, nil, err
+	}
+	members, err := accounts.ProfileAccounts(provider, name)
+	if err != nil {
+		return accountProfileRow{}, nil, err
+	}
+	rows := makeAccountListRows(accounts, members, currentAccount)
+	return accountProfileRow{
+		Current:     profile.Name == currentProfile,
+		Provider:    profile.Provider,
+		Name:        profile.Name,
+		Description: profile.Description,
+		Accounts:    len(rows),
+	}, rows, nil
 }
 
 func makeAccountListRows(accounts *account.Store, list []account.Account, current string) []accountListRow {
