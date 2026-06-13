@@ -16,6 +16,29 @@ capd should become the local, protocol-stable cockpit for coding agents:
 - live validation produces portable evidence packages that can be archived,
   reviewed, and replayed.
 
+## Self-Directed Product Demands
+
+These are the demands capd should keep making of itself as it evolves:
+
+- **Account scheduler intelligence:** move from picking the lowest quota account
+  to a scored scheduler that considers quota, freshness, health, recent
+  failures, task type, and profile membership while always explaining the
+  decision.
+- **No-surprise diagnostics:** every Web or CLI diagnostic should be explicit
+  about whether it is prompt-free, SecretStore-reading, runtime-projecting, or
+  quota-refreshing before it runs.
+- **Operational resilience:** reconnect, replay, bounded buffers, and daemon
+  restart recovery should be treated as core product behavior, not edge cases.
+- **Security-by-contract:** every public endpoint should have a test that proves
+  it does not return token material, raw auth JSON, SecretStore refs, local
+  runtime paths, or overbroad browser capabilities.
+- **Adapter parity:** Codex should remain the reference adapter, but every
+  supported CLI family needs the same lifecycle fixtures before it is presented
+  as production-ready.
+- **Web validation loop:** the console/probe should become a small local QA lab:
+  health, profile, route, quota, readiness, repair plan, and evidence export in
+  one no-token UI.
+
 ## P0 Stabilization
 
 ### Live Evidence Gate
@@ -169,6 +192,8 @@ dependency.
 **Acceptance:**
 
 - `/healthz?format=json` remains lightweight and secret-free.
+- The first shipped `/healthz?format=json` runtime counters expose only
+  aggregate connected-client and session-state counts.
 - Optional metrics are disabled or local-only by default.
 
 ## P4 Extensibility
@@ -213,5 +238,13 @@ it is considered supported.
    contract.
 10. Done: clone static adapter conformance contracts for Claude, Gemini,
     OpenCode, Cursor, and supported CLI-family aliases.
-11. Add deterministic lifecycle fixtures for Claude, Gemini, OpenCode, and
+11. Done: add safe aggregate `/healthz?format=json` runtime counters for
+    connected clients and session states.
+12. Add deterministic lifecycle fixtures for Claude, Gemini, OpenCode, and
     Cursor once each can run without real credentials.
+13. Add local-only metrics snapshots for event backlog, adapter process
+    starts/failures, route decisions, and SecretStore access-denied counts.
+14. Add a Web Console evidence export button that saves the same support bundle
+    shape used by CLI automation.
+15. Add daemon restart recovery tests that prove stored sessions and replay
+    evidence survive process replacement.

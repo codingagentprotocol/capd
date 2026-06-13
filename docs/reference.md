@@ -86,9 +86,11 @@ with `capd start --secret-backend file` and re-import with
 ### `capd health` — check the daemon
 
 Checks the configured daemon `/healthz` endpoint and prints `ok`, or
-`{"ok":true,"addr":"...","daemon":"capd","version":"...","protocolVersion":"...","secretBackend":"..."}` with
+`{"ok":true,"addr":"...","daemon":"capd","version":"...","protocolVersion":"...","secretBackend":"...","runtime":{...}}` with
 `--json` when the daemon supports safe health metadata. The JSON path falls back
 to `{"ok":true,"addr":"..."}` for older daemons.
+Runtime metadata is aggregate-only, currently connected client count plus
+session-state counts, and does not include tokens, account data, or local paths.
 `--require-secret-backend <file|native>` fails unless the daemon reports that
 active backend, and also fails against older daemons that cannot report
 `secretBackend`. Failures point to `capd start`, making it useful before
@@ -225,7 +227,7 @@ running in the daemon), find it with `capd sessions`, re-join with
 
 | Command | Output |
 |---------|--------|
-| `capd health [--json] [--require-secret-backend <file\|native>]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok`, `addr`, and daemon metadata such as version, protocol version, and active SecretStore backend when supported; `--require-secret-backend` fails early when the daemon was started with the wrong backend |
+| `capd health [--json] [--require-secret-backend <file\|native>]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok`, `addr`, and daemon metadata such as version, protocol version, active SecretStore backend, and aggregate runtime counters when supported; `--require-secret-backend` fails early when the daemon was started with the wrong backend |
 | `capd secretstore check [--json] [--roundtrip] [--secret-backend <file\|native>] [--require-backend <file\|native>] [--timeout 2m]` | opens the selected SecretStore backend and prints safe readiness evidence. `--roundtrip` writes, reads, and deletes a diagnostic secret; `--require-backend` fails when the active backend differs, making this the smallest direct native SecretStore gate before live account checks. `--timeout` bounds OS credential backend waits, including native prompts. |
 | `capd console [--probe] [--url] [--require-secret-backend <file\|native>]` | opens the local web console, or the compact validation probe with `--probe`, after checking daemon health. By default it passes a signed short-lived scoped token to the browser without printing it; `--url` prints that scoped tokenized URL only when explicitly requested. `--probe` uses `probe:read`; the full console uses `console`, which permits bundled console account/diagnostic workflows but rejects agent task-control methods. `--require-secret-backend` preloads the page's readiness gate with the selected SecretStore backend so browser checks match CLI readiness runs. |
 | `capd probe data [--json] [--readiness] [--fail] [--require-secret-backend <file\|native>] [--timeout 2m]` | fetches `/probe/data` with `Authorization: Bearer <daemon-token-or-scoped-token>` and prints safe diagnostics for automation. Text output includes a compact readiness summary with route candidate count, actual/required SecretStore backend evidence, route-candidate `secretBackend` enums when present, the active `routePolicy` summary when returned, and server JSON errors when available. Without `--readiness`, the endpoint returns `promptFree:true`, labels text output as prompt-free account metadata, and uses cached account metadata plus route evidence without reading account credentials. `--readiness` requests the stronger readiness view and defaults the daemon request to `requireSecretBackend=native`; use `--require-secret-backend file` only for intentional file-backend tests. `--timeout` bounds HTTP waits, and `--fail` exits non-zero when the probe reports `ok=false` or an HTTP error status. |

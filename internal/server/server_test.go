@@ -62,6 +62,7 @@ func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
 		Secrets:  secret.NewFileStore(secretRoot),
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
+	s.clients.Add(2)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz?format=json", nil)
 	rec := httptest.NewRecorder()
@@ -90,12 +91,22 @@ func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
 		Version         string `json:"version"`
 		ProtocolVersion string `json:"protocolVersion"`
 		SecretBackend   string `json:"secretBackend"`
+		Runtime         struct {
+			ConnectedClients int `json:"connectedClients"`
+			SessionsListed   int `json:"sessionsListed"`
+			ActiveSessions   int `json:"activeSessions"`
+			StoredSessions   int `json:"storedSessions"`
+			EndedSessions    int `json:"endedSessions"`
+		} `json:"runtime"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
 	if !got.OK || got.Daemon != "capd" || got.Version != "test-version" || got.ProtocolVersion != protocol.Version || got.SecretBackend != secret.BackendFile {
 		t.Fatalf("health json = %+v", got)
+	}
+	if got.Runtime.ConnectedClients != 2 || got.Runtime.SessionsListed != 0 || got.Runtime.ActiveSessions != 0 || got.Runtime.StoredSessions != 0 || got.Runtime.EndedSessions != 0 {
+		t.Fatalf("runtime health = %+v", got.Runtime)
 	}
 	for _, leaked := range []string{"test-token", secretRoot, "secretRef", "rawAuthJson"} {
 		if strings.Contains(rec.Body.String(), leaked) {

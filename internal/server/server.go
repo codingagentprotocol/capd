@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account"
@@ -43,6 +44,7 @@ type Server struct {
 	policy     *policyEngine
 	accountMu  sync.Mutex
 	accountMux map[string]*sync.Mutex
+	clients    atomic.Int64
 }
 
 func New(opts Options) *Server {
@@ -98,6 +100,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if s.opts.Secrets != nil {
 		secretBackend = s.opts.Secrets.Backend()
 	}
+	runtime := s.runtimeHealth()
 	writeLocalJSONHeaders(w)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":              true,
@@ -105,5 +108,32 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		"version":         s.opts.Version,
 		"protocolVersion": protocol.Version,
 		"secretBackend":   secretBackend,
+		"runtime":         runtime,
 	})
+}
+
+func (s *Server) runtimeHealth() map[string]any {
+	runtime := map[string]any{
+		"connectedClients": s.clients.Load(),
+	}
+	if s.opts.Sessions == nil {
+		return runtime
+	}
+	sessions := s.opts.Sessions.List(1000)
+	active, stored, ended := 0, 0, 0
+	for _, sess := range sessions {
+		switch sess.State {
+		case protocol.SessionStateLive:
+			active++
+		case protocol.SessionStateStored:
+			stored++
+		case protocol.SessionStateEnded:
+			ended++
+		}
+	}
+	runtime["sessionsListed"] = len(sessions)
+	runtime["activeSessions"] = active
+	runtime["storedSessions"] = stored
+	runtime["endedSessions"] = ended
+	return runtime
 }

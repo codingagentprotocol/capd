@@ -66,6 +66,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.CloseNow()
+	s.clients.Add(1)
+	defer s.clients.Add(-1)
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
