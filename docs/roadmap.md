@@ -196,6 +196,8 @@ dependency.
   aggregate connected-client and session-state counts.
 - The second shipped runtime snapshot adds aggregate adapter start/failure,
   route failure, and route decision counts by agent id.
+- Native SecretStore access-denied outcomes are counted as aggregate runtime
+  metrics without account identifiers, refs, paths, or error strings.
 - Optional metrics are disabled or local-only by default.
 
 ## P4 Extensibility
@@ -246,8 +248,9 @@ it is considered supported.
     Cursor once each can run without real credentials.
 13. In progress: add local-only metrics snapshots for event backlog,
     adapter process starts/failures, route decisions, and SecretStore
-    access-denied counts. Adapter start/failure and route decision counters
-    are now present in `/healthz?format=json`.
+    access-denied counts. Adapter start/failure, route decision, and
+    SecretStore access-denied counters are now present in
+    `/healthz?format=json`.
 14. Add a Web Console evidence export button that saves the same support bundle
     shape used by CLI automation.
 15. Add daemon restart recovery tests that prove stored sessions and replay

@@ -67,6 +67,7 @@ func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
 	s.metrics.recordAdapterStart(false)
 	s.metrics.recordRouteDecision("codex", true)
 	s.metrics.recordRouteDecision("", false)
+	s.metrics.recordSecretAccessDenied()
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz?format=json", nil)
 	rec := httptest.NewRecorder()
@@ -105,6 +106,7 @@ func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
 				AdapterStarts        int64            `json:"adapterStarts"`
 				AdapterStartFailures int64            `json:"adapterStartFailures"`
 				RouteFailures        int64            `json:"routeFailures"`
+				SecretAccessDenied   int64            `json:"secretAccessDenied"`
 				RouteDecisions       map[string]int64 `json:"routeDecisions"`
 			} `json:"metrics"`
 		} `json:"runtime"`
@@ -118,7 +120,7 @@ func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
 	if got.Runtime.ConnectedClients != 2 || got.Runtime.SessionsListed != 0 || got.Runtime.ActiveSessions != 0 || got.Runtime.StoredSessions != 0 || got.Runtime.EndedSessions != 0 {
 		t.Fatalf("runtime health = %+v", got.Runtime)
 	}
-	if got.Runtime.Metrics.AdapterStarts != 2 || got.Runtime.Metrics.AdapterStartFailures != 1 || got.Runtime.Metrics.RouteFailures != 1 || got.Runtime.Metrics.RouteDecisions["codex"] != 1 {
+	if got.Runtime.Metrics.AdapterStarts != 2 || got.Runtime.Metrics.AdapterStartFailures != 1 || got.Runtime.Metrics.RouteFailures != 1 || got.Runtime.Metrics.SecretAccessDenied != 1 || got.Runtime.Metrics.RouteDecisions["codex"] != 1 {
 		t.Fatalf("runtime metrics = %+v", got.Runtime.Metrics)
 	}
 	for _, leaked := range []string{"test-token", secretRoot, "secretRef", "rawAuthJson"} {

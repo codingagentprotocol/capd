@@ -135,6 +135,18 @@ type deleteFailSecretStore struct {
 	err error
 }
 
+type getFailSecretStore struct {
+	secret.Store
+	err error
+}
+
+func (st getFailSecretStore) Get(context.Context, secret.Ref) (secret.Bundle, error) {
+	if st.err != nil {
+		return secret.Bundle{}, st.err
+	}
+	return secret.Bundle{}, errors.New("get failed")
+}
+
 func (st deleteFailSecretStore) Delete(context.Context, secret.Ref) error {
 	if st.err != nil {
 		return st.err
@@ -589,6 +601,7 @@ func TestHealthRuntimeMetricsTrackRoutesAndSessionStarts(t *testing.T) {
 				AdapterStarts        int64            `json:"adapterStarts"`
 				AdapterStartFailures int64            `json:"adapterStartFailures"`
 				RouteFailures        int64            `json:"routeFailures"`
+				SecretAccessDenied   int64            `json:"secretAccessDenied"`
 				RouteDecisions       map[string]int64 `json:"routeDecisions"`
 			} `json:"metrics"`
 		} `json:"runtime"`
@@ -599,8 +612,47 @@ func TestHealthRuntimeMetricsTrackRoutesAndSessionStarts(t *testing.T) {
 	if got.Runtime.ConnectedClients != 1 || got.Runtime.SessionsListed != 1 || got.Runtime.ActiveSessions != 1 {
 		t.Fatalf("runtime = %+v", got.Runtime)
 	}
-	if got.Runtime.Metrics.AdapterStarts != 1 || got.Runtime.Metrics.AdapterStartFailures != 0 || got.Runtime.Metrics.RouteFailures != 0 || got.Runtime.Metrics.RouteDecisions["fake"] != 1 {
+	if got.Runtime.Metrics.AdapterStarts != 1 || got.Runtime.Metrics.AdapterStartFailures != 0 || got.Runtime.Metrics.RouteFailures != 0 || got.Runtime.Metrics.SecretAccessDenied != 0 || got.Runtime.Metrics.RouteDecisions["fake"] != 1 {
 		t.Fatalf("metrics = %+v", got.Runtime.Metrics)
+	}
+}
+
+func TestHealthRuntimeMetricsTrackSecretAccessDenied(t *testing.T) {
+	s, _, _, _ := newCodexAccountIntegrationServer(t)
+	s.opts.Secrets = getFailSecretStore{
+		Store: s.opts.Secrets,
+		err:   errors.New("macOS keychain status -128"),
+	}
+
+	_, perr := s.checkAccounts(context.Background(), protocol.AccountsCheckParams{})
+	if perr == nil {
+		t.Fatal("expected SecretStore error")
+	}
+	partial, ok := perr.Data.(protocol.AccountsCheckResult)
+	if !ok || len(partial.Accounts) != 1 || partial.Accounts[0].SecretState != protocol.AccountSecretStateAccessDenied {
+		t.Fatalf("partial = %#v", perr.Data)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz?format=json", nil)
+	rec := httptest.NewRecorder()
+	s.handleHealthz(rec, req)
+	var got struct {
+		Runtime struct {
+			Metrics struct {
+				SecretAccessDenied int64 `json:"secretAccessDenied"`
+			} `json:"metrics"`
+		} `json:"runtime"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Runtime.Metrics.SecretAccessDenied != 1 {
+		t.Fatalf("metrics = %+v", got.Runtime.Metrics)
+	}
+	for _, leaked := range []string{"codex-test", "codex@example.com", "secretRef", "test-token", "macOS keychain status -128"} {
+		if strings.Contains(rec.Body.String(), leaked) {
+			t.Fatalf("health metrics leaked %q: %s", leaked, rec.Body.String())
+		}
 	}
 }
 

@@ -48,6 +48,7 @@ func (s *Server) runtimeEnvForAccount(ctx context.Context, agentID, accountID st
 		Secrets: s.opts.Secrets,
 	}.Project(ctx, acc)
 	if err != nil {
+		s.recordSecretAccessError(err)
 		return nil, protocol.NewError(protocol.CodeInternalError, "project account runtime: %v", err)
 	}
 	if len(profile.Env) == 0 {
@@ -806,6 +807,7 @@ func (s *Server) checkAccount(ctx context.Context, acc account.Account, current 
 	if _, err := s.opts.Secrets.Get(ctx, ref); err != nil {
 		row.SecretBackendOK = true
 		row.SecretState = accountSecretErrorState(err)
+		s.recordSecretState(row.SecretState)
 		return row, protocol.NewError(protocol.CodeInternalError, "load account credentials: %s", row.SecretState)
 	}
 	row.SecretBackendOK = true
@@ -861,6 +863,16 @@ func accountSecretErrorState(err error) string {
 		return protocol.AccountSecretStateAccessDenied
 	default:
 		return protocol.AccountSecretStateUnreadable
+	}
+}
+
+func (s *Server) recordSecretAccessError(err error) {
+	s.recordSecretState(accountSecretErrorState(err))
+}
+
+func (s *Server) recordSecretState(state string) {
+	if state == protocol.AccountSecretStateAccessDenied {
+		s.metrics.recordSecretAccessDenied()
 	}
 }
 
@@ -971,6 +983,7 @@ func (s *Server) refreshOneAccountQuota(ctx context.Context, acc account.Account
 	}
 	bundle, err := s.opts.Secrets.Get(ctx, ref)
 	if err != nil {
+		s.recordSecretAccessError(err)
 		return protocol.AccountSummary{}, protocol.NewError(protocol.CodeInternalError, "load account secret: %v", err)
 	}
 	if bundle.AccountID == "" {
@@ -1021,6 +1034,7 @@ func (s *Server) saveUsageQuota(ctx context.Context, accountID string, usage map
 		}
 		bundle, err := s.opts.Secrets.Get(ctx, ref)
 		if err != nil {
+			s.recordSecretAccessError(err)
 			return protocol.NewError(protocol.CodeInternalError, "load account secret: %v", err)
 		}
 		updatedAcc, changed = codexauth.AccountWithBundleMetadata(acc, bundle)
@@ -1079,6 +1093,7 @@ func (s *Server) removeAccount(ctx context.Context, params protocol.AccountsRemo
 		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInternalError, "remove account runtime: %v", err)
 	}
 	if err := s.opts.Secrets.Delete(ctx, ref); err != nil {
+		s.recordSecretAccessError(err)
 		return protocol.AccountsRemoveResult{}, protocol.NewError(protocol.CodeInternalError, "remove account credentials: %v", err)
 	}
 	if err := s.opts.Accounts.DeleteAccount(acc.ID); err != nil {

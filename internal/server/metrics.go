@@ -9,6 +9,7 @@ type runtimeMetrics struct {
 	adapterStarts        atomic.Int64
 	adapterStartFailures atomic.Int64
 	routeFailures        atomic.Int64
+	secretAccessDenied   atomic.Int64
 
 	mu             sync.Mutex
 	routeDecisions map[string]int64
@@ -44,12 +45,20 @@ func (m *runtimeMetrics) recordRouteDecision(agentID string, ok bool) {
 	m.mu.Unlock()
 }
 
+func (m *runtimeMetrics) recordSecretAccessDenied() {
+	if m == nil {
+		return
+	}
+	m.secretAccessDenied.Add(1)
+}
+
 func (m *runtimeMetrics) snapshot() map[string]any {
 	if m == nil {
 		return map[string]any{
 			"adapterStarts":        int64(0),
 			"adapterStartFailures": int64(0),
 			"routeFailures":        int64(0),
+			"secretAccessDenied":   int64(0),
 			"routeDecisions":       map[string]int64{},
 		}
 	}
@@ -63,6 +72,7 @@ func (m *runtimeMetrics) snapshot() map[string]any {
 		"adapterStarts":        m.adapterStarts.Load(),
 		"adapterStartFailures": m.adapterStartFailures.Load(),
 		"routeFailures":        m.routeFailures.Load(),
+		"secretAccessDenied":   m.secretAccessDenied.Load(),
 		"routeDecisions":       routeDecisions,
 	}
 }
