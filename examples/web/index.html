@@ -323,13 +323,13 @@ function lightweightAccountsSummary(accounts, secretBackend) {
 }
 
 async function importCodexAccount() {
-  const authPath = prompt("Codex auth.json 路径（留空使用默认；多个路径用逗号分隔）", "");
+  const authPath = prompt("Codex auth.json 路径（留空使用默认；多个路径用换行或逗号分隔）", "");
   if (authPath === null) return;
   const button = document.getElementById("importCodex");
   button.disabled = true;
   try {
     const params = { provider: "codex" };
-    const authPaths = authPath.split(",").map(p => p.trim()).filter(Boolean);
+    const authPaths = splitAuthPaths(authPath);
     if (authPaths.length === 1) params.authPath = authPaths[0];
     if (authPaths.length > 1) params.authPaths = authPaths;
     const result = await call("accounts/import", params);
@@ -345,6 +345,10 @@ async function importCodexAccount() {
   } finally {
     button.disabled = false;
   }
+}
+
+function splitAuthPaths(value) {
+  return String(value || "").split(/\r?\n|,/).map(p => p.trim()).filter(Boolean);
 }
 
 function accountsImportNextStep(importedAccounts) {
