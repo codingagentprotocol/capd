@@ -146,7 +146,8 @@ for route policy, route candidates, quota freshness, and repair-plan evidence.
 For automation, `capd probe evidence --manifest
 /tmp/capd-live-evidence/manifest.json --fail` reads the saved manifest plus its
 listed artifacts and exits non-zero when route policy, route candidates, fresh
-quota evidence, backend, daemon mode, or a passed selftest status is missing.
+quota evidence, route decision evidence, backend, daemon mode, or a passed
+selftest status is missing.
 Add `--html /tmp/capd-live-evidence/report.html` to write a standalone QA
 report from the same safe summary without embedding raw artifact JSON.
 

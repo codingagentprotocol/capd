@@ -130,6 +130,7 @@ type probeEvidenceReport struct {
 	RoutePolicy     *protocol.AccountRoutePolicy `json:"routePolicy,omitempty"`
 	RouteCandidates int                          `json:"routeCandidates"`
 	FreshCandidates int                          `json:"freshCandidates"`
+	RouteDecisionOK bool                         `json:"routeDecisionOk"`
 	QuotaFresh      bool                         `json:"quotaFresh"`
 	RepairPlanSteps int                          `json:"repairPlanSteps"`
 	Issues          []string                     `json:"issues,omitempty"`
@@ -160,6 +161,7 @@ type probeEvidenceArtifact struct {
 	RoutePolicy     bool   `json:"routePolicy"`
 	RouteCandidates int    `json:"routeCandidates"`
 	FreshCandidates int    `json:"freshCandidates"`
+	RouteDecisionOK bool   `json:"routeDecisionOk"`
 	QuotaFresh      bool   `json:"quotaFresh"`
 	RepairPlanSteps int    `json:"repairPlanSteps"`
 }
@@ -405,6 +407,9 @@ func loadProbeEvidenceReport(manifestPath string, artifactPaths []string) (probe
 		if artifact.QuotaFresh {
 			report.QuotaFresh = true
 		}
+		if artifact.RouteDecisionOK {
+			report.RouteDecisionOK = true
+		}
 	}
 	report.Checks = probeEvidenceChecks(report)
 	report.Issues = probeEvidenceIssues(report.Checks)
@@ -507,9 +512,14 @@ func loadProbeEvidenceArtifact(path string) (probeEvidenceArtifact, error) {
 		checked, _ := intField(summary, "checkedAccounts")
 		fresh, _ := intField(summary, "freshQuotaAccounts")
 		autoFresh, _ := summary["autoRouteFresh"].(bool)
+		routeDecisionOK, _ := summary["routeDecisionOk"].(bool)
 		artifact.QuotaFresh = checked > 0 && fresh == checked && autoFresh
+		artifact.RouteDecisionOK = routeDecisionOK
 	} else if artifact.RouteCandidates > 0 {
 		artifact.QuotaFresh = artifact.FreshCandidates == artifact.RouteCandidates
+	}
+	if !artifact.RouteDecisionOK {
+		artifact.RouteDecisionOK = mapHasNested(data, "accountRoute") || mapHasNested(data, "routeDecision") || mapHasNested(data, "data", "accountRoute") || mapHasNested(data, "data", "routeDecision") || mapHasNested(data, "codex", "accountRoute") || mapHasNested(data, "codex", "routeDecision")
 	}
 	repair := firstArray(data, []string{"repairPlan"}, []string{"data", "repairPlan"}, []string{"codex", "repairPlan"})
 	artifact.RepairPlanSteps = len(repair)
@@ -565,12 +575,13 @@ func printProbeEvidenceReport(cmd *cobra.Command, report probeEvidenceReport) {
 		fmt.Fprintf(cmd.OutOrStdout(), "route policy: %s\n", routePolicyText(*report.RoutePolicy))
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "route candidates: %d fresh=%d\n", report.RouteCandidates, report.FreshCandidates)
+	fmt.Fprintf(cmd.OutOrStdout(), "route decision: %t\n", report.RouteDecisionOK)
 	fmt.Fprintf(cmd.OutOrStdout(), "quota fresh: %t\n", report.QuotaFresh)
 	fmt.Fprintf(cmd.OutOrStdout(), "repair plan: %d steps\n", report.RepairPlanSteps)
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ARTIFACT\tKIND\tPOLICY\tCANDIDATES\tFRESH\tQUOTA\tREPAIR")
+	fmt.Fprintln(w, "ARTIFACT\tKIND\tPOLICY\tCANDIDATES\tFRESH\tROUTE\tQUOTA\tREPAIR")
 	for _, artifact := range report.Artifacts {
-		fmt.Fprintf(w, "%s\t%s\t%t\t%d\t%d\t%t\t%d\n", artifact.Path, artifact.Kind, artifact.RoutePolicy, artifact.RouteCandidates, artifact.FreshCandidates, artifact.QuotaFresh, artifact.RepairPlanSteps)
+		fmt.Fprintf(w, "%s\t%s\t%t\t%d\t%d\t%t\t%t\t%d\n", artifact.Path, artifact.Kind, artifact.RoutePolicy, artifact.RouteCandidates, artifact.FreshCandidates, artifact.RouteDecisionOK, artifact.QuotaFresh, artifact.RepairPlanSteps)
 	}
 	_ = w.Flush()
 	checks := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
@@ -640,6 +651,7 @@ tr:last-child td{border-bottom:0} code{font-family:ui-monospace,SFMono-Regular,M
 <div class="grid">
   <div class="metric"><span class="muted">Route candidates</span><b>{{.RouteCandidates}}</b></div>
   <div class="metric"><span class="muted">Fresh candidates</span><b>{{.FreshCandidates}}</b></div>
+  <div class="metric"><span class="muted">Route decision</span><b>{{.RouteDecisionOK}}</b></div>
   <div class="metric"><span class="muted">Quota fresh</span><b>{{.QuotaFresh}}</b></div>
   <div class="metric"><span class="muted">Repair steps</span><b>{{.RepairPlanSteps}}</b></div>
 </div>
@@ -651,8 +663,8 @@ tr:last-child td{border-bottom:0} code{font-family:ui-monospace,SFMono-Regular,M
 </table>
 <h2>Artifacts</h2>
 <table>
-<thead><tr><th>Path</th><th>Kind</th><th>Policy</th><th>Candidates</th><th>Fresh</th><th>Quota</th><th>Repair</th></tr></thead>
-<tbody>{{range .Artifacts}}<tr><td><code>{{.Path}}</code></td><td>{{.Kind}}</td><td>{{.RoutePolicy}}</td><td>{{.RouteCandidates}}</td><td>{{.FreshCandidates}}</td><td>{{.QuotaFresh}}</td><td>{{.RepairPlanSteps}}</td></tr>{{end}}</tbody>
+<thead><tr><th>Path</th><th>Kind</th><th>Policy</th><th>Candidates</th><th>Fresh</th><th>Route</th><th>Quota</th><th>Repair</th></tr></thead>
+<tbody>{{range .Artifacts}}<tr><td><code>{{.Path}}</code></td><td>{{.Kind}}</td><td>{{.RoutePolicy}}</td><td>{{.RouteCandidates}}</td><td>{{.FreshCandidates}}</td><td>{{.RouteDecisionOK}}</td><td>{{.QuotaFresh}}</td><td>{{.RepairPlanSteps}}</td></tr>{{end}}</tbody>
 </table>
 {{if .Issues}}<h2>Issues</h2><ul>{{range .Issues}}<li>{{.}}</li>{{end}}</ul>{{end}}
 </main>
@@ -692,6 +704,12 @@ func probeEvidenceChecks(report probeEvidenceReport) []probeEvidenceCheck {
 			NextStep: missingEvidenceStep(report.RouteCandidates > 0, "include agents-route.json or probe-data-readiness.json"),
 		},
 		{
+			Name:     "route decision",
+			OK:       report.RouteDecisionOK,
+			Evidence: fmt.Sprintf("routeDecisionOk=%t", report.RouteDecisionOK),
+			NextStep: missingEvidenceStep(report.RouteDecisionOK, "include agents-route.json with accountRoute or probe-data-readiness.json with summary.routeDecisionOk=true"),
+		},
+		{
 			Name:     "quota freshness",
 			OK:       report.QuotaFresh,
 			Evidence: fmt.Sprintf("quotaFresh=%t", report.QuotaFresh),
@@ -722,6 +740,8 @@ func (check probeEvidenceCheck) EvidenceIssue() string {
 		return "routePolicy evidence missing"
 	case "route candidates":
 		return "routeCandidates evidence missing"
+	case "route decision":
+		return "routeDecisionOk evidence missing"
 	case "quota freshness":
 		return "fresh quota evidence missing"
 	default:

@@ -62,8 +62,8 @@ func TestProbeEvidenceCmdSummarizesManifestArtifacts(t *testing.T) {
 	probe := filepath.Join(dir, "probe-data-readiness.json")
 	doctor := filepath.Join(dir, "doctor-prompt-free.json")
 	writeTestFile(t, manifest, `{"manifestVersion":1,"status":"passed","stage":"complete","backend":"native","daemonMode":"temporary","artifacts":{"agentsRoute":"agents-route.json","probeData":"probe-data-readiness.json","doctor":"doctor-prompt-free.json"}}`)
-	writeTestFile(t, route, `{"routePolicy":{"name":"conservative-quota-pressure","freshTtlSeconds":1800,"unknownScore":75,"currentAccountTieBreak":0.01,"quotaWindows":["primary","secondary","code_review"]},"routeCandidates":[{"accountId":"codex-a","quotaState":"fresh","fresh":true,"secretBackend":"native","primaryUsedPercent":12}]}`)
-	writeTestFile(t, probe, `{"summary":{"checkedAccounts":2,"freshQuotaAccounts":2,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteFresh":true},"repairPlan":[]}`)
+	writeTestFile(t, route, `{"routePolicy":{"name":"conservative-quota-pressure","freshTtlSeconds":1800,"unknownScore":75,"currentAccountTieBreak":0.01,"quotaWindows":["primary","secondary","code_review"]},"accountRoute":{"accountId":"codex-a","quotaState":"fresh","fresh":true,"secretBackend":"native"},"routeCandidates":[{"accountId":"codex-a","quotaState":"fresh","fresh":true,"secretBackend":"native","primaryUsedPercent":12}]}`)
+	writeTestFile(t, probe, `{"summary":{"checkedAccounts":2,"freshQuotaAccounts":2,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteFresh":true,"routeDecisionOk":true},"repairPlan":[]}`)
 	writeTestFile(t, doctor, `{"codex":{"routePolicy":{"name":"conservative-quota-pressure"}},"repairPlan":[]}`)
 
 	var out bytes.Buffer
@@ -80,10 +80,12 @@ func TestProbeEvidenceCmdSummarizesManifestArtifacts(t *testing.T) {
 		"manifest: manifest.json " + manifest + " status=passed stage=complete backend=native daemon=temporary",
 		"route policy: conservative-quota-pressure ttl=1800s unknown=75.00 tie-break=0.01 windows=primary/secondary/code_review",
 		"route candidates: 1 fresh=1",
+		"route decision: true",
 		"quota fresh: true",
 		"repair plan: 0 steps",
 		"selftest status      true  passed",
 		"route policy         true  conservative-quota-pressure",
+		"route decision       true  routeDecisionOk=true",
 		"quota freshness      true  quotaFresh=true",
 	} {
 		if !strings.Contains(text, want) {
@@ -109,7 +111,7 @@ func TestProbeEvidenceCmdJSONAndFail(t *testing.T) {
 		t.Fatalf("err = %v output=%s", err, out.String())
 	}
 	text := out.String()
-	for _, want := range []string{`"ok": false`, `"source": "summary.json"`, `"status": "failed"`, `"routeCandidates": 1`, `"freshCandidates": 0`, `"checks":`, `"name": "selftest status"`, `"name": "route policy"`, `"name": "quota freshness"`, `"routePolicy evidence missing"`, `"fresh quota evidence missing"`} {
+	for _, want := range []string{`"ok": false`, `"source": "summary.json"`, `"status": "failed"`, `"routeCandidates": 1`, `"freshCandidates": 0`, `"routeDecisionOk": false`, `"checks":`, `"name": "selftest status"`, `"name": "route policy"`, `"name": "route decision"`, `"name": "quota freshness"`, `"routePolicy evidence missing"`, `"routeDecisionOk evidence missing"`, `"fresh quota evidence missing"`} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("json missing %q: %s", want, text)
 		}
@@ -123,8 +125,8 @@ func TestProbeEvidenceCmdWritesStandaloneHTMLReport(t *testing.T) {
 	probe := filepath.Join(dir, "probe-data-readiness.json")
 	report := filepath.Join(dir, "report", "evidence.html")
 	writeTestFile(t, manifest, `{"manifestVersion":1,"status":"passed","stage":"complete","backend":"native","daemonMode":"existing","artifacts":{"agentsRoute":"agents-route.json","probeData":"probe-data-readiness.json"}}`)
-	writeTestFile(t, route, `{"routePolicy":{"name":"conservative-quota-pressure","freshTtlSeconds":1800,"unknownScore":75,"currentAccountTieBreak":0.01,"quotaWindows":["primary"]},"routeCandidates":[{"accountId":"codex-a","quotaState":"fresh","fresh":true,"secretBackend":"native","primaryUsedPercent":12}],"access_token":"must-not-appear"}`)
-	writeTestFile(t, probe, `{"summary":{"checkedAccounts":1,"freshQuotaAccounts":1,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteFresh":true},"repairPlan":[]}`)
+	writeTestFile(t, route, `{"routePolicy":{"name":"conservative-quota-pressure","freshTtlSeconds":1800,"unknownScore":75,"currentAccountTieBreak":0.01,"quotaWindows":["primary"]},"accountRoute":{"accountId":"codex-a","quotaState":"fresh","fresh":true,"secretBackend":"native"},"routeCandidates":[{"accountId":"codex-a","quotaState":"fresh","fresh":true,"secretBackend":"native","primaryUsedPercent":12}],"access_token":"must-not-appear"}`)
+	writeTestFile(t, probe, `{"summary":{"checkedAccounts":1,"freshQuotaAccounts":1,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteFresh":true,"routeDecisionOk":true},"repairPlan":[]}`)
 
 	var out bytes.Buffer
 	cmd := newProbeCmd()
@@ -148,6 +150,7 @@ func TestProbeEvidenceCmdWritesStandaloneHTMLReport(t *testing.T) {
 		"status passed",
 		"backend native",
 		"Route candidates",
+		"Route decision",
 		"conservative-quota-pressure",
 		"quota freshness",
 		"agents-route.json",
