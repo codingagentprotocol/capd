@@ -107,6 +107,7 @@ CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex quota all
 CAPD_SECRET_BACKEND=native capd accounts --secret-backend native codex smoke --json --quota --require-multiple --require-fresh-quota --require-all-fresh-quota --require-secret-backend native --timeout 2m
 CAPD_SECRET_BACKEND=native capd secretstore check --json --roundtrip --require-backend native --timeout 2m
 CAPD_SECRET_BACKEND=native capd doctor --json --fail --verify-secretstore --require-secret-backend native --timeout 2m
+CAPD_SECRET_BACKEND=native capd doctor --repair-plan --prompt-free --require-secret-backend native
 
 # In another terminal, keep the daemon running for CAP/WebSocket checks:
 capd start --secret-backend native
@@ -257,6 +258,9 @@ JSON also includes the same `routeCandidates` ordering used by
 account would be selected. The top-level `repairPlan` is the ordered autopilot
 view: each entry has an `id`, copy/paste `command`, expected evidence, and
 daemon/SecretStore requirements without token material or local runtime paths.
+Use `capd doctor --repair-plan --prompt-free --require-secret-backend native`
+when automation only needs the ordered repair commands and should avoid native
+SecretStore credential prompts.
 The top-level `summary` object is the compact
 CI/Web view of missing accounts, account credential readability, quota
 freshness, auto-route freshness, SecretStore backend status, and daemon CAP

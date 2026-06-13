@@ -117,6 +117,63 @@ func TestDoctorTextReturnsErrorWhenNotReady(t *testing.T) {
 	}
 }
 
+func TestDoctorRepairPlanOnlyJSON(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+	if err := writeTokenForTest(home, "tok-doctor-plan"); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	cmd := newDoctorCmd()
+	cmd.SetArgs([]string{"--repair-plan", "--prompt-free", "--require-secret-backend", "native"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var steps []doctorRepairStep
+	if err := json.Unmarshal(out.Bytes(), &steps); err != nil {
+		t.Fatalf("repair plan JSON = %q: %v", out.String(), err)
+	}
+	if !containsDoctorRepairStep(steps, doctorRepairStep{ID: "start-daemon", Command: "capd start --secret-backend native"}) {
+		t.Fatalf("repair plan = %+v", steps)
+	}
+	if !containsDoctorRepairStep(steps, doctorRepairStep{ID: "import-codex-accounts", Command: "capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json", RequiresDaemon: true, RequiresSecret: true}) {
+		t.Fatalf("repair plan = %+v", steps)
+	}
+	text := out.String()
+	for _, forbidden := range []string{"tok-doctor-plan", home, `"summary"`, `"checks"`, `"codex"`} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("repair-plan output leaked or included full report %q: %s", forbidden, text)
+		}
+	}
+}
+
+func TestDoctorRepairPlanOnlyHonorsFailFlag(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+	var out bytes.Buffer
+	cmd := newDoctorCmd()
+	cmd.SetArgs([]string{"--repair-plan", "--fail"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "readiness issue") {
+		t.Fatalf("err = %v output=%s", err, out.String())
+	}
+	var steps []doctorRepairStep
+	if jsonErr := json.Unmarshal(out.Bytes(), &steps); jsonErr != nil {
+		t.Fatalf("repair plan JSON = %q: %v", out.String(), jsonErr)
+	}
+	if len(steps) == 0 {
+		t.Fatalf("repair plan should be printed before fail: %s", out.String())
+	}
+}
+
 func TestDoctorDaemonNextStepHonorsRequiredSecretBackend(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
