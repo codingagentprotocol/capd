@@ -93,7 +93,7 @@ func TestRepairRunCommandPrintsJSONDryRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	for _, want := range []string{`"dryRun": true`, `"status": "skipped"`, `"command": "capd start --secret-backend native"`, `"command": "make live-codex-preflight"`} {
+	for _, want := range []string{`"dryRun": true`, `"status": "skipped"`, `"command": "capd start --secret-backend native"`, `"command": "make live-codex-preflight"`, `"execution": {`, `"runnable": false`, `"reason": "starts a foreground daemon; run manually in another terminal"`} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("repair JSON missing %q: %s", want, text)
 		}

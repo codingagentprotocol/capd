@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
+	"github.com/codingagentprotocol/capd/internal/repairplan"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
@@ -353,7 +354,7 @@ func probeDataRepairPlan(result probeDataResult, readiness bool, requireSecretBa
 			RequiresSecret:   true,
 		})
 	}
-	return steps
+	return repairplan.Annotate(steps, repairplan.Options{})
 }
 
 func probeCheckFailed(checks []probeDataCheck, name string) bool {

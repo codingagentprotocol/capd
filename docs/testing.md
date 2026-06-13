@@ -276,7 +276,8 @@ remaining steps are runnable. The runner skips placeholder auth paths, daemon
 startup, shell `export` commands, and the final live preflight unless
 `--include-final` is explicitly set. The Web Console and Probe classify the
 same `repairPlan` entries as runnable or manual so browser-side diagnostics can
-be compared directly with `capd repair run --json`.
+be compared directly with `capd repair run --json`; both paths expose
+`execution.runnable` and `execution.reason` for machine checks.
 The top-level `summary` object is the compact
 CI/Web view of missing accounts, account credential readability, quota
 freshness, auto-route freshness, SecretStore backend status, and daemon CAP

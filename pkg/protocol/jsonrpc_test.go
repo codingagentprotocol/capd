@@ -80,3 +80,21 @@ func TestRepairStepJSONShape(t *testing.T) {
 		t.Fatalf("repair step = %s", data)
 	}
 }
+
+func TestRepairStepExecutionJSONShape(t *testing.T) {
+	data, err := json.Marshal(RepairStep{
+		ID:      "import-codex-accounts",
+		Command: "capd accounts import --auth /path/a/auth.json",
+		Execution: &RepairStepExecution{
+			Runnable: false,
+			Reason:   "command contains placeholders",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"id":"import-codex-accounts","title":"","command":"capd accounts import --auth /path/a/auth.json","expectedEvidence":"","execution":{"runnable":false,"reason":"command contains placeholders"}}`
+	if string(data) != want {
+		t.Fatalf("repair step execution = %s", data)
+	}
+}

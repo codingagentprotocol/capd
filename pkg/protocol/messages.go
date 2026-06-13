@@ -273,13 +273,21 @@ type AccountsQuotaResult struct {
 // or execute after explicit user approval. It must never include tokens,
 // credentials, local secret material, or private filesystem paths.
 type RepairStep struct {
-	ID               string `json:"id"`
-	Title            string `json:"title"`
-	Command          string `json:"command"`
-	ExpectedEvidence string `json:"expectedEvidence"`
-	RequiresDaemon   bool   `json:"requiresDaemon,omitempty"`
-	RequiresSecret   bool   `json:"requiresSecret,omitempty"`
-	Optional         bool   `json:"optional,omitempty"`
+	ID               string               `json:"id"`
+	Title            string               `json:"title"`
+	Command          string               `json:"command"`
+	ExpectedEvidence string               `json:"expectedEvidence"`
+	RequiresDaemon   bool                 `json:"requiresDaemon,omitempty"`
+	RequiresSecret   bool                 `json:"requiresSecret,omitempty"`
+	Optional         bool                 `json:"optional,omitempty"`
+	Execution        *RepairStepExecution `json:"execution,omitempty"`
+}
+
+// RepairStepExecution describes whether a RepairStep is safe for an approval-
+// gated repair runner to execute automatically.
+type RepairStepExecution struct {
+	Runnable bool   `json:"runnable"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 func (r AccountsQuotaResult) MarshalJSON() ([]byte, error) {

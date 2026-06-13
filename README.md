@@ -231,9 +231,10 @@ it is dry-run by default, and `--execute --yes` runs only non-placeholder,
 non-foreground repair commands. It leaves daemon startup, shell `export`
 commands, auth path placeholders, and the final live preflight for explicit
 manual action unless the command is made runnable and, for the final gate,
-`--include-final` is supplied. The Web Console and compact Probe classify the
-same repair steps as `runnable` or `manual` with the same conservative reasons,
-so browser diagnostics match the CLI repair runner.
+`--include-final` is supplied. `/probe/data` and `capd repair run --json`
+attach `execution.runnable` plus `execution.reason` to repair steps; the Web
+Console and compact Probe render that server-provided classification, with a
+local fallback for older daemons.
 For unattended release checks, `make
 live-codex-selftest` starts a temporary daemon when needed, waits for health,
 runs the same preflight, and cleans up only the daemon it started. The final

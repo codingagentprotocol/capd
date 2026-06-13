@@ -161,7 +161,7 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 		t.Fatalf("csp = %q", got)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"CAPD Probe", "accounts/check", "accounts/list", "accounts/quota", "agents/usage", "agents/route", "/healthz?format=json", "/probe/data", "Authorization:`Bearer ${TOKEN}`", "fetchProbeData", "httpProbe", "fallbackResult", "fallbackHealth", "http probe error", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "health: fallbackHealth", "protocolVersion", "secretBackend", "secretState", "credentialReadable", "runtimeReady", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "nextSteps", "repairPlan", "repairStepClassification", "repairCommandBinary", "manual reason:", "outside repair runner allowlist", "requires --include-final", "expectedEvidence", "checks", "validationRows", "showTests", "daemon health", "account metadata", "account credentials", "account runtime", "not checked in prompt-free refresh", "safe no-prompt audit", "use Readiness only when ready for SecretStore credential checks", "use Readiness only when ready for runtime projection checks", "promptFreeDoctorCommand", "credentialAccessNextStep", "access-denied", "macOS Keychain access was denied", "approve macOS Keychain access, or restart with file SecretStore and re-import accounts", "project account runtimes with accounts/project", "multi-account readiness", "quota freshness", "auto route fresh", "require native secret", "native secret backend", "readiness gate", "rpcError", "e.data", "routeDecision = e.data", "e.data.accountRoute || route", "readinessCommand", "doctorCommand", "capd doctor --prompt-free --json --fail", "capd accounts check --json --readiness", "--require-secret-backend ${backend}", "--timeout 2m", "capd agents route --account auto --require-fresh-quota --json", "capd start --secret-backend native", "deep verify with:", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", "readinessSummaryText", "http summary", "summary.ready", "summary.checkedAccounts", "summary.secretBackendOk", "RPC_TIMEOUT_MS = 12000", "LONG_RPC_TIMEOUT_MS = 120000", "rpcTimeoutFor", "lightweightAccountsResult", "accountQuotaState", "accountQuotaFresh", "accountQuotaCheckedAt", "accountPrimaryUsedPercent", "a.quotaState", "a.quotaFresh", "a.quotaCheckedAt", "a.primaryUsedPercent", `call("accounts/list", { provider:"codex" })`, "http probe: skipped for prompt-free refresh", `method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)`, `timeout after ${timeoutMS}ms`, "clearTimeout(pending.timer)"} {
+	for _, want := range []string{"CAPD Probe", "accounts/check", "accounts/list", "accounts/quota", "agents/usage", "agents/route", "/healthz?format=json", "/probe/data", "Authorization:`Bearer ${TOKEN}`", "fetchProbeData", "httpProbe", "fallbackResult", "fallbackHealth", "http probe error", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "health: fallbackHealth", "protocolVersion", "secretBackend", "secretState", "credentialReadable", "runtimeReady", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "nextSteps", "repairPlan", "repairStepClassification", "repairCommandBinary", "step.execution", "server classified repair step", "manual reason:", "outside repair runner allowlist", "requires --include-final", "expectedEvidence", "checks", "validationRows", "showTests", "daemon health", "account metadata", "account credentials", "account runtime", "not checked in prompt-free refresh", "safe no-prompt audit", "use Readiness only when ready for SecretStore credential checks", "use Readiness only when ready for runtime projection checks", "promptFreeDoctorCommand", "credentialAccessNextStep", "access-denied", "macOS Keychain access was denied", "approve macOS Keychain access, or restart with file SecretStore and re-import accounts", "project account runtimes with accounts/project", "multi-account readiness", "quota freshness", "auto route fresh", "require native secret", "native secret backend", "readiness gate", "rpcError", "e.data", "routeDecision = e.data", "e.data.accountRoute || route", "readinessCommand", "doctorCommand", "capd doctor --prompt-free --json --fail", "capd accounts check --json --readiness", "--require-secret-backend ${backend}", "--timeout 2m", "capd agents route --account auto --require-fresh-quota --json", "capd start --secret-backend native", "deep verify with:", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "decision.reason", "readinessSummaryText", "http summary", "summary.ready", "summary.checkedAccounts", "summary.secretBackendOk", "RPC_TIMEOUT_MS = 12000", "LONG_RPC_TIMEOUT_MS = 120000", "rpcTimeoutFor", "lightweightAccountsResult", "accountQuotaState", "accountQuotaFresh", "accountQuotaCheckedAt", "accountPrimaryUsedPercent", "a.quotaState", "a.quotaFresh", "a.quotaCheckedAt", "a.primaryUsedPercent", `call("accounts/list", { provider:"codex" })`, "http probe: skipped for prompt-free refresh", `method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)`, `timeout after ${timeoutMS}ms`, "clearTimeout(pending.timer)"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("probe HTML missing %q", want)
 		}
@@ -367,6 +367,14 @@ func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
 			t.Fatalf("repairPlan missing %+v: %+v", want, got.RepairPlan)
 		}
 	}
+	importStep := probeRepairStepByID(got.RepairPlan, "import-codex-accounts")
+	if importStep.Execution == nil || importStep.Execution.Runnable || !strings.Contains(importStep.Execution.Reason, "placeholders") {
+		t.Fatalf("import repair execution = %+v", importStep.Execution)
+	}
+	finalStep := probeRepairStepByID(got.RepairPlan, "final-live-preflight")
+	if finalStep.Execution == nil || finalStep.Execution.Runnable || !strings.Contains(finalStep.Execution.Reason, "--include-final") {
+		t.Fatalf("final repair execution = %+v", finalStep.Execution)
+	}
 }
 
 func probeNextStepsContain(steps []string, want string) bool {
@@ -398,6 +406,15 @@ func probeRepairPlanContains(steps []protocol.RepairStep, want protocol.RepairSt
 		return true
 	}
 	return false
+}
+
+func probeRepairStepByID(steps []protocol.RepairStep, id string) protocol.RepairStep {
+	for _, step := range steps {
+		if step.ID == id {
+			return step
+		}
+	}
+	return protocol.RepairStep{}
 }
 
 func TestProbeDataNextStepsExplainMacOSKeychainCancellation(t *testing.T) {
@@ -650,6 +667,8 @@ func TestConsoleStaticContract(t *testing.T) {
 		"renderRepairPlan",
 		"repairStepClassification",
 		"repairCommandBinary",
+		"step.execution",
+		"server classified repair step",
 		"runnable with: capd repair run --execute --yes",
 		"manual: ${classification.reason}",
 		"command contains placeholders",

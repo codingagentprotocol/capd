@@ -130,9 +130,10 @@ Codex CLI availability, SecretStore backend, per-account SecretStore credential
 readability, multi-account import, quota freshness, and auto-route freshness.
 The top-level `repairPlan` array uses the public `protocol.RepairStep` shape:
 `id`, `title`, copy/paste `command`, `expectedEvidence`, and optional
-`requiresDaemon`, `requiresSecret`, and `optional` booleans. The same type is
-used by `/probe/data` so browser diagnostics, CLI doctor output, and CI logs can
-agree on the remediation contract without exposing token material.
+`requiresDaemon`, `requiresSecret`, `optional`, and `execution` evidence.
+`execution.runnable` plus `execution.reason` is attached by `/probe/data` and
+`capd repair run --json` so browser diagnostics, CLI doctor output, and CI logs
+can agree on the remediation contract without exposing token material.
 When accounts are missing and the daemon is healthy, doctor next steps point to
 `capd accounts import` so the fix exercises the same CAP/WebSocket import path
 as web clients; when a second account is needed, the next step points to
@@ -154,8 +155,10 @@ without executing commands. Add `--execute --yes` to run only commands that are
 safe to automate: no placeholder paths, no shell environment mutations, no
 foreground daemon startup, and no final live preflight unless `--include-final`
 is also supplied. The Web Console and Probe render the same runnable/manual
-classification so browser diagnostics agree with CLI execution policy. Without
-`--yes`, `--execute` asks the user to type `execute` before running anything.
+classification from server-provided `execution` evidence, with a local fallback
+for older daemons, so browser diagnostics agree with CLI execution policy.
+Without `--yes`, `--execute` asks the user to type `execute` before running
+anything.
 
 | Flag | Default | Meaning |
 |------|---------|---------|

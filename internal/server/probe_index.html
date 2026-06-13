@@ -227,6 +227,9 @@ function repairPlanSummary(steps) {
   return lines;
 }
 function repairStepClassification(step) {
+  if (step && step.execution && typeof step.execution.runnable === "boolean") {
+    return { runnable: step.execution.runnable, reason: step.execution.reason || "server classified repair step" };
+  }
   const command = String(step && step.command || "").trim();
   if (!command) return { runnable:false, reason:"empty command" };
   if (command.includes("/path/") || command.includes("<") || command.includes("...")) return { runnable:false, reason:"command contains placeholders" };

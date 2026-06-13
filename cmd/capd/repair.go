@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
+	"github.com/codingagentprotocol/capd/internal/repairplan"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
@@ -133,6 +134,7 @@ func runRepairPlan(ctx context.Context, steps []protocol.RepairStep, opts repair
 	if !opts.Execute {
 		for _, step := range steps {
 			status, reason := repairStepDryRunStatus(step, opts)
+			step = repairStepWithExecution(step, opts)
 			out.Steps = append(out.Steps, repairRunStepReport{Step: step, Status: status, Reason: reason})
 			if status == "planned" {
 				out.Summary.Planned++
@@ -148,11 +150,12 @@ func runRepairPlan(ctx context.Context, steps []protocol.RepairStep, opts repair
 		}
 	}
 	for _, step := range steps {
-		runnable, reason := repairStepRunnable(step, opts)
+		classification := repairStepClassification(step, opts)
+		step = repairStepWithExecution(step, opts)
 		row := repairRunStepReport{Step: step}
-		if !runnable {
+		if !classification.Runnable {
 			row.Status = "skipped"
-			row.Reason = reason
+			row.Reason = classification.Reason
 			out.Summary.Skipped++
 			out.Steps = append(out.Steps, row)
 			continue
@@ -174,34 +177,21 @@ func runRepairPlan(ctx context.Context, steps []protocol.RepairStep, opts repair
 }
 
 func repairStepDryRunStatus(step protocol.RepairStep, opts repairRunOptions) (string, string) {
-	if ok, reason := repairStepRunnable(step, opts); !ok {
-		return "skipped", reason
+	classification := repairStepClassification(step, opts)
+	if !classification.Runnable {
+		return "skipped", classification.Reason
 	}
 	return "planned", "use --execute --yes to run"
 }
 
-func repairStepRunnable(step protocol.RepairStep, opts repairRunOptions) (bool, string) {
-	command := strings.TrimSpace(step.Command)
-	if command == "" {
-		return false, "empty command"
-	}
-	if strings.Contains(command, "/path/") || strings.Contains(command, "<") || strings.Contains(command, "...") {
-		return false, "command contains placeholders"
-	}
-	if strings.HasPrefix(command, "capd start") {
-		return false, "starts a foreground daemon; run manually in another terminal"
-	}
-	if strings.HasPrefix(command, "export ") {
-		return false, "changes shell environment; run manually in your shell"
-	}
-	_, bin, _ := splitRepairCommand(command)
-	if bin != "capd" && bin != "make" {
-		return false, "command is outside the repair runner allowlist"
-	}
-	if step.ID == "final-live-preflight" && !opts.IncludeFinal {
-		return false, "final live preflight requires --include-final"
-	}
-	return true, ""
+func repairStepClassification(step protocol.RepairStep, opts repairRunOptions) protocol.RepairStepExecution {
+	return repairplan.Classify(step, repairplan.Options{IncludeFinal: opts.IncludeFinal})
+}
+
+func repairStepWithExecution(step protocol.RepairStep, opts repairRunOptions) protocol.RepairStep {
+	execution := repairStepClassification(step, opts)
+	step.Execution = &execution
+	return step
 }
 
 func confirmRepairRun(stdin io.Reader, stdout io.Writer, count int) bool {
@@ -220,7 +210,7 @@ func confirmRepairRun(stdin io.Reader, stdout io.Writer, count int) bool {
 }
 
 func executeRepairStep(ctx context.Context, step protocol.RepairStep) (string, error) {
-	env, bin, args := splitRepairCommand(step.Command)
+	env, bin, args := repairplan.SplitCommand(step.Command)
 	if bin == "" {
 		return "", fmt.Errorf("empty command")
 	}
@@ -230,19 +220,6 @@ func executeRepairStep(ctx context.Context, step protocol.RepairStep) (string, e
 	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
-}
-
-func splitRepairCommand(command string) ([]string, string, []string) {
-	fields := strings.Fields(command)
-	env := []string{}
-	for len(fields) > 0 && strings.Contains(fields[0], "=") && !strings.HasPrefix(fields[0], "-") {
-		env = append(env, fields[0])
-		fields = fields[1:]
-	}
-	if len(fields) == 0 {
-		return env, "", nil
-	}
-	return env, fields[0], fields[1:]
 }
 
 func printRepairRunReport(w io.Writer, report repairRunReport) {
