@@ -10,6 +10,7 @@ port="${CAPD_PORT:-7777}"
 log="${CAPD_LIVE_DAEMON_LOG:-${TMPDIR:-/tmp}/capd-live-daemon-$$.log}"
 bin="${CAPD_LIVE_DAEMON_BIN:-${TMPDIR:-/tmp}/capd-live-daemon-$$}"
 summary="${CAPD_LIVE_SUMMARY:-}"
+repair_plan="${CAPD_LIVE_REPAIR_PLAN:-}"
 bin_owned=0
 
 export CAPD_HOST="$host"
@@ -37,6 +38,7 @@ write_summary() {
 	daemon_mode_json="$(json_escape "$daemon_mode")"
 	log_json="$(json_escape "$log")"
 	bin_json="$(json_escape "$bin")"
+	repair_plan_json="$(json_escape "$repair_plan")"
 	diagnose_json="$(json_escape "$diagnose_secretstore")"
 	run_prompt_json="$(json_escape "$run_prompt")"
 	{
@@ -52,10 +54,24 @@ write_summary() {
 		printf '  "daemonMode": "%s",\n' "$daemon_mode_json"
 		printf '  "logPath": "%s",\n' "$log_json"
 		printf '  "bin": "%s",\n' "$bin_json"
+		printf '  "repairPlanPath": "%s",\n' "$repair_plan_json"
 		printf '  "diagnoseSecretStore": "%s",\n' "$diagnose_json"
 		printf '  "runPrompt": "%s"\n' "$run_prompt_json"
 		printf '}\n'
 	} >"$summary" || echo "warning: failed to write live summary to $summary" >&2
+}
+
+write_repair_plan() {
+	if [ -z "$repair_plan" ]; then
+		return 0
+	fi
+	if "$bin" doctor --prompt-free --json --fail --require-secret-backend "$backend" --timeout 2m >"$repair_plan" 2>/dev/null; then
+		return 0
+	fi
+	if [ -s "$repair_plan" ]; then
+		return 0
+	fi
+	echo "warning: failed to write live repair plan to $repair_plan" >&2
 }
 
 cleanup() {
@@ -93,6 +109,7 @@ elif health_any_backend; then
 	echo "capd daemon is running at ${host}:${port}, but not with ${backend} SecretStore" >&2
 	"$bin" health --json >&2 || true
 	echo "restart it with: capd start --secret-backend $backend" >&2
+	write_repair_plan
 	write_summary "failed" "secret-backend" "daemon is running with a different SecretStore backend"
 	exit 1
 else
@@ -106,12 +123,14 @@ else
 		if [ "$i" -ge 40 ]; then
 			echo "capd daemon did not become healthy; log: $log" >&2
 			tail -n 80 "$log" >&2 || true
+			write_repair_plan
 			write_summary "failed" "daemon-health" "temporary daemon did not become healthy"
 			exit 1
 		fi
 		if ! kill -0 "$daemon_pid" >/dev/null 2>&1; then
 			echo "capd daemon exited before becoming healthy; log: $log" >&2
 			tail -n 80 "$log" >&2 || true
+			write_repair_plan
 			write_summary "failed" "daemon-start" "temporary daemon exited before becoming healthy"
 			exit 1
 		fi
@@ -124,6 +143,7 @@ write_summary "running" "live-codex-preflight" "running live Codex preflight"
 if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then
 	echo "live-codex-preflight failed; safe diagnostics follow" >&2
 	echo "readiness gaps to resolve: >=2 imported Codex accounts, fresh quota for auto-route/all accounts, ${backend} SecretStore, and daemon/Web readiness" >&2
+	write_repair_plan
 	write_summary "failed" "live-codex-preflight" "readiness gaps: accounts, quota, SecretStore, or daemon/Web readiness"
 	"$bin" health --json --require-secret-backend "$backend" || true
 	"$bin" accounts --secret-backend "$backend" codex list --json || true
@@ -147,6 +167,7 @@ case "$run_prompt" in
 		echo "running live Codex prompt with quota-aware auto account"
 		write_summary "running" "live-prompt" "running quota-aware Codex prompt"
 		if ! "$bin" run --agent codex --account auto --require-fresh-quota "$prompt"; then
+			write_repair_plan
 			write_summary "failed" "live-prompt" "quota-aware Codex prompt failed"
 			exit 1
 		fi

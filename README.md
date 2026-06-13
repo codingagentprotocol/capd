@@ -224,7 +224,8 @@ metadata, fresh route gate JSON, prompt-free probe data JSON, and smoke JSON; se
 `LIVE_DIAGNOSE_SECRETSTORE=1` for the heavier native SecretStore doctor,
 daemon-side accounts/check, and probe diagnostics. Set
 `CAPD_LIVE_SUMMARY=/tmp/capd-live-summary.json` to emit a compact status/stage
-artifact with timestamp, daemon mode, binary, and log path for CI or
+artifact with timestamp, daemon mode, binary, log path, and optional repair-plan
+path for CI or
 long-running tasks; the file is updated with `status:"running"` as each stage
 starts, then overwritten by the final result. `make live-codex-readiness` runs the
 same preflight and then sends the final live prompt. Override the final prompt with
@@ -234,6 +235,10 @@ command with the same `CAPD_SECRET_BACKEND` value, and the daemon-side
 readiness step uses `capd accounts check --json --readiness`, so failing gates
 still print safe partial evidence and a compact `summary` under `data` for
 quota, account, and SecretStore diagnostics.
+Set `CAPD_LIVE_REPAIR_PLAN=/tmp/capd-live-repair.json` with
+`make live-codex-selftest` to persist the prompt-free doctor report, including
+its ordered `repairPlan`, when daemon startup, backend alignment, preflight, or
+the optional live prompt fails.
 `capd health --json --require-secret-backend <file|native>` reads
 `/healthz?format=json` where available, so live preflight output also captures
 the daemon version, protocol version, and active SecretStore backend without

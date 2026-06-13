@@ -172,11 +172,15 @@ additional doctor, daemon-side accounts/check, and probe readiness diagnostics
 that may touch native SecretStore prompts.
 Set `CAPD_LIVE_SUMMARY=/tmp/capd-live-summary.json` to write a small machine-readable
 selftest result with `summaryVersion`, `status`, `stage`, `checkedAt`,
-`backend`, `host`, `port`, `daemonMode`, `logPath`, and `bin` so CI or
+`backend`, `host`, `port`, `daemonMode`, `logPath`, `bin`, and
+`repairPlanPath` so CI or
 long-running tasks can tell whether the failure happened in daemon startup,
 preflight, or the final live prompt and collect the matching daemon log.
 The file is updated as the run advances with `status:"running"` and the latest
 reached `stage`, then overwritten with the final `passed` or `failed` result.
+Set `CAPD_LIVE_REPAIR_PLAN=/tmp/capd-live-repair.json` to persist the
+prompt-free doctor report, including the ordered `repairPlan`, whenever daemon
+startup, backend alignment, preflight, or the optional live prompt fails.
 
 Without real Codex accounts, run the deterministic simulated gate:
 
