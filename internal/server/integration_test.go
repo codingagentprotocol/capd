@@ -3064,6 +3064,92 @@ func TestSessionLifecycleAndReplay(t *testing.T) {
 	}
 }
 
+func TestSessionRevivesAfterDaemonRestartAndReplays(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "sessions.db")
+	cwd := filepath.Join(dir, "work")
+	if err := os.MkdirAll(cwd, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	fake1 := &scriptedAdapter{}
+	reg1 := adapter.NewRegistry(fake1)
+	st1, err := session.OpenStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s1 := New(Options{
+		Token:    "it-token",
+		Version:  "it",
+		Registry: reg1,
+		Sessions: session.NewManager(reg1, st1),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	ts1 := httptest.NewServer(http.HandlerFunc(s1.handleWS))
+	c1 := initialized(t, ts1)
+
+	var created protocol.SessionCreateResult
+	c1.mustResult(c1.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake", Cwd: cwd}), &created)
+	c1.mustResult(c1.call(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: created.SessionID, Prompt: "before-restart"}), nil)
+	if ev := c1.waitEvent(protocol.EventOutputText); ev.Data["text"] != "echo:before-restart" {
+		t.Fatalf("pre-restart output = %+v", ev)
+	}
+	c1.waitEvent(protocol.EventTaskDone)
+	if err := c1.conn.Close(websocket.StatusNormalClosure, "daemon restart test"); err != nil {
+		t.Fatal(err)
+	}
+	ts1.Close()
+	if err := st1.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	fake2 := &scriptedAdapter{}
+	reg2 := adapter.NewRegistry(fake2)
+	st2, err := session.OpenStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st2.Close()
+	s2 := New(Options{
+		Token:    "it-token",
+		Version:  "it",
+		Registry: reg2,
+		Sessions: session.NewManager(reg2, st2),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	ts2 := httptest.NewServer(http.HandlerFunc(s2.handleWS))
+	defer ts2.Close()
+	c2 := initialized(t, ts2)
+
+	var list protocol.SessionListResult
+	c2.mustResult(c2.call(protocol.MethodSessionList, struct{}{}), &list)
+	if len(list.Sessions) != 1 || list.Sessions[0].SessionID != created.SessionID || list.Sessions[0].State != protocol.SessionStateStored {
+		t.Fatalf("stored sessions after restart = %+v", list.Sessions)
+	}
+
+	var attached protocol.SessionAttachResult
+	c2.mustResult(c2.call(protocol.MethodSessionAttach, protocol.SessionAttachParams{SessionID: created.SessionID, FromSeq: 0}), &attached)
+	if attached.SessionID != created.SessionID || attached.NextSeq < 3 {
+		t.Fatalf("attached = %+v", attached)
+	}
+	opts := fake2.lastOpts()
+	if opts.Resume != "fake-native-1" || opts.Cwd != cwd {
+		t.Fatalf("revive opts = %+v", opts)
+	}
+	if ev := c2.waitEvent(protocol.EventOutputText); ev.SessionID != created.SessionID || ev.Data["text"] != "echo:before-restart" {
+		t.Fatalf("replayed output = %+v", ev)
+	}
+	c2.mu.Lock()
+	c2.events = nil
+	c2.mu.Unlock()
+
+	c2.mustResult(c2.call(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: created.SessionID, Prompt: "after-restart"}), nil)
+	if ev := c2.waitEvent(protocol.EventOutputText); ev.SessionID != created.SessionID || ev.Data["text"] != "echo:after-restart" {
+		t.Fatalf("post-restart output = %+v", ev)
+	}
+	c2.waitEvent(protocol.EventTaskDone)
+}
+
 func TestClientDisconnectDoesNotEndLiveSessionAndReconnectCanContinue(t *testing.T) {
 	ts, _ := newIntegration(t)
 	c := initialized(t, ts)

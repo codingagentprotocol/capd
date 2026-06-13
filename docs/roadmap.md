@@ -254,5 +254,6 @@ it is considered supported.
 14. Done: add a Web Console evidence export button that saves a prompt-free
     browser package with inline health, probe, route, and account-check
     artifacts for QA handoff.
-15. Add daemon restart recovery tests that prove stored sessions and replay
-    evidence survive process replacement.
+15. Done: add CAP/WebSocket daemon restart recovery tests that prove stored
+    sessions, native resume ids, replay, and follow-up turns survive process
+    replacement.
