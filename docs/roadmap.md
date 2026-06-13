@@ -211,5 +211,7 @@ it is considered supported.
    overflow signaling, persistence, and replay.
 9. Done: add reusable adapter conformance fixtures and a Codex static
    contract.
-10. Clone adapter conformance lifecycle checks for Claude, Gemini, OpenCode,
-    and Cursor once each fixture can run without real credentials.
+10. Done: clone static adapter conformance contracts for Claude, Gemini,
+    OpenCode, Cursor, and supported CLI-family aliases.
+11. Add deterministic lifecycle fixtures for Claude, Gemini, OpenCode, and
+    Cursor once each can run without real credentials.

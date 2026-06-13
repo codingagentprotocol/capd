@@ -155,9 +155,9 @@ func TestSimulatedCodexReadinessTargetCoversCoreGates(t *testing.T) {
 		"DocsCoverPromptFreeBrowserProbeRefresh",
 		"ReferenceDocsCoverRunFreshQuotaRecovery",
 		"ReferenceDocsCoverBrowserTokenCleanup",
-		"go test ./internal/adapter/adaptertest ./internal/adapter/codex",
+		"go test ./internal/adapter/adaptertest ./internal/adapter/codex ./internal/adapter/claudecode ./internal/adapter/gemini ./internal/adapter/opencode ./internal/adapter/cursoragent",
 		"ConformanceHelpers",
-		"CodexAdapterConformanceStaticContract",
+		".*AdapterConformanceStaticContract",
 		"ProbeUsesResolvedCodexBinary",
 	} {
 		if !strings.Contains(makefile, want) {
