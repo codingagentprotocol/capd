@@ -246,8 +246,10 @@ it is considered supported.
     OpenCode, Cursor, and supported CLI-family aliases.
 11. Done: add safe aggregate `/healthz?format=json` runtime counters for
     connected clients and session states.
-12. Add deterministic lifecycle fixtures for Claude, Gemini, OpenCode, and
-    Cursor once each can run without real credentials.
+12. In progress: add deterministic lifecycle fixtures for Claude, Gemini,
+    OpenCode, and Cursor once each can run without real credentials. Claude
+    Code-compatible lifecycle and native resume fixtures are now covered with a
+    fake stream-json CLI.
 13. Done: add local-only metrics snapshots for event backlog, adapter process
     starts/failures, route decisions, and SecretStore access-denied counts in
     `/healthz?format=json`.
