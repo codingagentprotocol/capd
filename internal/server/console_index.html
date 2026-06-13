@@ -287,10 +287,10 @@ function lightweightAccountsResult(listResult, healthInfo = null) {
     projectionMarkerOk: false,
     secretBackendOk: false,
     promptFree: true,
-    quotaFresh: !!a.quotaFresh,
-    quotaState: (a.quota && a.quota.quotaState) || "missing",
-    quotaCheckedAt: (a.quota && a.quota.checkedAt) || 0,
-    primaryUsedPercent: a.quota ? a.quota.primaryUsedPercent : undefined
+    quotaFresh: accountQuotaFresh(a),
+    quotaState: accountQuotaState(a),
+    quotaCheckedAt: accountQuotaCheckedAt(a),
+    primaryUsedPercent: accountPrimaryUsedPercent(a)
   }));
   const secretBackend = (healthInfo && healthInfo.secretBackend) || "";
   return {
@@ -850,21 +850,24 @@ function routeEvidenceSummary(route) {
 }
 
 function accountLabel(a) {
-  const state = quotaState(a.quota);
-  const quota = hasNumber(a.quota && a.quota.primaryUsedPercent) ? ` · ${a.quota.primaryUsedPercent}% ${state}` : ` · ${state}`;
+  const state = accountQuotaState(a);
+  const primary = accountPrimaryUsedPercent(a);
+  const quota = hasNumber(primary) ? ` · ${primary}% ${state}` : ` · ${state}`;
   return `${a.provider || "unknown"} · ${a.email || a.id}${a.plan ? " · " + a.plan : ""}${quota}`;
 }
 
 function quotaLabel(a) {
-  const state = quotaState(a.quota);
-  if (!a.quota) return `${a.plan || "unknown plan"} · quota ${state}`;
+  const state = accountQuotaState(a);
   const parts = [];
-  if (a.quota.plan || a.plan) parts.push(a.quota.plan || a.plan);
+  const quota = a.quota || {};
+  if (quota.plan || a.plan) parts.push(quota.plan || a.plan);
   parts.push(`quota ${state}`);
-  if (hasNumber(a.quota.primaryUsedPercent)) parts.push(`primary ${a.quota.primaryUsedPercent}%`);
-  if (hasNumber(a.quota.secondaryUsedPercent)) parts.push(`secondary ${a.quota.secondaryUsedPercent}%`);
-  if (hasNumber(a.quota.codeReviewUsedPercent)) parts.push(`review ${a.quota.codeReviewUsedPercent}%`);
-  if (a.quota.checkedAt) parts.push(`checked ${new Date(a.quota.checkedAt * 1000).toLocaleString()}`);
+  const primary = accountPrimaryUsedPercent(a);
+  const checkedAt = accountQuotaCheckedAt(a);
+  if (hasNumber(primary)) parts.push(`primary ${primary}%`);
+  if (hasNumber(quota.secondaryUsedPercent)) parts.push(`secondary ${quota.secondaryUsedPercent}%`);
+  if (hasNumber(quota.codeReviewUsedPercent)) parts.push(`review ${quota.codeReviewUsedPercent}%`);
+  if (checkedAt) parts.push(`checked ${new Date(checkedAt * 1000).toLocaleString()}`);
   return parts.join(" · ") || "quota 已缓存";
 }
 
@@ -884,6 +887,27 @@ function quotaState(q) {
 
 function quotaFresh(q) {
   return !!(q && q.checkedAt && Date.now() - q.checkedAt * 1000 <= QUOTA_FRESH_MS);
+}
+
+function accountQuotaState(a) {
+  if (a && a.quotaState) return a.quotaState;
+  if (a && a.quota && a.quota.quotaState) return a.quota.quotaState;
+  if (accountQuotaCheckedAt(a)) return accountQuotaFresh(a) ? "fresh" : "stale";
+  return "missing";
+}
+
+function accountQuotaFresh(a) {
+  if (a && typeof a.quotaFresh === "boolean") return a.quotaFresh;
+  return quotaFresh(a && a.quota);
+}
+
+function accountQuotaCheckedAt(a) {
+  return (a && a.quotaCheckedAt) || (a && a.quota && a.quota.checkedAt) || 0;
+}
+
+function accountPrimaryUsedPercent(a) {
+  if (a && hasNumber(a.primaryUsedPercent)) return a.primaryUsedPercent;
+  return a && a.quota ? a.quota.primaryUsedPercent : undefined;
 }
 
 function hasNumber(v) {

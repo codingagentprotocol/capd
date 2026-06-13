@@ -226,10 +226,10 @@ function lightweightAccountsResult(listResult, healthInfo) {
     authJsonPrivate:false,
     projectionMarkerOk:false,
     secretBackendOk:false,
-    quotaFresh:!!a.quotaFresh,
-    quotaState:(a.quota && a.quota.quotaState) || "missing",
-    quotaCheckedAt:(a.quota && a.quota.checkedAt) || 0,
-    primaryUsedPercent:a.quota ? a.quota.primaryUsedPercent : undefined
+    quotaFresh:accountQuotaFresh(a),
+    quotaState:accountQuotaState(a),
+    quotaCheckedAt:accountQuotaCheckedAt(a),
+    primaryUsedPercent:accountPrimaryUsedPercent(a)
   }));
   return {
     provider:"codex",
@@ -239,6 +239,23 @@ function lightweightAccountsResult(listResult, healthInfo) {
     promptFree:true,
     accounts
   };
+}
+function accountQuotaState(a) {
+  if (a && a.quotaState) return a.quotaState;
+  if (a && a.quota && a.quota.quotaState) return a.quota.quotaState;
+  if (accountQuotaCheckedAt(a)) return accountQuotaFresh(a) ? "fresh" : "stale";
+  return "missing";
+}
+function accountQuotaFresh(a) {
+  if (a && typeof a.quotaFresh === "boolean") return a.quotaFresh;
+  return !!(a && a.quota && a.quota.checkedAt && Date.now() - a.quota.checkedAt * 1000 <= 5 * 60 * 60 * 1000);
+}
+function accountQuotaCheckedAt(a) {
+  return (a && a.quotaCheckedAt) || (a && a.quota && a.quota.checkedAt) || 0;
+}
+function accountPrimaryUsedPercent(a) {
+  if (a && typeof a.primaryUsedPercent === "number") return a.primaryUsedPercent;
+  return a && a.quota ? a.quota.primaryUsedPercent : undefined;
 }
 function readinessCommand(requiredBackend = "") {
   const backend = normalizeSecretBackend(requiredBackend);
