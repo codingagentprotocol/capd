@@ -138,6 +138,21 @@ func TestRouteCLIAccountAutoProfileConstrainsCandidates(t *testing.T) {
 	}
 }
 
+func TestRouteCLIProfileRequiresAutoAccount(t *testing.T) {
+	infos := []protocol.AgentInfo{
+		{ID: "codex", Available: true, Capabilities: protocol.AgentCapabilities{Usage: true, Resume: true}},
+	}
+	for _, params := range []routeCLIParams{
+		{Profile: "work"},
+		{AccountID: "codex-test", Profile: "work"},
+	} {
+		_, err := routeCLI(infos, nil, params)
+		if err == nil || !strings.Contains(err.Error(), "--account auto") {
+			t.Fatalf("params=%+v err=%v", params, err)
+		}
+	}
+}
+
 func TestRouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	accounts, _ := seedCodexAccount(t)

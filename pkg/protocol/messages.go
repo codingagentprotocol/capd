@@ -103,6 +103,7 @@ type AgentRouteParams struct {
 	Prompt            string            `json:"prompt,omitempty"`
 	Attachments       []Attachment      `json:"attachments,omitempty"`
 	AccountID         string            `json:"accountId,omitempty"`
+	Profile           string            `json:"profile,omitempty"`
 	Model             string            `json:"model,omitempty"`
 	Effort            string            `json:"effort,omitempty"`
 	Capabilities      AgentCapabilities `json:"capabilities,omitempty"`
@@ -387,6 +388,7 @@ const (
 type SessionCreateParams struct {
 	AgentID           string `json:"agentId"`                     // use "auto" to let capd choose
 	AccountID         string `json:"accountId,omitempty"`         // optional provider account id, currently supported by codex
+	Profile           string `json:"profile,omitempty"`           // optional account profile for accountId:auto
 	RequireFreshQuota bool   `json:"requireFreshQuota,omitempty"` // with accountId:auto, fail unless auto routing has fresh quota
 	Cwd               string `json:"cwd,omitempty"`               // working directory for the agent
 	Resume            string `json:"resume,omitempty"`            // agent-native session id to resume

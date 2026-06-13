@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ func routeParamsForCreate(params protocol.SessionCreateParams) protocol.AgentRou
 		Model:             model,
 		Effort:            effort,
 		AccountID:         strings.TrimSpace(params.AccountID),
+		Profile:           strings.TrimSpace(params.Profile),
 		Capabilities:      required,
 		RequireFreshQuota: params.RequireFreshQuota,
 	}
@@ -45,6 +47,7 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 	params.Model = strings.TrimSpace(params.Model)
 	params.Effort = strings.TrimSpace(params.Effort)
 	params.AccountID = strings.TrimSpace(params.AccountID)
+	params.Profile = strings.TrimSpace(params.Profile)
 	params.Prefer = trimRoutePreference(params.Prefer)
 	required := routeRequirements(params)
 	prefer := params.Prefer
@@ -54,6 +57,9 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 	accountID := params.AccountID
 	if params.RequireFreshQuota && accountID != protocol.AccountAuto {
 		return protocol.AgentRouteResult{}, protocol.NewError(protocol.CodeInvalidParams, "requireFreshQuota is supported only with accountId %q", protocol.AccountAuto)
+	}
+	if params.Profile != "" && accountID != protocol.AccountAuto {
+		return protocol.AgentRouteResult{}, protocol.NewError(protocol.CodeInvalidParams, "profile is supported only with accountId %q", protocol.AccountAuto)
 	}
 	if perr := rejectReservedAccountID(accountID); perr != nil {
 		return protocol.AgentRouteResult{}, perr
@@ -66,13 +72,13 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 		required.Usage = true
 		required.Resume = true
 		if accountID == protocol.AccountAuto {
-			acc, reason, perr := s.selectCodexAccountForRoute()
+			acc, reason, perr := s.selectCodexAccountForRoute(params.Profile)
 			if perr != nil {
 				return protocol.AgentRouteResult{}, perr
 			}
 			if params.RequireFreshQuota {
 				if q, err := s.opts.Accounts.LoadQuota(acc.ID); err != nil || !account.QuotaSnapshotFresh(q, time.Now()) {
-					return protocol.AgentRouteResult{}, s.routeFreshQuotaError(acc)
+					return protocol.AgentRouteResult{}, s.routeFreshQuotaError(acc, params.Profile)
 				}
 			}
 			selectedAccountID = acc.ID
@@ -121,7 +127,7 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 		result.AccountRoute = &evidence
 		policy := account.DefaultRoutePolicyEvidence()
 		result.RoutePolicy = &policy
-		if candidates, err := account.QuotaRouteCandidates(s.opts.Accounts, codexauth.Provider); err == nil {
+		if candidates, err := s.codexRouteCandidates(params.Profile); err == nil {
 			result.RouteCandidates = candidates
 		}
 	}
@@ -142,18 +148,78 @@ func (s *Server) loadCodexAccountForRoute(accountID string) (account.Account, *p
 	return acc, nil
 }
 
-func (s *Server) selectCodexAccountForRoute() (account.Account, string, *protocol.Error) {
+func (s *Server) selectCodexAccountForRoute(profile string) (account.Account, string, *protocol.Error) {
 	if s.opts.Accounts == nil {
 		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
 	}
-	best, err := account.SelectQuotaRouteAccount(s.opts.Accounts, codexauth.Provider)
+	profile = strings.TrimSpace(profile)
+	var best account.Account
+	var err error
+	if profile == "" {
+		best, err = account.SelectQuotaRouteAccount(s.opts.Accounts, codexauth.Provider)
+	} else {
+		best, err = s.selectCodexProfileAccountForRoute(profile)
+	}
 	if err != nil {
+		if profile != "" {
+			return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "no Codex accounts in profile %q", profile)
+		}
 		return account.Account{}, "", protocol.NewError(protocol.CodeInvalidParams, "no imported Codex accounts")
 	}
-	return best, account.QuotaRouteReason(s.opts.Accounts, best), nil
+	reason := account.QuotaRouteReason(s.opts.Accounts, best)
+	if profile != "" {
+		reason += "; profile " + profile
+	}
+	return best, reason, nil
 }
 
-func (s *Server) routeFreshQuotaError(acc account.Account) *protocol.Error {
+func (s *Server) selectCodexProfileAccountForRoute(profile string) (account.Account, error) {
+	members, err := s.opts.Accounts.ProfileAccounts(codexauth.Provider, profile)
+	if err != nil {
+		return account.Account{}, err
+	}
+	if len(members) == 0 {
+		return account.Account{}, account.ErrUnknownAccount
+	}
+	current, _ := s.opts.Accounts.CurrentAccount(codexauth.Provider)
+	best := members[0]
+	bestScore := account.QuotaRouteScore(s.opts.Accounts, best, current)
+	for _, member := range members[1:] {
+		score := account.QuotaRouteScore(s.opts.Accounts, member, current)
+		if score < bestScore || (score == bestScore && member.ID < best.ID) {
+			best = member
+			bestScore = score
+		}
+	}
+	return best, nil
+}
+
+func (s *Server) codexRouteCandidates(profile string) ([]protocol.AccountRouteEvidence, error) {
+	profile = strings.TrimSpace(profile)
+	if profile == "" {
+		return account.QuotaRouteCandidates(s.opts.Accounts, codexauth.Provider)
+	}
+	members, err := s.opts.Accounts.ProfileAccounts(codexauth.Provider, profile)
+	if err != nil {
+		return nil, err
+	}
+	current, _ := s.opts.Accounts.CurrentAccount(codexauth.Provider)
+	sort.Slice(members, func(i, j int) bool {
+		leftScore := account.QuotaRouteScore(s.opts.Accounts, members[i], current)
+		rightScore := account.QuotaRouteScore(s.opts.Accounts, members[j], current)
+		if leftScore != rightScore {
+			return leftScore < rightScore
+		}
+		return members[i].ID < members[j].ID
+	})
+	candidates := make([]protocol.AccountRouteEvidence, 0, len(members))
+	for _, member := range members {
+		candidates = append(candidates, account.QuotaRouteEvidence(s.opts.Accounts, member))
+	}
+	return candidates, nil
+}
+
+func (s *Server) routeFreshQuotaError(acc account.Account, profile string) *protocol.Error {
 	perr := protocol.NewError(protocol.CodeInvalidParams, freshQuotaRefreshHint)
 	if s.opts.Accounts == nil || acc.ID == "" {
 		return perr
@@ -164,7 +230,7 @@ func (s *Server) routeFreshQuotaError(acc account.Account) *protocol.Error {
 	if ref, err := secret.ParseRef(acc.SecretRef); err == nil {
 		data.SecretBackend = ref.Backend
 	}
-	if candidates, err := account.QuotaRouteCandidates(s.opts.Accounts, codexauth.Provider); err == nil {
+	if candidates, err := s.codexRouteCandidates(profile); err == nil {
 		data.RouteCandidates = candidates
 	}
 	perr.Data = data

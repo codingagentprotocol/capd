@@ -382,7 +382,7 @@ func (s *Server) checkAccounts(ctx context.Context, params protocol.AccountsChec
 		}
 	}
 	if len(accounts) > 0 {
-		selected, _, perr := s.selectCodexAccountForRoute()
+		selected, _, perr := s.selectCodexAccountForRoute("")
 		if perr != nil {
 			return protocol.AccountsCheckResult{}, accountsCheckErrorWithEvidence(perr, result, params)
 		}
@@ -767,7 +767,7 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 			return protocol.AccountsQuotaResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
 		}
 	} else if accountID == protocol.AccountAuto {
-		acc, _, perr := s.selectCodexAccountForRoute()
+		acc, _, perr := s.selectCodexAccountForRoute("")
 		if perr != nil {
 			return protocol.AccountsQuotaResult{}, perr
 		}

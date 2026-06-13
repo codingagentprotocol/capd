@@ -132,6 +132,7 @@ capd accounts check --json
 capd accounts check --json --readiness
 capd agents usage codex --account auto
 capd agents route --account auto --require-fresh-quota --json
+capd run --agent codex --account auto --profile work "say ready"
 capd run --agent codex --account auto --require-fresh-quota "say ready"
 ```
 

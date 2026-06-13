@@ -750,6 +750,46 @@ func TestAgentsRouteAutoAccountChoosesLowestCachedQuota(t *testing.T) {
 	}
 }
 
+func TestAgentsRouteAutoAccountProfileConstrainsCandidates(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	addCodexAccountForTest(t, accounts, "codex-low-outside", "low@example.com")
+	addCodexAccountForTest(t, accounts, "codex-work", "work@example.com")
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", Plan: "pro", PrimaryUsedPercent: 40}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low-outside", Plan: "pro", PrimaryUsedPercent: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-work", Plan: "pro", PrimaryUsedPercent: 20}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertProfile(account.Profile{Provider: codexauth.Provider, Name: "work"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.AddProfileAccount(codexauth.Provider, "work", "codex-work"); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var routed protocol.AgentRouteResult
+	c.mustResult(c.call(protocol.MethodAgentsRoute, protocol.AgentRouteParams{
+		AccountID: protocol.AccountAuto,
+		Profile:   " work ",
+	}), &routed)
+	if routed.Agent.ID != "codex" || routed.AccountID != "codex-work" {
+		t.Fatalf("route = %+v", routed)
+	}
+	if routed.AccountRoute == nil || routed.AccountRoute.AccountID != "codex-work" || routed.AccountRoute.PrimaryUsedPercent == nil || *routed.AccountRoute.PrimaryUsedPercent != 20 {
+		t.Fatalf("account route = %+v", routed.AccountRoute)
+	}
+	if len(routed.RouteCandidates) != 1 || routed.RouteCandidates[0].AccountID != "codex-work" {
+		t.Fatalf("route candidates = %+v", routed.RouteCandidates)
+	}
+	if !strings.Contains(routed.Reason, "profile work") {
+		t.Fatalf("reason = %q", routed.Reason)
+	}
+}
+
 func TestAgentsRouteAutoAccountRequireFreshQuota(t *testing.T) {
 	ts, _, accounts := newCodexAccountIntegration(t)
 	c := initialized(t, ts)
@@ -811,6 +851,21 @@ func agentRouteErrorData(t *testing.T, perr *protocol.Error) protocol.AgentRoute
 		t.Fatal(err)
 	}
 	return out
+}
+
+func TestAgentsRouteRejectsProfileWithoutAutoAccount(t *testing.T) {
+	ts, _, _ := newCodexAccountIntegration(t)
+	c := initialized(t, ts)
+
+	for _, params := range []protocol.AgentRouteParams{
+		{Profile: "work"},
+		{AccountID: "codex-test", Profile: "work"},
+	} {
+		resp := c.call(protocol.MethodAgentsRoute, params)
+		if resp.Error == nil || resp.Error.Code != protocol.CodeInvalidParams || !strings.Contains(resp.Error.Message, `accountId "auto"`) {
+			t.Fatalf("params=%+v response=%+v", params, resp)
+		}
+	}
 }
 
 func TestAgentsRouteRejectsFreshQuotaGateWithoutAutoAccount(t *testing.T) {
@@ -904,6 +959,57 @@ func TestAgentsRouteAutoAccountIgnoresStaleLowQuota(t *testing.T) {
 	}
 	if !strings.Contains(routed.Reason, "auto account codex-fresh primary 20%") {
 		t.Fatalf("reason = %q", routed.Reason)
+	}
+}
+
+func TestSessionCreateAutoAccountProfileBindsProfileAccount(t *testing.T) {
+	ts, _, accounts := newCodexAccountIntegration(t)
+	addCodexAccountForTest(t, accounts, "codex-low-outside", "low@example.com")
+	addCodexAccountForTest(t, accounts, "codex-work", "work@example.com")
+	testAccount, err := accounts.LoadAccount("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	workAccount, err := accounts.LoadAccount("codex-work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	workAccount.SecretRef = testAccount.SecretRef
+	if err := accounts.UpsertAccount(workAccount); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-test", PrimaryUsedPercent: 40}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-low-outside", PrimaryUsedPercent: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SaveQuota(account.QuotaSnapshot{AccountID: "codex-work", PrimaryUsedPercent: 20}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpsertProfile(account.Profile{Provider: codexauth.Provider, Name: "work"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.AddProfileAccount(codexauth.Provider, "work", "codex-work"); err != nil {
+		t.Fatal(err)
+	}
+	c := initialized(t, ts)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:   " codex ",
+		AccountID: " " + protocol.AccountAuto + " ",
+		Profile:   " work ",
+	}), &created)
+	if created.AccountID != "codex-work" {
+		t.Fatalf("created = %+v", created)
+	}
+	accountID, err := accounts.SessionAccount(created.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accountID != "codex-work" {
+		t.Fatalf("session account = %q", accountID)
 	}
 }
 

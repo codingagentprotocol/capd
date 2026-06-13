@@ -82,7 +82,7 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		effectiveAccountID := params.AccountID
 		if params.AccountID != "" {
 			if params.AccountID == protocol.AccountAuto {
-				acc, _, perr := s.selectCodexAccountForRoute()
+				acc, _, perr := s.selectCodexAccountForRoute("")
 				if perr != nil {
 					return nil, perr
 				}
@@ -166,6 +166,7 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		}
 		params.AgentID = strings.TrimSpace(params.AgentID)
 		params.AccountID = strings.TrimSpace(params.AccountID)
+		params.Profile = strings.TrimSpace(params.Profile)
 		if params.Cwd == "" {
 			home, err := os.UserHomeDir()
 			if err != nil {
@@ -192,6 +193,7 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		} else if params.AccountID == protocol.AccountAuto {
 			routed, perr := s.routeAgent(ctx, protocol.AgentRouteParams{
 				AccountID:         protocol.AccountAuto,
+				Profile:           params.Profile,
 				Model:             params.Model,
 				Effort:            params.Effort,
 				Capabilities:      routeRequirements(routeParamsForCreate(params)),

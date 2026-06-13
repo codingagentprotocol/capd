@@ -29,6 +29,9 @@ func (e *policyEngine) validateSessionCreate(params protocol.SessionCreateParams
 	if params.RequireFreshQuota && accountID != protocol.AccountAuto {
 		return protocol.NewError(protocol.CodeInvalidParams, "requireFreshQuota is supported only with accountId %q", protocol.AccountAuto)
 	}
+	if strings.TrimSpace(params.Profile) != "" && accountID != protocol.AccountAuto {
+		return protocol.NewError(protocol.CodeInvalidParams, "profile is supported only with accountId %q", protocol.AccountAuto)
+	}
 	if perr := rejectReservedAccountID(accountID); perr != nil {
 		return perr
 	}

@@ -187,6 +187,22 @@ func TestRunTaskRequireFreshQuotaFailsFastForExistingSession(t *testing.T) {
 	}
 }
 
+func TestRunTaskProfileRequiresAutoAccount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cmd := newRunCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	for _, opts := range []runOpts{
+		{agent: "codex", profile: "work", prompt: "hello"},
+		{agent: "codex", session: "s_existing", account: protocol.AccountAuto, profile: "work", prompt: "hello"},
+	} {
+		err := runTask(cmd, opts)
+		if err == nil || !strings.Contains(err.Error(), "--account auto") && !strings.Contains(err.Error(), "creating a new session") {
+			t.Fatalf("opts=%+v err=%v", opts, err)
+		}
+	}
+}
+
 func TestRunTaskSendsRequireFreshQuotaForAutoAccount(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -280,6 +296,7 @@ func TestRunTaskSendsRequireFreshQuotaForAutoAccount(t *testing.T) {
 	if err := runTask(cmd, runOpts{
 		agent:             " codex ",
 		account:           " " + protocol.AccountAuto + " ",
+		profile:           " work ",
 		requireFreshQuota: true,
 		prompt:            "hello",
 	}); err != nil {
@@ -290,7 +307,7 @@ func TestRunTaskSendsRequireFreshQuotaForAutoAccount(t *testing.T) {
 	}
 	select {
 	case params := <-seenCreate:
-		if params.AgentID != "codex" || params.AccountID != protocol.AccountAuto || !params.RequireFreshQuota {
+		if params.AgentID != "codex" || params.AccountID != protocol.AccountAuto || params.Profile != "work" || !params.RequireFreshQuota {
 			t.Fatalf("session/create params = %+v", params)
 		}
 	case <-ctx.Done():

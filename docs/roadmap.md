@@ -203,7 +203,10 @@ it is considered supported.
 3. Done: add scoped daemon tokens for console/probe URLs.
 4. Done: add profile metadata and CLI commands for safe account groups.
 5. Done: add CLI profile-aware routing filters for `--account auto`.
-6. Extend daemon `agents/route` and `session/create` with profile-aware routing.
-7. Add session backpressure stress tests before changing event fan-out internals.
-8. Add adapter conformance fixtures for Codex first, then clone them for other
+6. Done: extend daemon `agents/route`, `session/create`, and `capd run` with
+   profile-aware auto account routing.
+7. Add Web Console controls for choosing profile-aware auto routes before
+   starting sessions.
+8. Add session backpressure stress tests before changing event fan-out internals.
+9. Add adapter conformance fixtures for Codex first, then clone them for other
    adapters.

@@ -375,6 +375,9 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 		prefer = cliDefaultRoutePreference
 	}
 	accountID := params.AccountID
+	if params.Profile != "" && accountID != protocol.AccountAuto {
+		return protocol.AgentRouteResult{}, fmt.Errorf("--profile requires --account %s", protocol.AccountAuto)
+	}
 	selectedAccountID := ""
 	accountReason := ""
 	var selectedAccount account.Account

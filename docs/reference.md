@@ -185,6 +185,7 @@ anything.
 | `--cwd` | current directory | project directory the agent works in |
 | `--session` | _(new session)_ | continue an existing session id (multi-turn; survives restarts) |
 | `--account` | — | imported account id for a new session; currently Codex only |
+| `--profile` | — | with `--account auto`, constrain Codex account selection to a named account profile |
 | `--require-fresh-quota` | off | with `--account auto`, fail unless the selected Codex account has fresh cached quota |
 | `--permission` | `default` | `default` (read-only sandbox + approvals) · `acceptEdits` (workspace-write) · `full` (no prompts) |
 | `--model` | agent default | agent-native model id, e.g. `gpt-5.3-codex` |

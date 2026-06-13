@@ -28,6 +28,7 @@ func newRunCmd() *cobra.Command {
 		permission        string
 		sessionID         string
 		accountID         string
+		profile           string
 		requireFreshQuota bool
 		model             string
 		effort            string
@@ -47,7 +48,7 @@ func newRunCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTask(cmd, runOpts{agent: agentID, cwd: cwd, permission: permission,
-				session: sessionID, account: accountID, requireFreshQuota: requireFreshQuota,
+				session: sessionID, account: accountID, profile: profile, requireFreshQuota: requireFreshQuota,
 				model: model, effort: effort, images: images, json: showJSON, prompt: args[0]})
 		},
 	}
@@ -56,6 +57,7 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&permission, "permission", "", "permission mode: default | acceptEdits | full")
 	cmd.Flags().StringVar(&sessionID, "session", "", "continue an existing capd session instead of creating one")
 	cmd.Flags().StringVar(&accountID, "account", "", "agent account id for a new session (currently Codex)")
+	cmd.Flags().StringVar(&profile, "profile", "", "account profile for --account auto")
 	cmd.Flags().BoolVar(&requireFreshQuota, "require-fresh-quota", false, "with --account auto, fail unless selected account has fresh cached quota")
 	cmd.Flags().StringVar(&model, "model", "", "agent-native model id (empty = agent default)")
 	cmd.Flags().StringVar(&effort, "effort", "", "reasoning effort where supported (codex: minimal..xhigh)")
@@ -65,10 +67,10 @@ func newRunCmd() *cobra.Command {
 }
 
 type runOpts struct {
-	agent, cwd, permission, session, account, model, effort, prompt string
-	images                                                          []string
-	json                                                            bool
-	requireFreshQuota                                               bool
+	agent, cwd, permission, session, account, profile, model, effort, prompt string
+	images                                                                   []string
+	json                                                                     bool
+	requireFreshQuota                                                        bool
 }
 
 func runTask(cmd *cobra.Command, o runOpts) error {
@@ -77,6 +79,7 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 	permission := strings.TrimSpace(o.permission)
 	sessionID := strings.TrimSpace(o.session)
 	accountID := strings.TrimSpace(o.account)
+	profile := strings.TrimSpace(o.profile)
 	model := strings.TrimSpace(o.model)
 	effort := strings.TrimSpace(o.effort)
 	prompt, showJSON := o.prompt, o.json
@@ -89,6 +92,14 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 		}
 		if accountID != protocol.AccountAuto {
 			return fmt.Errorf("--require-fresh-quota requires --account %s", protocol.AccountAuto)
+		}
+	}
+	if profile != "" {
+		if sessionID != "" {
+			return fmt.Errorf("--profile is only valid when creating a new session")
+		}
+		if accountID != protocol.AccountAuto {
+			return fmt.Errorf("--profile requires --account %s", protocol.AccountAuto)
 		}
 	}
 
@@ -162,7 +173,7 @@ func runTask(cmd *cobra.Command, o runOpts) error {
 			cwd, _ = os.Getwd()
 		}
 		res, err := call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
-			AgentID: agentID, AccountID: accountID, RequireFreshQuota: o.requireFreshQuota,
+			AgentID: agentID, AccountID: accountID, Profile: profile, RequireFreshQuota: o.requireFreshQuota,
 			Cwd: cwd, PermissionMode: permission, Model: model, Effort: effort,
 		})
 		if err != nil {
