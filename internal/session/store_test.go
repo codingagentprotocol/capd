@@ -365,6 +365,35 @@ func TestConcurrentResolveRevivesOnce(t *testing.T) {
 	}
 }
 
+func TestStatsReportsEventBacklog(t *testing.T) {
+	fake := &fakeAdapter{id: "fake"}
+	m := NewManager(adapter.NewRegistry(fake), nil)
+	sess, err := m.Create(context.Background(), "fake", adapter.SessionOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, cancel, _ := sess.Subscribe(0)
+	defer cancel()
+	_, lastSession, _ := fake.snapshot()
+
+	for i := 0; i < 3; i++ {
+		lastSession.events <- protocol.Event{
+			Type: protocol.EventOutputText,
+			Data: map[string]any{"text": "x"},
+		}
+	}
+	waitFor(t, func() bool {
+		stats := m.Stats()
+		return stats.LiveSessions == 1 &&
+			stats.Subscribers == 1 &&
+			stats.BufferedEvents == 3 &&
+			stats.MaxBufferedEvents == 3 &&
+			stats.PendingSubscriberEvents == 3 &&
+			stats.MaxPendingSubscriberEvents == 3 &&
+			stats.SubscriberCapacity == subBuffer
+	})
+}
+
 func TestSubscriberOverflowSignals(t *testing.T) {
 	fake := &fakeAdapter{id: "fake"}
 	m := NewManager(adapter.NewRegistry(fake), nil)

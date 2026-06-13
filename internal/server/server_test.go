@@ -102,7 +102,16 @@ func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
 			ActiveSessions   int `json:"activeSessions"`
 			StoredSessions   int `json:"storedSessions"`
 			EndedSessions    int `json:"endedSessions"`
-			Metrics          struct {
+			Backlog          struct {
+				LiveSessions               int `json:"liveSessions"`
+				Subscribers                int `json:"subscribers"`
+				BufferedEvents             int `json:"bufferedEvents"`
+				MaxBufferedEvents          int `json:"maxBufferedEvents"`
+				PendingSubscriberEvents    int `json:"pendingSubscriberEvents"`
+				MaxPendingSubscriberEvents int `json:"maxPendingSubscriberEvents"`
+				SubscriberCapacity         int `json:"subscriberCapacity"`
+			} `json:"backlog"`
+			Metrics struct {
 				AdapterStarts        int64            `json:"adapterStarts"`
 				AdapterStartFailures int64            `json:"adapterStartFailures"`
 				RouteFailures        int64            `json:"routeFailures"`
@@ -119,6 +128,9 @@ func TestHealthzJSONReportsSafeDaemonMetadata(t *testing.T) {
 	}
 	if got.Runtime.ConnectedClients != 2 || got.Runtime.SessionsListed != 0 || got.Runtime.ActiveSessions != 0 || got.Runtime.StoredSessions != 0 || got.Runtime.EndedSessions != 0 {
 		t.Fatalf("runtime health = %+v", got.Runtime)
+	}
+	if got.Runtime.Backlog.LiveSessions != 0 || got.Runtime.Backlog.Subscribers != 0 || got.Runtime.Backlog.BufferedEvents != 0 || got.Runtime.Backlog.SubscriberCapacity == 0 {
+		t.Fatalf("runtime backlog = %+v", got.Runtime.Backlog)
 	}
 	if got.Runtime.Metrics.AdapterStarts != 2 || got.Runtime.Metrics.AdapterStartFailures != 1 || got.Runtime.Metrics.RouteFailures != 1 || got.Runtime.Metrics.SecretAccessDenied != 1 || got.Runtime.Metrics.RouteDecisions["codex"] != 1 {
 		t.Fatalf("runtime metrics = %+v", got.Runtime.Metrics)

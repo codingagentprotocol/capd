@@ -198,6 +198,8 @@ dependency.
   route failure, and route decision counts by agent id.
 - Native SecretStore access-denied outcomes are counted as aggregate runtime
   metrics without account identifiers, refs, paths, or error strings.
+- Event backlog snapshots report only aggregate live session, subscriber,
+  buffered-event, and pending-subscriber-event counts.
 - Optional metrics are disabled or local-only by default.
 
 ## P4 Extensibility
@@ -246,10 +248,8 @@ it is considered supported.
     connected clients and session states.
 12. Add deterministic lifecycle fixtures for Claude, Gemini, OpenCode, and
     Cursor once each can run without real credentials.
-13. In progress: add local-only metrics snapshots for event backlog,
-    adapter process starts/failures, route decisions, and SecretStore
-    access-denied counts. Adapter start/failure, route decision, and
-    SecretStore access-denied counters are now present in
+13. Done: add local-only metrics snapshots for event backlog, adapter process
+    starts/failures, route decisions, and SecretStore access-denied counts in
     `/healthz?format=json`.
 14. Done: add a Web Console evidence export button that saves a prompt-free
     browser package with inline health, probe, route, and account-check

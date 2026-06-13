@@ -121,6 +121,7 @@ func (s *Server) runtimeHealth() map[string]any {
 	if s.opts.Sessions == nil {
 		return runtime
 	}
+	runtime["backlog"] = s.opts.Sessions.Stats()
 	sessions := s.opts.Sessions.List(1000)
 	active, stored, ended := 0, 0, 0
 	for _, sess := range sessions {

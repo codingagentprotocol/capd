@@ -38,6 +38,16 @@ type Manager struct {
 	reviving map[string]*reviveCall
 }
 
+type Stats struct {
+	LiveSessions               int `json:"liveSessions"`
+	Subscribers                int `json:"subscribers"`
+	BufferedEvents             int `json:"bufferedEvents"`
+	MaxBufferedEvents          int `json:"maxBufferedEvents"`
+	PendingSubscriberEvents    int `json:"pendingSubscriberEvents"`
+	MaxPendingSubscriberEvents int `json:"maxPendingSubscriberEvents"`
+	SubscriberCapacity         int `json:"subscriberCapacity"`
+}
+
 func NewManager(reg *adapter.Registry, store *Store) *Manager {
 	return &Manager{registry: reg, store: store, sessions: make(map[string]*Session), reviving: make(map[string]*reviveCall)}
 }
@@ -224,6 +234,38 @@ func (m *Manager) List(limit int) []protocol.SessionInfo {
 	}
 	m.mu.Unlock()
 	return out
+}
+
+func (m *Manager) Stats() Stats {
+	m.mu.Lock()
+	sessions := make([]*Session, 0, len(m.sessions))
+	for _, sess := range m.sessions {
+		sessions = append(sessions, sess)
+	}
+	m.mu.Unlock()
+
+	stats := Stats{
+		LiveSessions:       len(sessions),
+		SubscriberCapacity: subBuffer,
+	}
+	for _, sess := range sessions {
+		sess.mu.Lock()
+		buffered := len(sess.buf)
+		if buffered > stats.MaxBufferedEvents {
+			stats.MaxBufferedEvents = buffered
+		}
+		stats.BufferedEvents += buffered
+		for _, sub := range sess.subs {
+			stats.Subscribers++
+			pending := len(sub.ch)
+			stats.PendingSubscriberEvents += pending
+			if pending > stats.MaxPendingSubscriberEvents {
+				stats.MaxPendingSubscriberEvents = pending
+			}
+		}
+		sess.mu.Unlock()
+	}
+	return stats
 }
 
 // History returns stored events without touching the session's liveness —
