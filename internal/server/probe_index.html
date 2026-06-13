@@ -216,6 +216,14 @@ function readinessSummaryText(summary) {
   if (summary.secretBackend) bits.push(`secret ${summary.secretBackend}`);
   return bits.join(" · ");
 }
+function repairPlanSummary(steps) {
+  const lines = [];
+  for (const step of steps || []) {
+    lines.push(`repair ${step.id || "step"}: ${step.command || ""}`);
+    if (step.expectedEvidence) lines.push(`expect: ${step.expectedEvidence}`);
+  }
+  return lines;
+}
 function lightweightAccountsResult(listResult, healthInfo) {
   const accounts = (listResult && listResult.accounts || []).filter(a => !a.provider || a.provider === "codex").map(a => ({
     id:a.id,
@@ -407,6 +415,7 @@ async function refresh(readiness = false) {
         const httpSummary = readinessSummaryText(httpProbe.summary);
         if (httpSummary) summary.push(`http summary: ${httpSummary}`);
         if (httpProbe.nextSteps && httpProbe.nextSteps.length) summary.push(...httpProbe.nextSteps.map(step => `next: ${step}`));
+        if (httpProbe.repairPlan && httpProbe.repairPlan.length) summary.push(...repairPlanSummary(httpProbe.repairPlan));
       } catch (probeErr) {
         summary.push(`http probe error: ${probeErr.message || String(probeErr)}`);
       }
@@ -456,6 +465,7 @@ async function refresh(readiness = false) {
       if (httpSummary) summaryLines.push(`http summary: ${httpSummary}`);
       if (httpProbe.errors && httpProbe.errors.length) summaryLines.push(...httpProbe.errors.map(err => `${err.source}: ${err.message || err.code || "error"}`));
       if (httpProbe.nextSteps && httpProbe.nextSteps.length) summaryLines.push(...httpProbe.nextSteps.map(step => `next: ${step}`));
+      if (httpProbe.repairPlan && httpProbe.repairPlan.length) summaryLines.push(...repairPlanSummary(httpProbe.repairPlan));
     }
     showSummary(summaryLines);
     const checks = fallbackChecks;

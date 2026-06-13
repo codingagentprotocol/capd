@@ -258,7 +258,8 @@ auto-route, and route-candidate evidence in place.
 The endpoint bounds server-side work too: ordinary probes get 12s and readiness
 probes get 2m. Its JSON includes a compact `summary` for account counts, quota
 freshness, auto-route freshness, route-decision status, and SecretStore backend
-status.
+status, plus `repairPlan` entries with runnable commands and expected evidence
+for Web/CI clients that want the same ordered autopilot view as `capd doctor`.
 Both `agents/route --account auto --json` and daemon-side `accounts/check`
 include `routeCandidates`, sorted by the same conservative quota score used for
 auto routing, with each parseable candidate carrying the safe `secretBackend`

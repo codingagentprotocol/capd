@@ -503,6 +503,10 @@ function renderProbeDataResult(data) {
   for (const next of data.nextSteps || []) {
     line("ev-sys", `· next ${next}`);
   }
+  for (const step of data.repairPlan || []) {
+    line("ev-sys", `· repair ${step.id || "step"}: ${step.command || ""}`);
+    if (step.expectedEvidence) line("ev-sys", `· expect ${step.expectedEvidence}`);
+  }
   for (const err of data.errors || []) {
     line("ev-err", `✗ ${err.source || "probe"} code=${err.code || 0} ${err.message || ""}`);
   }

@@ -48,6 +48,7 @@ type probeDataResult struct {
 	RouteCandidates []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
 	Checks          []probeDataCheck                `json:"checks"`
 	NextSteps       []string                        `json:"nextSteps,omitempty"`
+	RepairPlan      []probeRepairStep               `json:"repairPlan,omitempty"`
 	Errors          []probeDataError                `json:"errors,omitempty"`
 }
 
@@ -81,6 +82,16 @@ type probeDataError struct {
 	Source  string `json:"source"`
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+type probeRepairStep struct {
+	ID               string `json:"id"`
+	Title            string `json:"title"`
+	Command          string `json:"command"`
+	ExpectedEvidence string `json:"expectedEvidence"`
+	RequiresDaemon   bool   `json:"requiresDaemon,omitempty"`
+	RequiresSecret   bool   `json:"requiresSecret,omitempty"`
+	Optional         bool   `json:"optional,omitempty"`
 }
 
 func (s *Server) handleProbeData(w http.ResponseWriter, r *http.Request) {
@@ -197,6 +208,7 @@ func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBac
 	result.NextSteps = probeDataNextSteps(result.Checks, result.Errors)
 	result.OK = len(result.Errors) == 0 && allProbeChecksOK(result.Checks)
 	result.Summary = probeDataSummaryFor(result, readiness, requireSecretBackend)
+	result.RepairPlan = probeDataRepairPlan(result, readiness, requireSecretBackend)
 	return result
 }
 
@@ -279,6 +291,88 @@ func probeDataSummaryFor(result probeDataResult, readiness bool, requireSecretBa
 		summary.SecretBackendOK = summary.SecretBackend == requireSecretBackend
 	}
 	return summary
+}
+
+func probeDataRepairPlan(result probeDataResult, readiness bool, requireSecretBackend string) []probeRepairStep {
+	if result.OK || !readiness {
+		return nil
+	}
+	summary := result.Summary
+	backend := requireSecretBackend
+	if backend == "" {
+		backend = summary.RequiredSecretBackend
+	}
+	if backend == "" {
+		backend = summary.SecretBackend
+	}
+	steps := []probeRepairStep{}
+	if summary.RequiredSecretBackend != "" && !summary.SecretBackendOK {
+		steps = append(steps, probeRepairStep{
+			ID:               "restart-daemon-secret-backend",
+			Title:            "Restart capd with the required SecretStore backend",
+			Command:          "capd start --secret-backend " + summary.RequiredSecretBackend,
+			ExpectedEvidence: "probe summary shows secretBackendOk=true",
+			RequiresSecret:   true,
+		})
+	}
+	if summary.MissingAccounts > 0 || probeCheckFailed(result.Checks, "multi-account readiness") {
+		steps = append(steps, probeRepairStep{
+			ID:               "import-codex-accounts",
+			Title:            "Import enough Codex accounts through CAP",
+			Command:          "capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json",
+			ExpectedEvidence: "probe summary shows checkedAccounts>=2 and missingAccounts=0",
+			RequiresDaemon:   true,
+			RequiresSecret:   true,
+		})
+	}
+	if probeCheckFailed(result.Checks, "account credentials") {
+		steps = append(steps, probeRepairStep{
+			ID:               "repair-secretstore",
+			Title:            "Repair unreadable Codex account credentials",
+			Command:          probeSecretStoreCheckCommand(backend),
+			ExpectedEvidence: "probe account credentials check passes",
+			RequiresSecret:   true,
+		})
+	}
+	if summary.CheckedAccounts > 0 && (summary.FreshQuotaAccounts < summary.CheckedAccounts || !summary.AutoRouteFresh || probeCheckFailed(result.Checks, "quota freshness") || probeCheckFailed(result.Checks, "auto route fresh")) {
+		steps = append(steps, probeRepairStep{
+			ID:               "refresh-quota-readiness",
+			Title:            "Refresh quota and verify daemon-side readiness",
+			Command:          probeAccountsCheckReadinessCommand(backend),
+			ExpectedEvidence: "probe summary shows quotaRefreshed=true and autoRouteFresh=true",
+			RequiresDaemon:   true,
+			RequiresSecret:   true,
+		})
+	}
+	if !summary.RouteDecisionOK || probeCheckFailed(result.Checks, "route decision") {
+		steps = append(steps, probeRepairStep{
+			ID:               "preview-auto-route",
+			Title:            "Preview fresh quota-aware Codex routing",
+			Command:          "capd agents route --account auto --require-fresh-quota --json",
+			ExpectedEvidence: "route decision returns ok=true with a fresh accountRoute",
+			RequiresDaemon:   true,
+		})
+	}
+	if len(steps) > 0 {
+		steps = append(steps, probeRepairStep{
+			ID:               "final-live-preflight",
+			Title:            "Run the full live Codex preflight",
+			Command:          "make live-codex-preflight",
+			ExpectedEvidence: "preflight exits 0 and routeCandidates show a fresh auto route",
+			RequiresDaemon:   true,
+			RequiresSecret:   true,
+		})
+	}
+	return steps
+}
+
+func probeCheckFailed(checks []probeDataCheck, name string) bool {
+	for _, check := range checks {
+		if check.Name == name {
+			return !check.OK
+		}
+	}
+	return false
 }
 
 func probeDataChecks(result probeDataResult, readiness bool, requireSecretBackend string) []probeDataCheck {

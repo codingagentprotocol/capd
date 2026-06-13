@@ -321,7 +321,9 @@ for web clients and smoke tests over HTTP, but require an `Authorization: Bearer
 header so daemon tokens are not embedded in diagnostics URLs. The HTTP handler
 also has a server-side deadline: 12s for ordinary probes and 2m for readiness.
 Its JSON includes a compact `summary` with account counts, quota freshness,
-auto-route freshness, route-decision status, and SecretStore backend status; the
-CLI text output prints the same summary as a single line and preserves
-route-candidate `secretBackend` enums when present, while the Web Probe
-surfaces the summary in the visible area.
+auto-route freshness, route-decision status, and SecretStore backend status,
+plus a `repairPlan` with runnable commands and expected evidence for Web/CI
+autopilot flows. The CLI text output prints the same summary as a single line,
+preserves route-candidate `secretBackend` enums when present, and renders the
+repair plan as copy/paste commands, while the Web Probe surfaces the summary
+and repair evidence in the visible area.

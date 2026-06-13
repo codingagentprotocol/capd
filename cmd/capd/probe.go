@@ -139,8 +139,17 @@ type probeDataResponse struct {
 		Evidence string `json:"evidence"`
 		NextStep string `json:"nextStep"`
 	} `json:"checks"`
-	NextSteps []string `json:"nextSteps"`
-	Errors    []struct {
+	NextSteps  []string `json:"nextSteps"`
+	RepairPlan []struct {
+		ID               string `json:"id"`
+		Title            string `json:"title"`
+		Command          string `json:"command"`
+		ExpectedEvidence string `json:"expectedEvidence"`
+		RequiresDaemon   bool   `json:"requiresDaemon"`
+		RequiresSecret   bool   `json:"requiresSecret"`
+		Optional         bool   `json:"optional"`
+	} `json:"repairPlan"`
+	Errors []struct {
 		Source  string `json:"source"`
 		Code    int    `json:"code"`
 		Message string `json:"message"`
@@ -272,6 +281,14 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 	}
 	for _, next := range result.NextSteps {
 		fmt.Fprintf(cmd.OutOrStdout(), "next: %s\n", next)
+	}
+	if len(result.RepairPlan) > 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "repair plan:")
+		for i, step := range result.RepairPlan {
+			fmt.Fprintf(cmd.OutOrStdout(), "%d. %s\n", i+1, step.Title)
+			fmt.Fprintf(cmd.OutOrStdout(), "   command: %s\n", step.Command)
+			fmt.Fprintf(cmd.OutOrStdout(), "   expect: %s\n", step.ExpectedEvidence)
+		}
 	}
 	if result.Error != "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "error: probe data %s\n", result.Error)
