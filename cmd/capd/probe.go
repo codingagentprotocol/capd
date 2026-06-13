@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -134,6 +135,7 @@ type probeEvidenceCheck struct {
 
 type probeEvidenceManifest struct {
 	Path       string            `json:"path"`
+	Dir        string            `json:"dir"`
 	Source     string            `json:"source"`
 	Version    int               `json:"version"`
 	Status     string            `json:"status"`
@@ -405,7 +407,7 @@ func manifestArtifactPaths(manifest probeEvidenceManifest) []string {
 	seen := map[string]bool{}
 	paths := []string{}
 	for _, key := range []string{"agentsRoute", "probeData", "doctor", "accountsSmoke", "accountsCheck", "health", "accountsList"} {
-		path := manifest.Artifacts[key]
+		path := resolveManifestArtifactPath(manifest, manifest.Artifacts[key])
 		if path == "" || seen[path] {
 			continue
 		}
@@ -413,6 +415,13 @@ func manifestArtifactPaths(manifest probeEvidenceManifest) []string {
 		paths = append(paths, path)
 	}
 	return paths
+}
+
+func resolveManifestArtifactPath(manifest probeEvidenceManifest, path string) string {
+	if path == "" || filepath.IsAbs(path) || manifest.Dir == "" {
+		return path
+	}
+	return filepath.Join(manifest.Dir, path)
 }
 
 func loadProbeEvidenceManifest(path string) (probeEvidenceManifest, error) {
@@ -424,7 +433,7 @@ func loadProbeEvidenceManifest(path string) (probeEvidenceManifest, error) {
 	if err := json.Unmarshal(raw, &data); err != nil {
 		return probeEvidenceManifest{}, fmt.Errorf("decode evidence manifest: %w", err)
 	}
-	manifest := probeEvidenceManifest{Path: path, Artifacts: map[string]string{}}
+	manifest := probeEvidenceManifest{Path: path, Dir: filepath.Dir(path), Artifacts: map[string]string{}}
 	if version, ok := intField(data, "manifestVersion"); ok {
 		manifest.Source = "manifest.json"
 		manifest.Version = version

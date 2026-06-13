@@ -126,6 +126,7 @@ func TestReferenceDocsCoverProbeEvidence(t *testing.T) {
 		"capd probe evidence --manifest <manifest.json\\|summary.json>",
 		"validates saved live selftest evidence without contacting the daemon",
 		"follows artifact paths from the manifest or summary",
+		"relative artifact paths are resolved from the manifest directory",
 		"route policy, route candidate count, fresh quota evidence",
 		"emits a `checks` array for CI/Web consumers",
 		"`--fail` exits non-zero",

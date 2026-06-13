@@ -61,7 +61,7 @@ func TestProbeEvidenceCmdSummarizesManifestArtifacts(t *testing.T) {
 	route := filepath.Join(dir, "agents-route.json")
 	probe := filepath.Join(dir, "probe-data-readiness.json")
 	doctor := filepath.Join(dir, "doctor-prompt-free.json")
-	writeTestFile(t, manifest, `{"manifestVersion":1,"status":"passed","stage":"complete","backend":"native","daemonMode":"temporary","artifacts":{"agentsRoute":"`+route+`","probeData":"`+probe+`","doctor":"`+doctor+`"}}`)
+	writeTestFile(t, manifest, `{"manifestVersion":1,"status":"passed","stage":"complete","backend":"native","daemonMode":"temporary","artifacts":{"agentsRoute":"agents-route.json","probeData":"probe-data-readiness.json","doctor":"doctor-prompt-free.json"}}`)
 	writeTestFile(t, route, `{"routePolicy":{"name":"conservative-quota-pressure","freshTtlSeconds":1800,"unknownScore":75,"currentAccountTieBreak":0.01,"quotaWindows":["primary","secondary","code_review"]},"routeCandidates":[{"accountId":"codex-a","quotaState":"fresh","fresh":true,"secretBackend":"native","primaryUsedPercent":12}]}`)
 	writeTestFile(t, probe, `{"summary":{"checkedAccounts":2,"freshQuotaAccounts":2,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteFresh":true},"repairPlan":[]}`)
 	writeTestFile(t, doctor, `{"codex":{"routePolicy":{"name":"conservative-quota-pressure"}},"repairPlan":[]}`)
