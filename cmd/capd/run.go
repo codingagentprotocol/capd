@@ -323,6 +323,9 @@ func runTaskRouteErrorEvidence(err error) string {
 		}
 		lines = append(lines, "route candidates: "+strings.Join(parts, "; "))
 	}
+	if routeData.RoutePolicy != nil {
+		lines = append(lines, "route policy: "+routePolicyText(*routeData.RoutePolicy))
+	}
 	if backend, err := secret.NormalizeBackend(routeData.SecretBackend); err == nil {
 		lines = append(lines, "secret backend: "+backend)
 	}

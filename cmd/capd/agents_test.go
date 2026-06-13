@@ -127,6 +127,7 @@ func TestRouteCLIAccountAutoRequireFreshQuotaFailsWhenMissing(t *testing.T) {
 	}
 	for _, want := range []string{
 		"route: quota stale fresh false secret file primary 2.0% score 74.99 checked",
+		"route policy: conservative-quota-pressure ttl=1800s unknown=75.00 tie-break=0.01 windows=primary/secondary/code_review",
 		"route candidates: codex-test quota stale fresh false secret file",
 		"codex-missing quota missing fresh false secret file",
 		"secret backend: file",
@@ -303,10 +304,18 @@ func TestRouteCLITextIncludesAccountRouteEvidence(t *testing.T) {
 			Score:              8,
 			CheckedAt:          1700000000,
 		},
+		RoutePolicy: &protocol.AccountRoutePolicy{
+			Name:                   "conservative-quota-pressure",
+			FreshTTLSeconds:        1800,
+			UnknownScore:           75,
+			CurrentAccountTieBreak: 0.01,
+			QuotaWindows:           []string{"primary", "secondary", "code_review"},
+		},
 		Reason: "matched capabilities; auto account codex-test primary 8%",
 	})
 	for _, want := range []string{
 		"codex\tcodex-test\tquota fresh fresh true secret file primary 8.0% score 8.00 checked ",
+		"policy conservative-quota-pressure ttl=1800s unknown=75.00 tie-break=0.01 windows=primary/secondary/code_review",
 		"matched capabilities",
 	} {
 		if !strings.Contains(text, want) {

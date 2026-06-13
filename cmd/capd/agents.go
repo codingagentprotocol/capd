@@ -155,6 +155,9 @@ func routeCLIText(result protocol.AgentRouteResult) string {
 	if result.AccountRoute != nil {
 		parts = append(parts, routeEvidenceText(*result.AccountRoute))
 	}
+	if result.RoutePolicy != nil {
+		parts = append(parts, "policy "+routePolicyText(*result.RoutePolicy))
+	}
 	if result.Reason != "" {
 		parts = append(parts, result.Reason)
 	}
@@ -213,6 +216,26 @@ func routeEvidenceText(route protocol.AccountRouteEvidence) string {
 	}
 	if route.Reason != "" {
 		parts = append(parts, route.Reason)
+	}
+	return strings.Join(parts, " ")
+}
+
+func routePolicyText(policy protocol.AccountRoutePolicy) string {
+	parts := []string{}
+	if policy.Name != "" {
+		parts = append(parts, policy.Name)
+	}
+	if policy.FreshTTLSeconds > 0 {
+		parts = append(parts, fmt.Sprintf("ttl=%ds", policy.FreshTTLSeconds))
+	}
+	if policy.UnknownScore > 0 {
+		parts = append(parts, fmt.Sprintf("unknown=%.2f", policy.UnknownScore))
+	}
+	if policy.CurrentAccountTieBreak > 0 {
+		parts = append(parts, fmt.Sprintf("tie-break=%.2f", policy.CurrentAccountTieBreak))
+	}
+	if len(policy.QuotaWindows) > 0 {
+		parts = append(parts, "windows="+strings.Join(policy.QuotaWindows, "/"))
 	}
 	return strings.Join(parts, " ")
 }
@@ -430,6 +453,7 @@ func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error
 		policy := account.DefaultRoutePolicyEvidence()
 		data.RoutePolicy = &policy
 		lines = append(lines, "route: "+routeEvidenceText(route))
+		lines = append(lines, "route policy: "+routePolicyText(policy))
 		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil && len(candidates) > 0 {
 			data.RouteCandidates = candidates
 			parts := make([]string, 0, len(candidates))

@@ -348,6 +348,13 @@ func TestRunTaskFreshQuotaFailureSuggestsReadiness(t *testing.T) {
 						Message: "auto route does not have fresh cached quota",
 						Data: protocol.AgentRouteErrorData{
 							SecretBackend: secret.BackendFile,
+							RoutePolicy: &protocol.AccountRoutePolicy{
+								Name:                   "conservative-quota-pressure",
+								FreshTTLSeconds:        1800,
+								UnknownScore:           75,
+								CurrentAccountTieBreak: 0.01,
+								QuotaWindows:           []string{"primary", "secondary", "code_review"},
+							},
 							AccountRoute: &protocol.AccountRouteEvidence{
 								AccountID:          "codex-stale",
 								QuotaState:         protocol.AccountQuotaStateStale,
@@ -402,7 +409,7 @@ func TestRunTaskFreshQuotaFailureSuggestsReadiness(t *testing.T) {
 		t.Fatal("expected fresh quota error")
 	}
 	text := err.Error()
-	for _, want := range []string{"fresh cached quota", "route: quota stale fresh false primary 91.0% score 75.00 checked", "route candidates: codex-stale quota stale", "codex-missing quota missing", "secret backend: file", "capd accounts check --json --readiness --require-secret-backend file --timeout 2m", "LIVE_SECRET_BACKEND=file make live-codex-preflight", "capd agents route --account auto --require-fresh-quota --json"} {
+	for _, want := range []string{"fresh cached quota", "route: quota stale fresh false primary 91.0% score 75.00 checked", "route candidates: codex-stale quota stale", "codex-missing quota missing", "route policy: conservative-quota-pressure ttl=1800s unknown=75.00 tie-break=0.01 windows=primary/secondary/code_review", "secret backend: file", "capd accounts check --json --readiness --require-secret-backend file --timeout 2m", "LIVE_SECRET_BACKEND=file make live-codex-preflight", "capd agents route --account auto --require-fresh-quota --json"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("error missing %q: %s", want, text)
 		}

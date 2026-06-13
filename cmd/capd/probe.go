@@ -248,7 +248,7 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s fresh=%t%s\n", result.AutoRoute.AccountID, result.AutoRoute.QuotaState, result.AutoRoute.Fresh, backend)
 	}
 	if result.RoutePolicy != nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "route policy: %s\n", probeRoutePolicyText(*result.RoutePolicy))
+		fmt.Fprintf(cmd.OutOrStdout(), "route policy: %s\n", routePolicyText(*result.RoutePolicy))
 	}
 	if len(result.RouteCandidates) > 0 {
 		parts := make([]string, 0, len(result.RouteCandidates))
@@ -290,24 +290,4 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 	if result.Error != "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "error: probe data %s\n", result.Error)
 	}
-}
-
-func probeRoutePolicyText(policy protocol.AccountRoutePolicy) string {
-	parts := []string{}
-	if policy.Name != "" {
-		parts = append(parts, policy.Name)
-	}
-	if policy.FreshTTLSeconds > 0 {
-		parts = append(parts, fmt.Sprintf("ttl=%ds", policy.FreshTTLSeconds))
-	}
-	if policy.UnknownScore > 0 {
-		parts = append(parts, fmt.Sprintf("unknown=%.2f", policy.UnknownScore))
-	}
-	if policy.CurrentAccountTieBreak > 0 {
-		parts = append(parts, fmt.Sprintf("tie-break=%.2f", policy.CurrentAccountTieBreak))
-	}
-	if len(policy.QuotaWindows) > 0 {
-		parts = append(parts, "windows="+strings.Join(policy.QuotaWindows, "/"))
-	}
-	return strings.Join(parts, " ")
 }
