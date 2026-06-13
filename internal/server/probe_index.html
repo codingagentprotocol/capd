@@ -192,12 +192,24 @@ function routeDecisionText(decision, route) {
   if (route) bits.push(routeText(route));
   const candidates = routeCandidateText(decision.routeCandidates);
   if (candidates) bits.push(`candidates ${candidates}`);
+  const policy = routePolicyText(decision.routePolicy);
+  if (policy) bits.push(`policy ${policy}`);
   if (decision.reason) bits.push(decision.reason);
   return bits.join(" · ") || routeText(route);
 }
 function routeCandidateText(candidates) {
   if (!Array.isArray(candidates) || candidates.length === 0) return "";
   return candidates.map(c => routeText(c)).join(" | ");
+}
+function routePolicyText(policy) {
+  if (!policy) return "";
+  const bits = [];
+  if (policy.name) bits.push(policy.name);
+  if (typeof policy.freshTtlSeconds === "number") bits.push(`ttl ${policy.freshTtlSeconds}s`);
+  if (typeof policy.unknownScore === "number") bits.push(`unknown ${policy.unknownScore}`);
+  if (typeof policy.currentAccountTieBreak === "number") bits.push(`tie ${policy.currentAccountTieBreak}`);
+  if (Array.isArray(policy.quotaWindows) && policy.quotaWindows.length) bits.push(`windows ${policy.quotaWindows.join("/")}`);
+  return bits.join(" ");
 }
 function readinessSummaryText(summary) {
   if (!summary) return "";
@@ -331,6 +343,7 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
   const secretStates = accounts.map(a => a.secretState).filter(Boolean).join(", ") || "unknown";
   const routeEvidence = routeText(route);
   const candidatesEvidence = routeCandidateText((routeDecision && routeDecision.routeCandidates) || (result && result.routeCandidates));
+  const routePolicyEvidence = routePolicyText((routeDecision && routeDecision.routePolicy) || (result && result.routePolicy));
   const promptFree = !!(result && result.promptFree);
   const nativeSecretOK = !readiness || !requireNative || secretBackend === "native";
   const requiredBackend = requiredSecretBackend();
@@ -353,6 +366,7 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
     { name:"auto route fresh", ok:!!(route && route.fresh), evidence:routeEvidence, nextStep:(route && route.fresh) ? "" : routeFreshNextStep },
     { name:"route decision", ok:!!routeDecision, evidence:routeDecisionText(routeDecision, route), nextStep:routeDecision ? "" : "preview routing with: capd agents route --account auto --require-fresh-quota --json" },
     { name:"route candidates", ok:!!candidatesEvidence, evidence:candidatesEvidence || "routeCandidates missing", nextStep:candidatesEvidence ? "" : "preview routing with: capd agents route --account auto --json" },
+    { name:"route policy", ok:!!routePolicyEvidence, evidence:routePolicyEvidence || "routePolicy missing", nextStep:routePolicyEvidence ? "" : "refresh diagnostics or run: capd agents route --account auto --json" },
     { name:"native secret backend", ok:nativeSecretOK, evidence:requireNative ? `secret ${secretBackend}` : "not required", nextStep:nativeSecretNextStep },
   ];
   if (readiness) rows.push({ name:"readiness gate", ok:!readinessError && !routeError && rows.every(r => r.name === "readiness gate" || r.ok), evidence:readinessError || routeError || "all readiness checks passed", nextStep:(readinessError || routeError) ? "fix failed checks above, then rerun Readiness" : "" });
@@ -424,6 +438,7 @@ async function refresh(readiness = false) {
       `auto route: ${routeText(route)}`,
       `route decision: ${routeDecisionText(routeDecision, route)}`,
       `route candidates: ${routeCandidateText((routeDecision && routeDecision.routeCandidates) || result.routeCandidates) || "missing"}`,
+      `route policy: ${routePolicyText((routeDecision && routeDecision.routePolicy) || result.routePolicy) || "missing"}`,
       ...accountEvidence(accounts)
     ];
     if (readinessError) summary.push(`readiness error: ${readinessError}`);
@@ -446,7 +461,7 @@ async function refresh(readiness = false) {
     const checks = validationRows({ healthOK:healthInfo, result, route, routeDecision, readiness, requireNative:requiredSecretBackend() === "native", readinessError, routeError });
     showSummary(summary);
     showTests(checks);
-    showJSON({ checks, health: healthInfo, accountsCheck: result, routeDecision, autoRoute: route, routeCandidates: (routeDecision && routeDecision.routeCandidates) || result.routeCandidates, httpProbe, readinessError, routeError });
+    showJSON({ checks, health: healthInfo, accountsCheck: result, routeDecision, autoRoute: route, routeCandidates: (routeDecision && routeDecision.routeCandidates) || result.routeCandidates, routePolicy: (routeDecision && routeDecision.routePolicy) || result.routePolicy, httpProbe, readinessError, routeError });
   } catch (e) {
     if (healthInfo) {
       setMetric("daemon", daemonLabel || "ok", "ok");
@@ -464,6 +479,7 @@ async function refresh(readiness = false) {
     const fallbackResult = httpProbe && httpProbe.accountsCheck ? httpProbe.accountsCheck : null;
     const fallbackRoute = httpProbe && httpProbe.autoRoute ? httpProbe.autoRoute : null;
     const fallbackRouteDecision = httpProbe && httpProbe.routeDecision ? httpProbe.routeDecision : null;
+    const fallbackRoutePolicy = httpProbe && httpProbe.routePolicy ? httpProbe.routePolicy : null;
     const fallbackHealth = (httpProbe && httpProbe.health) || healthInfo;
     if (fallbackResult) {
       const summary = httpProbe.summary || {};
@@ -484,6 +500,8 @@ async function refresh(readiness = false) {
       summaryLines.push(`http probe: ${httpProbe.ok ? "ok" : "attention"} (${(httpProbe.checks || []).length} checks)`);
       const httpSummary = readinessSummaryText(httpProbe.summary);
       if (httpSummary) summaryLines.push(`http summary: ${httpSummary}`);
+      const policy = routePolicyText(fallbackRoutePolicy || (fallbackRouteDecision && fallbackRouteDecision.routePolicy));
+      if (policy) summaryLines.push(`route policy: ${policy}`);
       if (httpProbe.errors && httpProbe.errors.length) summaryLines.push(...httpProbe.errors.map(err => `${err.source}: ${err.message || err.code || "error"}`));
       if (httpProbe.nextSteps && httpProbe.nextSteps.length) summaryLines.push(...httpProbe.nextSteps.map(step => `next: ${step}`));
       if (httpProbe.repairPlan && httpProbe.repairPlan.length) summaryLines.push(...repairPlanSummary(httpProbe.repairPlan));
@@ -491,7 +509,7 @@ async function refresh(readiness = false) {
     showSummary(summaryLines);
     const checks = fallbackChecks;
     showTests(checks);
-    showJSON({ checks, health: fallbackHealth, accountsCheck: fallbackResult, routeDecision: fallbackRouteDecision, autoRoute: fallbackRoute, httpProbe, error: e.message || String(e) });
+    showJSON({ checks, health: fallbackHealth, accountsCheck: fallbackResult, routeDecision: fallbackRouteDecision, autoRoute: fallbackRoute, routePolicy: fallbackRoutePolicy || (fallbackRouteDecision && fallbackRouteDecision.routePolicy), httpProbe, error: e.message || String(e) });
   } finally {
     $("refresh").disabled = false;
     $("readiness").disabled = false;
