@@ -850,6 +850,12 @@ func (s *Server) baseAccountCheckEvidence(acc account.Account, current string) p
 		row.PrimaryUsedPercent = &q.PrimaryUsedPercent
 		row.QuotaFresh = row.QuotaState == protocol.AccountQuotaStateFresh
 	}
+	if acc.Provider == codexauth.Provider {
+		evidence := account.QuotaRouteEvidence(s.opts.Accounts, acc)
+		row.RecentFailures = evidence.RecentFailures
+		row.LastFailureAt = evidence.LastFailureAt
+		row.HealthPenalty = evidence.HealthPenalty
+	}
 	return row
 }
 
@@ -1169,9 +1175,13 @@ func accountSummaryWithRoute(accounts *account.Store, acc account.Account, quota
 		summary.Plan = quota.Plan
 	}
 	if accounts != nil && acc.Provider == codexauth.Provider {
-		score := account.QuotaRouteScore(accounts, acc, current)
+		evidence := account.QuotaRouteEvidence(accounts, acc)
+		score := evidence.Score
 		summary.RouteScore = &score
-		summary.RouteReason = account.QuotaRouteReason(accounts, acc)
+		summary.RouteReason = evidence.Reason
+		summary.RecentFailures = evidence.RecentFailures
+		summary.LastFailureAt = evidence.LastFailureAt
+		summary.HealthPenalty = evidence.HealthPenalty
 	}
 	return summary
 }

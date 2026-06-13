@@ -282,6 +282,9 @@ type AccountCheckEvidence struct {
 	QuotaFresh         bool     `json:"quotaFresh"`
 	QuotaCheckedAt     int64    `json:"quotaCheckedAt,omitempty"`
 	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
+	RecentFailures     int      `json:"recentFailures,omitempty"`
+	LastFailureAt      int64    `json:"lastFailureAt,omitempty"`
+	HealthPenalty      float64  `json:"healthPenalty,omitempty"`
 }
 
 type AccountsQuotaParams struct {
@@ -399,16 +402,19 @@ type AccountProfileSummary struct {
 }
 
 type AccountSummary struct {
-	ID          string                `json:"id"`
-	Provider    string                `json:"provider"`
-	AuthMode    string                `json:"authMode,omitempty"`
-	Email       string                `json:"email,omitempty"`
-	AccountID   string                `json:"accountId,omitempty"`
-	Plan        string                `json:"plan,omitempty"`
-	Quota       *AccountQuotaSnapshot `json:"quota,omitempty"`
-	QuotaFresh  bool                  `json:"quotaFresh,omitempty"`
-	RouteScore  *float64              `json:"routeScore,omitempty"`
-	RouteReason string                `json:"routeReason,omitempty"`
+	ID             string                `json:"id"`
+	Provider       string                `json:"provider"`
+	AuthMode       string                `json:"authMode,omitempty"`
+	Email          string                `json:"email,omitempty"`
+	AccountID      string                `json:"accountId,omitempty"`
+	Plan           string                `json:"plan,omitempty"`
+	Quota          *AccountQuotaSnapshot `json:"quota,omitempty"`
+	QuotaFresh     bool                  `json:"quotaFresh,omitempty"`
+	RouteScore     *float64              `json:"routeScore,omitempty"`
+	RouteReason    string                `json:"routeReason,omitempty"`
+	RecentFailures int                   `json:"recentFailures,omitempty"`
+	LastFailureAt  int64                 `json:"lastFailureAt,omitempty"`
+	HealthPenalty  float64               `json:"healthPenalty,omitempty"`
 }
 
 func (a AccountSummary) isZero() bool {
@@ -421,7 +427,10 @@ func (a AccountSummary) isZero() bool {
 		a.Quota == nil &&
 		!a.QuotaFresh &&
 		a.RouteScore == nil &&
-		a.RouteReason == ""
+		a.RouteReason == "" &&
+		a.RecentFailures == 0 &&
+		a.LastFailureAt == 0 &&
+		a.HealthPenalty == 0
 }
 
 type AccountQuotaSnapshot struct {

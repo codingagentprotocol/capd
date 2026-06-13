@@ -199,6 +199,10 @@ func TestReferenceDocsCoverAccountListRouteAudit(t *testing.T) {
 		"`quotaFresh`",
 		"`routeScore`",
 		"`routeReason`",
+		"`recentFailures`",
+		"`lastFailureAt`",
+		"`healthPenalty`",
+		"safe recent-failure health evidence",
 		"without reading SecretStore token material",
 		"without SecretStore refs or token material",
 	} {

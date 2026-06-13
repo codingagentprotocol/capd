@@ -835,6 +835,8 @@ function accountQuotaDiagnosticText(account) {
   const parts = [`quota ${account.quotaState || "missing"}`, account.quotaFresh ? "fresh" : "not-fresh"];
   if (hasNumber(account.primaryUsedPercent)) parts.push(`primary ${account.primaryUsedPercent}%`);
   if (account.quotaCheckedAt) parts.push(`checked ${new Date(account.quotaCheckedAt * 1000).toLocaleString()}`);
+  const health = accountHealthLabel(account);
+  if (health) parts.push(health);
   return parts.join(" · ");
 }
 
@@ -928,6 +930,13 @@ function renderAccounts(accounts, currentAccountId) {
       route.className = "quota";
       route.textContent = routeAudit;
       card.appendChild(route);
+    }
+    const health = accountHealthLabel(a);
+    if (health) {
+      const healthEl = document.createElement("div");
+      healthEl.className = "quota";
+      healthEl.textContent = health;
+      card.appendChild(healthEl);
     }
     if (isCodex) {
       const current = document.createElement("button");
@@ -1170,6 +1179,14 @@ function routeAuditLabel(a) {
   const parts = [];
   if (hasNumber(a.routeScore)) parts.push(`route score ${a.routeScore}`);
   if (a.routeReason) parts.push(a.routeReason);
+  return parts.join(" · ");
+}
+
+function accountHealthLabel(a) {
+  if (!a || !a.recentFailures) return "";
+  const parts = [`recent failures ${a.recentFailures}`];
+  if (hasNumber(a.healthPenalty)) parts.push(`health penalty ${a.healthPenalty}`);
+  if (a.lastFailureAt) parts.push(`last failure ${new Date(a.lastFailureAt * 1000).toLocaleString()}`);
   return parts.join(" · ");
 }
 

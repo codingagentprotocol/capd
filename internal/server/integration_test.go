@@ -813,6 +813,20 @@ func TestSessionCreateFailureRecordsAccountHealthPenalty(t *testing.T) {
 	if evidence.HealthPenalty != account.DefaultQuotaRoutePolicy.RecentFailurePenalty || evidence.RecentFailures != 1 || !strings.Contains(evidence.Reason, "recent failures 1 penalty +10") {
 		t.Fatalf("evidence = %+v", evidence)
 	}
+	var listed protocol.AccountsListResult
+	c.mustResult(c.call(protocol.MethodAccountsList, protocol.AccountsListParams{
+		Provider: codexauth.Provider,
+	}), &listed)
+	if len(listed.Accounts) != 1 || listed.Accounts[0].RecentFailures != 1 || listed.Accounts[0].HealthPenalty != account.DefaultQuotaRoutePolicy.RecentFailurePenalty || listed.Accounts[0].LastFailureAt == 0 {
+		t.Fatalf("accounts/list health evidence = %+v", listed.Accounts)
+	}
+	var checked protocol.AccountsCheckResult
+	c.mustResult(c.call(protocol.MethodAccountsCheck, protocol.AccountsCheckParams{
+		Provider: codexauth.Provider,
+	}), &checked)
+	if len(checked.Accounts) != 1 || checked.Accounts[0].RecentFailures != 1 || checked.Accounts[0].HealthPenalty != account.DefaultQuotaRoutePolicy.RecentFailurePenalty || checked.Accounts[0].LastFailureAt == 0 {
+		t.Fatalf("accounts/check health evidence = %+v", checked.Accounts)
+	}
 
 	fake.mu.Lock()
 	fake.startErr = nil
