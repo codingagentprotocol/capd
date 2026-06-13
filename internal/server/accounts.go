@@ -616,7 +616,7 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 		for _, acc := range accounts {
 			summary, perr := s.refreshOneAccountQuota(ctx, acc)
 			if perr != nil {
-				return protocol.AccountsQuotaResult{}, accountsQuotaAllErrorWithEvidence(perr, acc.ID, result)
+				return protocol.AccountsQuotaResult{}, s.accountsQuotaAllErrorWithEvidence(perr, acc.ID, result)
 			}
 			result.Accounts = append(result.Accounts, summary)
 		}
@@ -652,15 +652,36 @@ func (s *Server) refreshAccountQuota(ctx context.Context, params protocol.Accoun
 	return protocol.AccountsQuotaResult{Account: summary}, nil
 }
 
-func accountsQuotaAllErrorWithEvidence(perr *protocol.Error, accountID string, partial protocol.AccountsQuotaResult) *protocol.Error {
+func (s *Server) accountsQuotaAllErrorWithEvidence(perr *protocol.Error, accountID string, partial protocol.AccountsQuotaResult) *protocol.Error {
 	if perr == nil {
 		return nil
 	}
 	out := protocol.NewError(perr.Code, "%s: %s", accountID, perr.Message)
-	if len(partial.Accounts) > 0 {
+	partial.FailedAccount = accountID
+	partial.NextSteps = accountsQuotaAllNextSteps(s.secretBackend())
+	if len(partial.Accounts) > 0 || partial.FailedAccount != "" {
 		out.Data = partial
 	}
 	return out
+}
+
+func accountsQuotaAllNextSteps(backend string) []string {
+	readiness := "capd accounts check --json --readiness"
+	if backend != "" {
+		readiness += " --require-secret-backend " + backend
+	}
+	readiness += " --timeout 2m"
+	return []string{
+		"inspect safe daemon account evidence with: " + readiness,
+		"after fixing the failing account, rerun quota refresh with: " + readiness,
+	}
+}
+
+func (s *Server) secretBackend() string {
+	if s == nil || s.opts.Secrets == nil {
+		return ""
+	}
+	return s.opts.Secrets.Backend()
 }
 
 func (s *Server) refreshOneAccountQuota(ctx context.Context, acc account.Account) (protocol.AccountSummary, *protocol.Error) {

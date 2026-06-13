@@ -263,22 +263,28 @@ type AccountsQuotaParams struct {
 }
 
 type AccountsQuotaResult struct {
-	Account  AccountSummary   `json:"account,omitempty"`
-	Accounts []AccountSummary `json:"accounts,omitempty"`
+	Account       AccountSummary   `json:"account,omitempty"`
+	Accounts      []AccountSummary `json:"accounts,omitempty"`
+	FailedAccount string           `json:"failedAccount,omitempty"`
+	NextSteps     []string         `json:"nextSteps,omitempty"`
 }
 
 func (r AccountsQuotaResult) MarshalJSON() ([]byte, error) {
 	type quotaResult struct {
-		Account  *AccountSummary  `json:"account,omitempty"`
-		Accounts []AccountSummary `json:"accounts,omitempty"`
+		Account       *AccountSummary  `json:"account,omitempty"`
+		Accounts      []AccountSummary `json:"accounts,omitempty"`
+		FailedAccount string           `json:"failedAccount,omitempty"`
+		NextSteps     []string         `json:"nextSteps,omitempty"`
 	}
 	var account *AccountSummary
 	if !r.Account.isZero() {
 		account = &r.Account
 	}
 	return json.Marshal(quotaResult{
-		Account:  account,
-		Accounts: r.Accounts,
+		Account:       account,
+		Accounts:      r.Accounts,
+		FailedAccount: r.FailedAccount,
+		NextSteps:     r.NextSteps,
 	})
 }
 

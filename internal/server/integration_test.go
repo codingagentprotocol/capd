@@ -2602,6 +2602,12 @@ func TestAccountsQuotaAllFailureIsSafeAndCachesSuccessfulAccounts(t *testing.T) 
 	if len(partial.Accounts) != 1 || partial.Accounts[0].ID != "codex-test" || partial.Accounts[0].Quota == nil || partial.Accounts[0].Quota.PrimaryUsedPercent != 41 {
 		t.Fatalf("partial quota evidence = %+v", partial)
 	}
+	if partial.FailedAccount != "codex-zlow" {
+		t.Fatalf("failed account = %q", partial.FailedAccount)
+	}
+	if len(partial.NextSteps) != 2 || !strings.Contains(partial.NextSteps[0], "capd accounts check --json --readiness --require-secret-backend file --timeout 2m") || !strings.Contains(partial.NextSteps[1], "rerun quota refresh") {
+		t.Fatalf("next steps = %+v", partial.NextSteps)
+	}
 	partialData, _ := json.Marshal(partial)
 	for _, leaked := range []string{"test-token", "zlow-token", "backend-secret", "secretRef", ref.String()} {
 		if strings.Contains(string(partialData), leaked) {
