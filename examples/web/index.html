@@ -79,6 +79,7 @@
 <div id="bar">
   <select id="agent"></select>
   <select id="account"><option value="">不用账号</option><option value="auto">自动账号</option></select>
+  <input id="accountProfile" placeholder="profile（仅自动账号）" style="flex:0 0 190px" disabled />
   <input id="cwd" list="cwds" placeholder="项目目录（留空=主目录）" style="flex:0 0 260px" />
   <datalist id="cwds"></datalist>
   <input id="prompt" placeholder="让 agent 干点什么…" />
@@ -917,6 +918,7 @@ function renderAccounts(accounts, currentAccountId) {
     accountsEl.appendChild(empty);
   }
   markActiveAccount();
+  updateProfileControl();
   previewRoute();
 }
 
@@ -929,13 +931,28 @@ function markActiveAccount() {
   }
 }
 
+function accountProfileName() {
+  return document.getElementById("accountProfile").value.trim();
+}
+
+function updateProfileControl() {
+  const profileEl = document.getElementById("accountProfile");
+  const accountId = document.getElementById("account").value;
+  profileEl.disabled = accountId !== "auto";
+  profileEl.title = profileEl.disabled ? "profile 只用于自动账号路由" : "约束自动账号路由到指定账号 profile";
+}
+
 async function previewRoute() {
   routePreviewEl.textContent = "";
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   const accountId = document.getElementById("account").value;
   const params = {};
   if (accountId) params.accountId = accountId;
-  if (accountId === "auto" && document.getElementById("requireFreshQuota").checked) params.requireFreshQuota = true;
+  if (accountId === "auto") {
+    const profile = accountProfileName();
+    if (profile) params.profile = profile;
+    if (document.getElementById("requireFreshQuota").checked) params.requireFreshQuota = true;
+  }
   try {
     const routed = await call("agents/route", params);
     routePreviewEl.textContent = routeDecisionSummary(routed);
@@ -1547,8 +1564,10 @@ document.getElementById("send").onclick = async () => {
     if (!sessionId) {
       const cwd = document.getElementById("cwd").value.trim();
       const accountId = document.getElementById("account").value;
+      const profile = accountId === "auto" ? accountProfileName() : "";
       const create = { agentId: document.getElementById("agent").value, cwd };
       if (accountId) create.accountId = accountId;
+      if (profile) create.profile = profile;
       if (accountId === "auto" && document.getElementById("requireFreshQuota").checked) create.requireFreshQuota = true;
       const res = await call("session/create", create);
       sessionId = res.sessionId;
@@ -1578,7 +1597,8 @@ document.getElementById("clearEvidenceManifest").onclick = () => {
   evidenceArtifactsInputEl.value = "";
   evidenceManifestResultEl.textContent = "";
 };
-document.getElementById("account").onchange = () => { markActiveAccount(); previewRoute(); };
+document.getElementById("account").onchange = () => { markActiveAccount(); updateProfileControl(); previewRoute(); };
+document.getElementById("accountProfile").oninput = previewRoute;
 document.getElementById("requireFreshQuota").onchange = previewRoute;
 document.getElementById("prompt").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("send").click(); });
 
