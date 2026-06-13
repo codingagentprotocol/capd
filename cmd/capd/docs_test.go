@@ -334,12 +334,15 @@ func TestTestingDocsCoverLiveSelftestDaemonSafety(t *testing.T) {
 		"instead of trying to start a second process on the same port",
 		"`CAPD_LIVE_EVIDENCE_DIR=/tmp/capd-live-evidence`",
 		"`manifest.json` index",
+		"generated `report.html`",
+		"manifest, HTML report, and primary evidence paths",
 		"primary evidence paths",
 		"absolute paths for local CI lookup",
-		"artifact paths relative to the evidence directory",
+		"artifact paths\nrelative to the evidence directory",
 		"archived or uploaded",
-		"Successful selftest runs validate that package with",
-		"`capd probe evidence --manifest ... --fail` before reporting `status:\"passed\"`",
+		"Successful selftest runs validate\nthat package and write the standalone HTML report before reporting",
+		"`status:\"passed\"`",
+		"best-effort writes the same `report.html` from\nthe failed manifest",
 	} {
 		if !strings.Contains(testingDoc, want) {
 			t.Fatalf("testing docs missing live selftest daemon safety contract %q", want)

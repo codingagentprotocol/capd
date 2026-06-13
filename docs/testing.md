@@ -200,19 +200,21 @@ startup, backend alignment, preflight, or the optional live prompt fails.
 Set `CAPD_LIVE_EVIDENCE_DIR=/tmp/capd-live-evidence` to persist safe JSON
 evidence artifacts. On success the directory receives the final
 `agents-route.json`, `probe-data-readiness.json`, and `doctor-prompt-free.json`
-outputs, plus a `manifest.json` index. The summary JSON records the manifest and
-primary evidence paths. The summary keeps absolute paths for local CI lookup;
-the manifest stores artifact paths relative to the evidence directory so the
-package can be archived or uploaded and still validated later. Those files prove
-the live account count, fresh quota gate, active `routePolicy`, route-candidate
-ordering, and SecretStore backend without exposing tokens or reading shell logs.
-Successful selftest runs validate that package with
-`capd probe evidence --manifest ... --fail` before reporting `status:"passed"`.
+outputs, plus a `manifest.json` index and generated `report.html`. The summary
+JSON records the manifest, HTML report, and primary evidence paths. The summary
+keeps absolute paths for local CI lookup; the manifest stores artifact paths
+relative to the evidence directory so the package can be archived or uploaded
+and still validated later. Those files prove the live account count, fresh quota
+gate, active `routePolicy`, route-candidate ordering, and SecretStore backend
+without exposing tokens or reading shell logs. Successful selftest runs validate
+that package and write the standalone HTML report before reporting
+`status:"passed"`.
 On
 preflight failure, the same directory captures prompt-free failure diagnostics
 such as `accounts-list.json`, `agents-route.json`, `probe-data-prompt-free.json`,
-and `accounts-smoke.json`; enabling `LIVE_DIAGNOSE_SECRETSTORE=1` also captures
-the heavier SecretStore-reading readiness files.
+and `accounts-smoke.json`, then best-effort writes the same `report.html` from
+the failed manifest; enabling `LIVE_DIAGNOSE_SECRETSTORE=1` also captures the
+heavier SecretStore-reading readiness files.
 
 Without real Codex accounts, run the deterministic simulated gate:
 

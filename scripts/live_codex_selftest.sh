@@ -13,6 +13,7 @@ summary="${CAPD_LIVE_SUMMARY:-}"
 repair_plan="${CAPD_LIVE_REPAIR_PLAN:-}"
 evidence_dir="${CAPD_LIVE_EVIDENCE_DIR:-}"
 evidence_manifest=""
+evidence_report=""
 evidence_health=""
 evidence_accounts=""
 evidence_route=""
@@ -24,6 +25,7 @@ bin_owned=0
 
 if [ -n "$evidence_dir" ]; then
 	evidence_manifest="$evidence_dir/manifest.json"
+	evidence_report="$evidence_dir/report.html"
 fi
 
 export CAPD_HOST="$host"
@@ -69,6 +71,7 @@ write_summary() {
 	repair_plan_json="$(json_escape "$repair_plan")"
 	evidence_dir_json="$(json_escape "$evidence_dir")"
 	evidence_manifest_json="$(json_escape "$evidence_manifest")"
+	evidence_report_json="$(json_escape "$evidence_report")"
 	evidence_route_json="$(json_escape "$evidence_route")"
 	evidence_probe_json="$(json_escape "$evidence_probe")"
 	evidence_doctor_json="$(json_escape "$evidence_doctor")"
@@ -90,6 +93,7 @@ write_summary() {
 		printf '  "repairPlanPath": "%s",\n' "$repair_plan_json"
 		printf '  "evidenceDir": "%s",\n' "$evidence_dir_json"
 		printf '  "evidenceManifestPath": "%s",\n' "$evidence_manifest_json"
+		printf '  "evidenceReportPath": "%s",\n' "$evidence_report_json"
 		printf '  "routeEvidencePath": "%s",\n' "$evidence_route_json"
 		printf '  "probeEvidencePath": "%s",\n' "$evidence_probe_json"
 		printf '  "doctorEvidencePath": "%s",\n' "$evidence_doctor_json"
@@ -192,6 +196,7 @@ write_success_evidence() {
 	evidence_probe="$evidence_dir/probe-data-readiness.json"
 	evidence_doctor="$evidence_dir/doctor-prompt-free.json"
 	evidence_manifest="$evidence_dir/manifest.json"
+	evidence_report="$evidence_dir/report.html"
 	"$bin" agents route --account auto --require-fresh-quota --json >"$evidence_route" || return $?
 	"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail >"$evidence_probe" || return $?
 	"$bin" doctor --prompt-free --json --fail --require-secret-backend "$backend" --timeout 2m >"$evidence_doctor" || return $?
@@ -201,7 +206,14 @@ verify_success_evidence() {
 	if [ -z "$evidence_dir" ]; then
 		return 0
 	fi
-	"$bin" probe evidence --manifest "$evidence_manifest" --fail
+	"$bin" probe evidence --manifest "$evidence_manifest" --html "$evidence_report" --fail
+}
+
+write_failure_evidence_report() {
+	if [ -z "$evidence_dir" ]; then
+		return 0
+	fi
+	"$bin" probe evidence --manifest "$evidence_manifest" --html "$evidence_report"
 }
 
 cleanup() {
@@ -281,6 +293,7 @@ if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; t
 		evidence_accounts="$evidence_dir/accounts-list.json"
 		evidence_smoke="$evidence_dir/accounts-smoke.json"
 		evidence_manifest="$evidence_dir/manifest.json"
+		evidence_report="$evidence_dir/report.html"
 	fi
 	capture_evidence "health.json" "$bin" health --json --require-secret-backend "$backend" || true
 	capture_evidence "accounts-list.json" "$bin" accounts --secret-backend "$backend" codex list --json || true
@@ -308,6 +321,7 @@ if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; t
 			;;
 	esac
 	write_evidence_manifest "failed" "live-codex-preflight" "readiness gaps: accounts, quota, SecretStore, or daemon/Web readiness" || true
+	write_failure_evidence_report || true
 	write_summary "failed" "live-codex-preflight" "readiness gaps: accounts, quota, SecretStore, or daemon/Web readiness"
 	exit 1
 fi
