@@ -10,13 +10,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/coder/websocket"
 
 	"github.com/codingagentprotocol/capd/internal/config"
 	"github.com/codingagentprotocol/capd/internal/daemon"
+	"github.com/codingagentprotocol/capd/internal/security"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
+
+const browserScopedTokenTTL = 12 * time.Hour
 
 func daemonWSURL(cfg config.Config) string {
 	u := url.URL{
@@ -72,6 +76,10 @@ func localPageURLWithParams(cfg config.Config, token, path string, params map[st
 
 func daemonAddr(cfg config.Config) string {
 	return net.JoinHostPort(cfg.Host, fmt.Sprint(cfg.Port))
+}
+
+func scopedBrowserToken(rootToken, scope string) (string, error) {
+	return security.MintScopedToken(rootToken, scope, browserScopedTokenTTL, time.Now())
 }
 
 func daemonConnectError(cfg config.Config, token string, err error) error {

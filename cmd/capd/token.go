@@ -8,6 +8,7 @@ import (
 
 	"github.com/codingagentprotocol/capd/internal/config"
 	"github.com/codingagentprotocol/capd/internal/daemon"
+	"github.com/codingagentprotocol/capd/internal/security"
 )
 
 func newTokenCmd() *cobra.Command {
@@ -21,7 +22,11 @@ func newTokenCmd() *cobra.Command {
 				return err
 			}
 			if url {
-				fmt.Fprintln(cmd.OutOrStdout(), consoleURL(config.Load(), token))
+				scoped, err := scopedBrowserToken(token, security.TokenScopeConsole)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), consoleURL(config.Load(), scoped))
 				return nil
 			}
 			home, err := daemon.Home()
@@ -32,6 +37,6 @@ func newTokenCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&url, "url", false, "print a local console URL with the token query parameter")
+	cmd.Flags().BoolVar(&url, "url", false, "print a local console URL with a scoped token query parameter")
 	return cmd
 }

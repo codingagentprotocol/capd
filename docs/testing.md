@@ -138,6 +138,9 @@ diagnostics without repeated OS credential prompts. Their ordinary next steps
 prefer `capd doctor --prompt-free`; use the console's `就绪门禁`, the probe's
 `Readiness`, `--readiness`, or `--require-secret-backend native` when you
 intentionally want the native SecretStore gate.
+`capd console` and `capd token --url` generate signed scoped URL tokens for the
+browser instead of embedding the raw daemon token; the raw `~/.capd/token`
+remains the full-scope token for CLI clients and backward compatibility.
 The full console also has a diagnostic package viewer for pasting live selftest
 `manifest.json` or `summary.json` output and checking the recorded route, probe,
 doctor, smoke, generated `report.html`, and SecretStore evidence artifact paths

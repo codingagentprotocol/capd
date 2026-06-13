@@ -8,6 +8,7 @@ import (
 
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/discovery"
+	"github.com/codingagentprotocol/capd/internal/security"
 	"github.com/codingagentprotocol/capd/internal/session"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
@@ -29,6 +30,9 @@ func (s *Server) dispatch(ctx context.Context, client *wsClient, req *protocol.R
 func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Request) (any, *protocol.Error) {
 	if !client.initialized && req.Method != protocol.MethodInitialize {
 		return nil, protocol.NewError(protocol.CodeInvalidRequest, "initialize must be the first request")
+	}
+	if !clientScopeAllows(client.auth.Scope, req.Method) {
+		return nil, protocol.NewError(protocol.CodeUnauthorized, "token scope %q cannot call %s", client.auth.Scope, req.Method)
 	}
 
 	switch req.Method {
@@ -402,6 +406,46 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 
 	default:
 		return nil, protocol.NewError(protocol.CodeMethodNotFound, "unknown method %q", req.Method)
+	}
+}
+
+func clientScopeAllows(scope, method string) bool {
+	switch scope {
+	case "", security.TokenScopeFull:
+		return true
+	case security.TokenScopeProbeRead:
+		switch method {
+		case protocol.MethodInitialize,
+			protocol.MethodAgentsList,
+			protocol.MethodAgentsRoute,
+			protocol.MethodAccountsList,
+			protocol.MethodAccountsCheck:
+			return true
+		default:
+			return false
+		}
+	case security.TokenScopeConsole, security.TokenScopeConsoleRead:
+		switch method {
+		case protocol.MethodInitialize,
+			protocol.MethodAgentsList,
+			protocol.MethodAgentsRoute,
+			protocol.MethodAgentsUsage,
+			protocol.MethodAccountsList,
+			protocol.MethodAccountsImport,
+			protocol.MethodAccountsCurrent,
+			protocol.MethodAccountsProject,
+			protocol.MethodAccountsCheck,
+			protocol.MethodAccountsQuota,
+			protocol.MethodAccountsRemove,
+			protocol.MethodSessionList,
+			protocol.MethodSessionAttach,
+			protocol.MethodSessionHistory:
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
 	}
 }
 

@@ -108,7 +108,7 @@ contexts.
 **Design:**
 
 - Keep the current local token for compatibility.
-- Add optional token scopes such as `console:read`, `sessions:write`,
+- Add optional token scopes such as `console`, `probe:read`, `sessions:write`,
   `accounts:read`, and `accounts:readiness`.
 - Let console URLs carry the narrowest token needed for the page.
 
@@ -200,7 +200,7 @@ it is considered supported.
 1. Done: add route-evidence compatibility tests around real `agents route` JSON.
 2. Done: add a `capd support bundle` command that packages safe evidence,
    health, route, prompt-free doctor, optional probe data, and HTML reports.
-3. Add scoped daemon tokens for console/probe URLs.
+3. Done: add scoped daemon tokens for console/probe URLs.
 4. Add profile-aware routing metadata and CLI commands.
 5. Add session backpressure stress tests before changing event fan-out internals.
 6. Add adapter conformance fixtures for Codex first, then clone them for other

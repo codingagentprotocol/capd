@@ -25,15 +25,17 @@ environment variable and file. For a guided tour, read the [README](../README.md
 | `--secret-backend` | `CAPD_SECRET_BACKEND`, then `file` | account SecretStore backend for the daemon (`file` or `native`) |
 
 The daemon also serves the local web console at `/console/` and a compact data
-probe at `/probe/`; both connect back to `/ws` with the daemon token, so opening
-either page does not bypass CAP authentication. Page responses are `no-store`
-and include CSP, referrer, permissions, and frame-deny headers because the token
-may be supplied once in the page URL. The console and probe remove that token
-from history, then authenticate the WebSocket with `Sec-WebSocket-Protocol:
-capd.auth.<base64url-token>` instead of putting the token in the WebSocket URL.
+probe at `/probe/`; `capd console` opens them with signed, short-lived scoped
+tokens derived from the root daemon token, so opening either page does not
+bypass CAP authentication or expose the full CLI token. Page responses are
+`no-store` and include CSP, referrer, permissions, and frame-deny headers
+because a scoped token may be supplied once in the page URL. The console and
+probe remove that token from history, then authenticate the WebSocket with
+`Sec-WebSocket-Protocol: capd.auth.<base64url-token>` instead of putting the
+token in the WebSocket URL.
 For automation and simple web validation, `GET /probe/data` returns the same
 safe daemon/account/route diagnostics as JSON and accepts only
-`Authorization: Bearer <daemon-token>`, not query-string tokens.
+`Authorization: Bearer <daemon-token-or-scoped-token>`, not query-string tokens.
 The console exposes account import,
 current-account selection,
 runtime projection, selected or all-account quota refresh, safe account checks,
@@ -224,8 +226,8 @@ running in the daemon), find it with `capd sessions`, re-join with
 |---------|--------|
 | `capd health [--json] [--require-secret-backend <file\|native>]` | prints `ok` when the configured daemon is serving `/healthz`; `--json` includes `ok`, `addr`, and daemon metadata such as version, protocol version, and active SecretStore backend when supported; `--require-secret-backend` fails early when the daemon was started with the wrong backend |
 | `capd secretstore check [--json] [--roundtrip] [--secret-backend <file\|native>] [--require-backend <file\|native>] [--timeout 2m]` | opens the selected SecretStore backend and prints safe readiness evidence. `--roundtrip` writes, reads, and deletes a diagnostic secret; `--require-backend` fails when the active backend differs, making this the smallest direct native SecretStore gate before live account checks. `--timeout` bounds OS credential backend waits, including native prompts. |
-| `capd console [--probe] [--url] [--require-secret-backend <file\|native>]` | opens the local web console, or the compact validation probe with `--probe`, after checking daemon health. By default it passes the daemon token to the browser without printing it; `--url` prints the tokenized URL only when explicitly requested. `--require-secret-backend` preloads the page's readiness gate with the selected SecretStore backend so browser checks match CLI readiness runs. |
-| `capd probe data [--json] [--readiness] [--fail] [--require-secret-backend <file\|native>] [--timeout 2m]` | fetches `/probe/data` with `Authorization: Bearer <daemon-token>` and prints safe diagnostics for automation. Text output includes a compact readiness summary with route candidate count, actual/required SecretStore backend evidence, route-candidate `secretBackend` enums when present, the active `routePolicy` summary when returned, and server JSON errors when available. Without `--readiness`, the endpoint returns `promptFree:true`, labels text output as prompt-free account metadata, and uses cached account metadata plus route evidence without reading account credentials. `--readiness` requests the stronger readiness view and defaults the daemon request to `requireSecretBackend=native`; use `--require-secret-backend file` only for intentional file-backend tests. `--timeout` bounds HTTP waits, and `--fail` exits non-zero when the probe reports `ok=false` or an HTTP error status. |
+| `capd console [--probe] [--url] [--require-secret-backend <file\|native>]` | opens the local web console, or the compact validation probe with `--probe`, after checking daemon health. By default it passes a signed short-lived scoped token to the browser without printing it; `--url` prints that scoped tokenized URL only when explicitly requested. `--probe` uses `probe:read`; the full console uses `console`, which permits bundled console account/diagnostic workflows but rejects agent task-control methods. `--require-secret-backend` preloads the page's readiness gate with the selected SecretStore backend so browser checks match CLI readiness runs. |
+| `capd probe data [--json] [--readiness] [--fail] [--require-secret-backend <file\|native>] [--timeout 2m]` | fetches `/probe/data` with `Authorization: Bearer <daemon-token-or-scoped-token>` and prints safe diagnostics for automation. Text output includes a compact readiness summary with route candidate count, actual/required SecretStore backend evidence, route-candidate `secretBackend` enums when present, the active `routePolicy` summary when returned, and server JSON errors when available. Without `--readiness`, the endpoint returns `promptFree:true`, labels text output as prompt-free account metadata, and uses cached account metadata plus route evidence without reading account credentials. `--readiness` requests the stronger readiness view and defaults the daemon request to `requireSecretBackend=native`; use `--require-secret-backend file` only for intentional file-backend tests. `--timeout` bounds HTTP waits, and `--fail` exits non-zero when the probe reports `ok=false` or an HTTP error status. |
 | `capd probe evidence --manifest <manifest.json\|summary.json> [--artifact <file>]... [--json] [--html <file>] [--fail]` | validates saved live selftest evidence without contacting the daemon. With only `--manifest`, it follows artifact paths from the manifest or summary; relative artifact paths are resolved from the manifest directory, and explicit `--artifact` flags override that list. The report extracts safe route policy, route decision status, route candidate count, fresh quota evidence, repair-plan count, SecretStore backend, daemon mode, and selftest status, and emits a `checks` array for CI/Web consumers. `--html` writes a standalone QA report from the same safe summary without embedding raw artifact JSON. `--fail` exits non-zero when the saved package lacks passed status, backend, daemon mode, routePolicy, routeDecisionOk, routeCandidates, or fresh quota evidence. |
 | `capd support bundle [--out dir] [--require-secret-backend <file\|native>] [--probe-data=false] [--timeout 2m] [--fail]` | collects a redacted local evidence package for debugging and CI handoff. The bundle writes `manifest.json`, `doctor-prompt-free.json`, `agents-route.json`, `health.json`, optional `probe-data.json`, and generated `report.html` into one directory, then validates the package with the same `probe evidence` checks. Collection is prompt-free by default: it does not read per-account SecretStore credentials, and daemon/probe failures are captured as safe JSON artifacts instead of aborting the bundle. `--fail` exits non-zero only after the package is written and the generated evidence report is not ready. |
 | `GET /probe/data` | authenticated HTTP diagnostics endpoint for Web clients and smoke tests. Requires `Authorization: Bearer <daemon-token>`. The ordinary path returns safe JSON health, a compact `summary`, cached account metadata, `agents/route`, `routeCandidates`, `routePolicy`, and pass/fail `checks` without reading SecretStore credentials or projecting runtimes. `?readiness=1` defaults to `requireSecretBackend=native` for the stronger live readiness view and adds the daemon-side `accounts/check` gate; `?readiness=1&requireSecretBackend=file` is reserved for intentional file-backend tests. `requireSecretBackend` accepts only `file` or `native`; unknown values fail fast with HTTP 400 before quota or route checks run. The top-level `summary` reuses the account summary shape for account, quota, auto-route, and SecretStore evidence, then adds route-decision status for the full Web diagnostics path. The handler also bounds server-side work: ordinary probes get 12s and readiness probes get 2m. |
@@ -323,9 +325,12 @@ Transport: `ws://HOST:PORT/ws`, JSON-RPC 2.0. Browser clients should
 authenticate with `Sec-WebSocket-Protocol: capd.auth.<base64url-token>`
 (base64url without padding). Non-browser clients may use `Authorization: Bearer
 TOKEN`; `?token=TOKEN` remains supported for backward compatibility with older
-local clients. The bundled Console and Probe pages accept that query token only
-as a bootstrap path: after reading it they remove `token` from the visible URL
-with `history.replaceState`, send WebSocket auth via the `capd.auth.*`
+local clients. The raw daemon token is `full` scope; signed `console` and
+`probe:read` tokens are accepted for the bundled browser diagnostics and reject
+methods outside their local diagnostic scope. The bundled Console and Probe
+pages accept a query token only as a bootstrap path: after reading it they
+remove `token` from the visible URL with `history.replaceState`, send WebSocket
+auth via the `capd.auth.*`
 subprotocol, and do not persist daemon tokens in localStorage or sessionStorage.
 All session activity arrives as `event` notifications.
 

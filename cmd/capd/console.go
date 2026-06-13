@@ -13,6 +13,7 @@ import (
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/config"
 	"github.com/codingagentprotocol/capd/internal/daemon"
+	"github.com/codingagentprotocol/capd/internal/security"
 )
 
 func newConsoleCmd() *cobra.Command {
@@ -35,17 +36,25 @@ func newConsoleCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			target := consoleURL(cfg, token)
+			scope := security.TokenScopeConsole
+			if probe {
+				scope = security.TokenScopeProbeRead
+			}
+			browserToken, err := scopedBrowserToken(token, scope)
+			if err != nil {
+				return err
+			}
+			target := consoleURL(cfg, browserToken)
 			label := "console"
 			if probe {
-				target = probeURL(cfg, token)
+				target = probeURL(cfg, browserToken)
 				label = "probe"
 			}
 			if requiredBackend != "" {
 				if probe {
-					target = probeURLWithSecretBackend(cfg, token, requiredBackend)
+					target = probeURLWithSecretBackend(cfg, browserToken, requiredBackend)
 				} else {
-					target = consoleURLWithSecretBackend(cfg, token, requiredBackend)
+					target = consoleURLWithSecretBackend(cfg, browserToken, requiredBackend)
 				}
 			}
 			if printURL {

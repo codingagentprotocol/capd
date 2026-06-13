@@ -18,6 +18,7 @@ type wsClient struct {
 	out         chan []byte
 	cancel      context.CancelFunc
 	initialized bool
+	auth        authInfo
 }
 
 // enqueue never blocks: a client that stops reading loses messages rather
@@ -47,7 +48,7 @@ func (c *wsClient) notify(method string, params any) bool {
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	ok, authSubprotocol := s.authorized(r)
+	auth, ok, authSubprotocol := s.authorized(r)
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -69,7 +70,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	client := &wsClient{conn: conn, out: make(chan []byte, 512), cancel: cancel}
+	client := &wsClient{conn: conn, out: make(chan []byte, 512), cancel: cancel, auth: auth}
 	go func() { // writer loop
 		for {
 			select {

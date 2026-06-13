@@ -12,6 +12,7 @@ import (
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/repairplan"
+	"github.com/codingagentprotocol/capd/internal/security"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
@@ -88,7 +89,7 @@ type probeDataError struct {
 
 func (s *Server) handleProbeData(w http.ResponseWriter, r *http.Request) {
 	writeLocalJSONHeaders(w)
-	if !s.authorizedBearer(r) {
+	if !s.authorizedBearerFor(r, security.TokenScopeProbeRead, security.TokenScopeConsole, security.TokenScopeConsoleRead) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok":    false,

@@ -19,6 +19,7 @@ import (
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/adapter"
+	"github.com/codingagentprotocol/capd/internal/security"
 	"github.com/codingagentprotocol/capd/internal/session"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
@@ -225,6 +226,54 @@ func TestProbeDataRequiresAuthorizationHeader(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Fatalf("%s status = %d", target, rec.Code)
 		}
+	}
+}
+
+func TestProbeDataAcceptsScopedProbeReadToken(t *testing.T) {
+	s, _ := newTestServer(t)
+	token, err := security.MintScopedToken("test-token", security.TokenScopeProbeRead, time.Hour, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/probe/data", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	s.handleProbeData(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "test-token") || strings.Contains(rec.Body.String(), token) {
+		t.Fatalf("probe data leaked token: %s", rec.Body.String())
+	}
+}
+
+func TestScopedProbeTokenCannotCallSessionCreate(t *testing.T) {
+	s, _ := newTestServer(t)
+	client := &wsClient{auth: authInfo{Scope: security.TokenScopeProbeRead}}
+	resp := s.dispatch(context.Background(), client, testRequest(protocol.MethodInitialize, protocol.InitializeParams{ProtocolVersion: protocol.Version}))
+	if resp.Error != nil {
+		t.Fatalf("initialize error = %+v", resp.Error)
+	}
+	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake"}))
+	if resp.Error == nil || resp.Error.Code != protocol.CodeUnauthorized || !strings.Contains(resp.Error.Message, "probe:read") {
+		t.Fatalf("session/create response = %+v", resp)
+	}
+}
+
+func TestScopedConsoleTokenAllowsAccountWorkflowButNotTaskControl(t *testing.T) {
+	s, _ := newTestServer(t)
+	client := &wsClient{auth: authInfo{Scope: security.TokenScopeConsole}}
+	resp := s.dispatch(context.Background(), client, testRequest(protocol.MethodInitialize, protocol.InitializeParams{ProtocolVersion: protocol.Version}))
+	if resp.Error != nil {
+		t.Fatalf("initialize error = %+v", resp.Error)
+	}
+	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodAccountsImport, protocol.AccountsImportParams{}))
+	if resp.Error == nil || resp.Error.Code == protocol.CodeUnauthorized {
+		t.Fatalf("accounts/import should pass scope gate and fail later if invalid: %+v", resp)
+	}
+	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: "s_test", Prompt: "x"}))
+	if resp.Error == nil || resp.Error.Code != protocol.CodeUnauthorized || !strings.Contains(resp.Error.Message, security.TokenScopeConsole) {
+		t.Fatalf("task/send response = %+v", resp)
 	}
 }
 
