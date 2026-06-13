@@ -21,6 +21,7 @@ evidence_probe=""
 evidence_doctor=""
 evidence_smoke=""
 evidence_accounts_check=""
+evidence_audit=""
 bin_owned=0
 
 if [ -n "$evidence_dir" ]; then
@@ -75,6 +76,7 @@ write_summary() {
 	evidence_route_json="$(json_escape "$evidence_route")"
 	evidence_probe_json="$(json_escape "$evidence_probe")"
 	evidence_doctor_json="$(json_escape "$evidence_doctor")"
+	evidence_audit_json="$(json_escape "$evidence_audit")"
 	diagnose_json="$(json_escape "$diagnose_secretstore")"
 	run_prompt_json="$(json_escape "$run_prompt")"
 	{
@@ -97,6 +99,7 @@ write_summary() {
 		printf '  "routeEvidencePath": "%s",\n' "$evidence_route_json"
 		printf '  "probeEvidencePath": "%s",\n' "$evidence_probe_json"
 		printf '  "doctorEvidencePath": "%s",\n' "$evidence_doctor_json"
+		printf '  "auditEvidencePath": "%s",\n' "$evidence_audit_json"
 		printf '  "diagnoseSecretStore": "%s",\n' "$diagnose_json"
 		printf '  "runPrompt": "%s"\n' "$run_prompt_json"
 		printf '}\n'
@@ -123,6 +126,7 @@ write_evidence_manifest() {
 	doctor_json="$(json_escape "$(evidence_manifest_path "$evidence_doctor")")"
 	smoke_json="$(json_escape "$(evidence_manifest_path "$evidence_smoke")")"
 	accounts_check_json="$(json_escape "$(evidence_manifest_path "$evidence_accounts_check")")"
+	audit_json="$(json_escape "$(evidence_manifest_path "$evidence_audit")")"
 	report_json="$(json_escape "$(evidence_manifest_path "$evidence_report")")"
 	{
 		printf '{\n'
@@ -143,6 +147,7 @@ write_evidence_manifest() {
 		printf '    "doctor": "%s",\n' "$doctor_json"
 		printf '    "accountsSmoke": "%s",\n' "$smoke_json"
 		printf '    "accountsCheck": "%s",\n' "$accounts_check_json"
+		printf '    "audit": "%s",\n' "$audit_json"
 		printf '    "report": "%s"\n' "$report_json"
 		printf '  }\n'
 		printf '}\n'
@@ -189,6 +194,26 @@ write_repair_plan() {
 	echo "warning: failed to write live repair plan to $repair_plan" >&2
 }
 
+write_audit_evidence() {
+	if [ -z "$evidence_dir" ]; then
+		return 0
+	fi
+	prepare_evidence_dir || return $?
+	evidence_audit="$evidence_dir/audit.json"
+	audit_log="${HOME:-}/.capd/audit.jsonl"
+	{
+		printf '{\n'
+		printf '  "ok": true,\n'
+		printf '  "source": "audit",\n'
+		printf '  "events": [\n'
+		if [ -f "$audit_log" ]; then
+			tail -n 100 "$audit_log" | awk 'NF { if (n++) printf ",\n"; printf "    %s", $0 }'
+		fi
+		printf '\n  ]\n'
+		printf '}\n'
+	} >"$evidence_audit"
+}
+
 write_success_evidence() {
 	if [ -z "$evidence_dir" ]; then
 		return 0
@@ -202,6 +227,7 @@ write_success_evidence() {
 	"$bin" agents route --account auto --require-fresh-quota --json >"$evidence_route" || return $?
 	"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail >"$evidence_probe" || return $?
 	"$bin" doctor --prompt-free --json --fail --require-secret-backend "$backend" --timeout 2m >"$evidence_doctor" || return $?
+	write_audit_evidence || return $?
 }
 
 verify_success_evidence() {
@@ -306,6 +332,7 @@ if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; t
 	capture_evidence "agents-route.json" "$bin" agents route --account auto --require-fresh-quota --json || true
 	capture_evidence "probe-data-prompt-free.json" "$bin" probe data --json --timeout 2m || true
 	capture_evidence "accounts-smoke.json" "$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true
+	write_audit_evidence || true
 	case "$diagnose_secretstore" in
 		1|true|TRUE|yes|YES)
 			if [ -n "$evidence_dir" ]; then

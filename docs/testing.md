@@ -169,6 +169,9 @@ redacted evidence into one directory. It writes prompt-free doctor output,
 route evidence, health, optional `/probe/data`, a portable `manifest.json`, and
 generated `report.html`; daemon failures are recorded as safe JSON artifacts so
 the bundle can still explain what failed.
+Live selftest evidence directories also include `audit.json`, built from recent
+local audit events when available, and `probe evidence` validates that artifact
+with the same unsafe-field checks used for support bundles.
 
 After importing multiple accounts and starting the daemon in another terminal,
 the same live preflight is available without sending a prompt:

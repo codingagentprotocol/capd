@@ -488,6 +488,7 @@ func loadProbeEvidenceManifest(path string) (probeEvidenceManifest, error) {
 			"agentsRoute": "routeEvidencePath",
 			"probeData":   "probeEvidencePath",
 			"doctor":      "doctorEvidencePath",
+			"audit":       "auditEvidencePath",
 			"repairPlan":  "repairPlanPath",
 		} {
 			if value := stringField(data, field); value != "" {
