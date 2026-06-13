@@ -184,6 +184,16 @@ reached `stage`, then overwritten with the final `passed` or `failed` result.
 Set `CAPD_LIVE_REPAIR_PLAN=/tmp/capd-live-repair.json` to persist the
 prompt-free doctor report, including the ordered `repairPlan`, whenever daemon
 startup, backend alignment, preflight, or the optional live prompt fails.
+Set `CAPD_LIVE_EVIDENCE_DIR=/tmp/capd-live-evidence` to persist safe JSON
+evidence artifacts. On success the directory receives the final
+`agents-route.json`, `probe-data-readiness.json`, and `doctor-prompt-free.json`
+outputs, and the summary JSON records their paths. Those files prove the live
+account count, fresh quota gate, active `routePolicy`, route-candidate ordering,
+and SecretStore backend without exposing tokens or reading shell logs. On
+preflight failure, the same directory captures prompt-free failure diagnostics
+such as `accounts-list.json`, `agents-route.json`, `probe-data-prompt-free.json`,
+and `accounts-smoke.json`; enabling `LIVE_DIAGNOSE_SECRETSTORE=1` also captures
+the heavier SecretStore-reading readiness files.
 
 Without real Codex accounts, run the deterministic simulated gate:
 

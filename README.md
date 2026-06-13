@@ -249,7 +249,12 @@ daemon-side accounts/check, and probe diagnostics. Set
 artifact with timestamp, daemon mode, binary, log path, and optional repair-plan
 path for CI or
 long-running tasks; the file is updated with `status:"running"` as each stage
-starts, then overwritten by the final result. `make live-codex-readiness` runs the
+starts, then overwritten by the final result. Set
+`CAPD_LIVE_EVIDENCE_DIR=/tmp/capd-live-evidence` to persist safe JSON evidence
+from the final route gate, `/probe/data` readiness gate, and prompt-free doctor
+report; the summary includes the evidence paths so long tasks can prove account
+count, fresh quota, route policy, route candidates, and SecretStore backend
+without scraping shell logs. `make live-codex-readiness` runs the
 same preflight and then sends the final live prompt. Override the final prompt with
 `LIVE_PROMPT="..." make live-codex-readiness`; override the backend only for
 intentional testing with `LIVE_SECRET_BACKEND=file`. The target runs every live

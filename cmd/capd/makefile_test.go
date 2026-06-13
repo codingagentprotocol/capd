@@ -169,6 +169,10 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`bin="${CAPD_LIVE_DAEMON_BIN:-${TMPDIR:-/tmp}/capd-live-daemon-$$}"`,
 		`summary="${CAPD_LIVE_SUMMARY:-}"`,
 		`repair_plan="${CAPD_LIVE_REPAIR_PLAN:-}"`,
+		`evidence_dir="${CAPD_LIVE_EVIDENCE_DIR:-}"`,
+		`evidence_route=""`,
+		`evidence_probe=""`,
+		`evidence_doctor=""`,
 		"bin_owned=0",
 		`daemon_mode="existing"`,
 		"write_summary()",
@@ -180,12 +184,29 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`"logPath": "%s"`,
 		`"bin": "%s"`,
 		`"repairPlanPath": "%s"`,
+		`"evidenceDir": "%s"`,
+		`"routeEvidencePath": "%s"`,
+		`"probeEvidencePath": "%s"`,
+		`"doctorEvidencePath": "%s"`,
 		`>"$summary"`,
 		`warning: failed to write live summary`,
+		"prepare_evidence_dir()",
+		`mkdir -p "$evidence_dir"`,
+		"capture_evidence()",
+		`path="$evidence_dir/$name"`,
+		`if "$@" >"$path"; then`,
 		"write_repair_plan()",
 		`if [ -z "$repair_plan" ]; then`,
 		`"$bin" doctor --prompt-free --json --fail --require-secret-backend "$backend" --timeout 2m >"$repair_plan" 2>/dev/null`,
 		`warning: failed to write live repair plan`,
+		"write_success_evidence()",
+		`evidence_route="$evidence_dir/agents-route.json"`,
+		`evidence_probe="$evidence_dir/probe-data-readiness.json"`,
+		`evidence_doctor="$evidence_dir/doctor-prompt-free.json"`,
+		`prepare_evidence_dir || return $?`,
+		`"$bin" agents route --account auto --require-fresh-quota --json >"$evidence_route" || return $?`,
+		`"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail >"$evidence_probe" || return $?`,
+		`"$bin" doctor --prompt-free --json --fail --require-secret-backend "$backend" --timeout 2m >"$evidence_doctor" || return $?`,
 		`write_summary "running" "initializing"`,
 		`go build -o "$bin" ./cmd/capd`,
 		`write_summary "running" "daemon-health"`,
@@ -208,6 +229,8 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`write_repair_plan`,
 		`write_summary "running" "live-codex-preflight"`,
 		`write_summary "failed" "live-codex-preflight"`,
+		`capture_evidence "agents-route.json" "$bin" agents route --account auto --require-fresh-quota --json || true`,
+		`capture_evidence "probe-data-prompt-free.json" "$bin" probe data --json --timeout 2m || true`,
 		"readiness gaps to resolve: >=2 imported Codex accounts, fresh quota for auto-route/all accounts, ${backend} SecretStore, and daemon/Web readiness",
 		`diagnose_secretstore="${LIVE_DIAGNOSE_SECRETSTORE:-0}"`,
 		`"$bin" health --json --require-secret-backend "$backend" || true`,
@@ -224,6 +247,9 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`"$bin" run --agent codex --account auto --require-fresh-quota "$prompt"`,
 		`write_summary "running" "live-prompt"`,
 		`write_summary "failed" "live-prompt"`,
+		`write_summary "running" "evidence"`,
+		`if ! write_success_evidence; then`,
+		`write_summary "failed" "evidence"`,
 		`write_summary "passed" "complete"`,
 	} {
 		if !strings.Contains(script, want) {
@@ -232,6 +258,12 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 	}
 	if strings.Contains(script, `if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend"; then`) {
 		t.Fatal("live selftest must pass CAPD_BIN so preflight reuses the tested binary")
+	}
+	promptGate := strings.Index(script, `case "$run_prompt" in`)
+	successEvidence := strings.LastIndex(script, `if ! write_success_evidence; then`)
+	finalPassed := strings.LastIndex(script, `write_summary "passed" "complete"`)
+	if !(promptGate < successEvidence && successEvidence < finalPassed) {
+		t.Fatal("live selftest must write success evidence before final passed summary")
 	}
 	optionalDoctor := `"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true`
 	optionalAccountsCheck := `"$bin" accounts check --json --readiness --require-secret-backend "$backend" --timeout 2m || true`

@@ -11,6 +11,10 @@ log="${CAPD_LIVE_DAEMON_LOG:-${TMPDIR:-/tmp}/capd-live-daemon-$$.log}"
 bin="${CAPD_LIVE_DAEMON_BIN:-${TMPDIR:-/tmp}/capd-live-daemon-$$}"
 summary="${CAPD_LIVE_SUMMARY:-}"
 repair_plan="${CAPD_LIVE_REPAIR_PLAN:-}"
+evidence_dir="${CAPD_LIVE_EVIDENCE_DIR:-}"
+evidence_route=""
+evidence_probe=""
+evidence_doctor=""
 bin_owned=0
 
 export CAPD_HOST="$host"
@@ -39,6 +43,10 @@ write_summary() {
 	log_json="$(json_escape "$log")"
 	bin_json="$(json_escape "$bin")"
 	repair_plan_json="$(json_escape "$repair_plan")"
+	evidence_dir_json="$(json_escape "$evidence_dir")"
+	evidence_route_json="$(json_escape "$evidence_route")"
+	evidence_probe_json="$(json_escape "$evidence_probe")"
+	evidence_doctor_json="$(json_escape "$evidence_doctor")"
 	diagnose_json="$(json_escape "$diagnose_secretstore")"
 	run_prompt_json="$(json_escape "$run_prompt")"
 	{
@@ -55,10 +63,41 @@ write_summary() {
 		printf '  "logPath": "%s",\n' "$log_json"
 		printf '  "bin": "%s",\n' "$bin_json"
 		printf '  "repairPlanPath": "%s",\n' "$repair_plan_json"
+		printf '  "evidenceDir": "%s",\n' "$evidence_dir_json"
+		printf '  "routeEvidencePath": "%s",\n' "$evidence_route_json"
+		printf '  "probeEvidencePath": "%s",\n' "$evidence_probe_json"
+		printf '  "doctorEvidencePath": "%s",\n' "$evidence_doctor_json"
 		printf '  "diagnoseSecretStore": "%s",\n' "$diagnose_json"
 		printf '  "runPrompt": "%s"\n' "$run_prompt_json"
 		printf '}\n'
 	} >"$summary" || echo "warning: failed to write live summary to $summary" >&2
+}
+
+prepare_evidence_dir() {
+	if [ -z "$evidence_dir" ]; then
+		return 0
+	fi
+	mkdir -p "$evidence_dir" || {
+		echo "failed to create live evidence directory: $evidence_dir" >&2
+		return 1
+	}
+}
+
+capture_evidence() {
+	name="$1"
+	shift
+	if [ -z "$evidence_dir" ]; then
+		"$@"
+		return $?
+	fi
+	path="$evidence_dir/$name"
+	if "$@" >"$path"; then
+		cat "$path"
+		return 0
+	fi
+	status=$?
+	cat "$path" || true
+	return "$status"
 }
 
 write_repair_plan() {
@@ -72,6 +111,19 @@ write_repair_plan() {
 		return 0
 	fi
 	echo "warning: failed to write live repair plan to $repair_plan" >&2
+}
+
+write_success_evidence() {
+	if [ -z "$evidence_dir" ]; then
+		return 0
+	fi
+	prepare_evidence_dir || return $?
+	evidence_route="$evidence_dir/agents-route.json"
+	evidence_probe="$evidence_dir/probe-data-readiness.json"
+	evidence_doctor="$evidence_dir/doctor-prompt-free.json"
+	"$bin" agents route --account auto --require-fresh-quota --json >"$evidence_route" || return $?
+	"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail >"$evidence_probe" || return $?
+	"$bin" doctor --prompt-free --json --fail --require-secret-backend "$backend" --timeout 2m >"$evidence_doctor" || return $?
 }
 
 cleanup() {
@@ -143,22 +195,34 @@ write_summary "running" "live-codex-preflight" "running live Codex preflight"
 if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then
 	echo "live-codex-preflight failed; safe diagnostics follow" >&2
 	echo "readiness gaps to resolve: >=2 imported Codex accounts, fresh quota for auto-route/all accounts, ${backend} SecretStore, and daemon/Web readiness" >&2
+	prepare_evidence_dir || true
 	write_repair_plan
 	write_summary "failed" "live-codex-preflight" "readiness gaps: accounts, quota, SecretStore, or daemon/Web readiness"
-	"$bin" health --json --require-secret-backend "$backend" || true
-	"$bin" accounts --secret-backend "$backend" codex list --json || true
-	"$bin" agents route --account auto --require-fresh-quota --json || true
-	"$bin" probe data --json --timeout 2m || true
-	"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true
+	capture_evidence "health.json" "$bin" health --json --require-secret-backend "$backend" || true
+	capture_evidence "accounts-list.json" "$bin" accounts --secret-backend "$backend" codex list --json || true
+	if [ -n "$evidence_dir" ]; then
+		evidence_route="$evidence_dir/agents-route.json"
+		evidence_probe="$evidence_dir/probe-data-prompt-free.json"
+	fi
+	capture_evidence "agents-route.json" "$bin" agents route --account auto --require-fresh-quota --json || true
+	capture_evidence "probe-data-prompt-free.json" "$bin" probe data --json --timeout 2m || true
+	capture_evidence "accounts-smoke.json" "$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true
 	case "$diagnose_secretstore" in
 		1|true|TRUE|yes|YES)
-			"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true
-			"$bin" accounts check --json --readiness --require-secret-backend "$backend" --timeout 2m || true
+			if [ -n "$evidence_dir" ]; then
+				evidence_doctor="$evidence_dir/doctor-secretstore.json"
+			fi
+			capture_evidence "doctor-secretstore.json" "$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true
+			capture_evidence "accounts-check-readiness.json" "$bin" accounts check --json --readiness --require-secret-backend "$backend" --timeout 2m || true
 			if health; then
-				"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true
+				if [ -n "$evidence_dir" ]; then
+					evidence_probe="$evidence_dir/probe-data-readiness.json"
+				fi
+				capture_evidence "probe-data-readiness.json" "$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true
 			fi
 			;;
 	esac
+	write_summary "failed" "live-codex-preflight" "readiness gaps: accounts, quota, SecretStore, or daemon/Web readiness"
 	exit 1
 fi
 
@@ -174,4 +238,10 @@ case "$run_prompt" in
 		;;
 esac
 
+write_summary "running" "evidence" "writing live Codex evidence artifacts"
+if ! write_success_evidence; then
+	write_repair_plan
+	write_summary "failed" "evidence" "failed to write live Codex evidence artifacts"
+	exit 1
+fi
 write_summary "passed" "complete" "live Codex selftest completed"
