@@ -248,8 +248,8 @@ it is considered supported.
     connected clients and session states.
 12. In progress: add deterministic lifecycle fixtures for Claude, Gemini,
     OpenCode, and Cursor once each can run without real credentials. Claude
-    Code-compatible lifecycle and native resume fixtures are now covered with a
-    fake stream-json CLI.
+    Code-compatible lifecycle/native resume and Gemini-family lifecycle
+    fixtures are now covered with fake stream-json CLIs.
 13. Done: add local-only metrics snapshots for event backlog, adapter process
     starts/failures, route decisions, and SecretStore access-denied counts in
     `/healthz?format=json`.
