@@ -140,6 +140,8 @@ The full console also has a diagnostic package viewer for pasting live selftest
 `manifest.json` or `summary.json` output and checking the recorded route, probe,
 doctor, smoke, and SecretStore evidence artifact paths without reading local
 files from the browser.
+Paste the matching artifact JSON into the same viewer to get a compact QA report
+for route policy, route candidates, quota freshness, and repair-plan evidence.
 
 After importing multiple accounts and starting the daemon in another terminal,
 the same live preflight is available without sending a prompt:

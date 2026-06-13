@@ -50,6 +50,7 @@
   #evidencePackage { border:1px solid #30363d; border-radius:8px; padding:10px; margin:0 0 12px; background:#010409; }
   #evidencePackage .head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; color:#e6edf3; }
   #evidencePackage textarea { width:100%; min-height:86px; box-sizing:border-box; resize:vertical; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:8px; font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #evidencePackage textarea#evidenceArtifactsInput { min-height:118px; margin-top:8px; }
   #evidencePackage .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
   #evidenceManifestResult { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:6px; margin-top:8px; }
   #main { display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:12px; align-items:stretch; }
@@ -103,6 +104,7 @@
 <div id="evidencePackage">
   <div class="head"><span>Live selftest evidence manifest</span><span class="empty">paste manifest.json or summary.json</span></div>
   <textarea id="evidenceManifestInput" spellcheck="false" placeholder='{"manifestVersion":1,"status":"passed","artifacts":{"agentsRoute":"..."}}'></textarea>
+  <textarea id="evidenceArtifactsInput" spellcheck="false" placeholder='Optional artifact JSON objects, separated by blank lines. Example: {"routePolicy":{"name":"conservative-quota-pressure"},"routeCandidates":[...]}'></textarea>
   <div class="actions">
     <button id="renderEvidenceManifest">查看诊断包</button>
     <button id="clearEvidenceManifest">清空</button>
@@ -139,6 +141,7 @@ const accountDiagnosticsEl = document.getElementById("accountDiagnostics");
 const readinessChecksEl = document.getElementById("readinessChecks");
 const repairPlanEl = document.getElementById("repairPlan");
 const evidenceManifestInputEl = document.getElementById("evidenceManifestInput");
+const evidenceArtifactsInputEl = document.getElementById("evidenceArtifactsInput");
 const evidenceManifestResultEl = document.getElementById("evidenceManifestResult");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
@@ -1296,7 +1299,8 @@ function renderEvidenceManifest() {
     return;
   }
   const normalized = normalizeEvidenceManifest(parsed);
-  renderEvidenceManifestRows(evidenceManifestRows(normalized));
+  const artifacts = parseEvidenceArtifacts(evidenceArtifactsInputEl.value.trim());
+  renderEvidenceManifestRows(evidenceManifestRows(normalized).concat(evidenceArtifactRows(artifacts)));
 }
 
 function normalizeEvidenceManifest(data) {
@@ -1395,6 +1399,104 @@ function evidenceManifestRows(manifest) {
   return rows;
 }
 
+function parseEvidenceArtifacts(raw) {
+  if (!raw) return { values: [], errors: [] };
+  const values = [];
+  const errors = [];
+  try {
+    const parsed = JSON.parse(raw);
+    return { values: Array.isArray(parsed) ? parsed : [parsed], errors };
+  } catch (_) {}
+  const chunks = raw.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+  for (const [index, chunk] of chunks.entries()) {
+    try {
+      const parsed = JSON.parse(chunk);
+      if (Array.isArray(parsed)) values.push(...parsed);
+      else values.push(parsed);
+    } catch (e) {
+      errors.push(`artifact ${index + 1}: ${e.message || String(e)}`);
+    }
+  }
+  return { values, errors };
+}
+
+function evidenceArtifactRows(parsed) {
+  const rows = [];
+  for (const err of parsed.errors) {
+    rows.push({ name: "artifact JSON", ok: false, evidence: err, nextStep: "paste valid JSON objects separated by blank lines" });
+  }
+  if (parsed.values.length === 0) {
+    rows.push({ name: "artifact details", ok: true, evidence: "no artifact JSON pasted", nextStep: "paste route/probe/doctor JSON for deeper QA evidence" });
+    return rows;
+  }
+  const routeLike = parsed.values.find(v => v && (v.routePolicy || v.routeCandidates || v.accountRoute));
+  const probeLike = parsed.values.find(v => v && (v.summary || v.checks || v.repairPlan));
+  const doctorLike = parsed.values.find(v => v && (v.codex || v.repairPlan || v.issues));
+  const policy = firstValue(parsed.values, v => v && (v.routePolicy || (v.codex && v.codex.routePolicy) || (v.data && v.data.routePolicy)));
+  const candidates = firstValue(parsed.values, v => v && (v.routeCandidates || (v.data && v.data.routeCandidates) || (v.codex && v.codex.routeCandidates)));
+  const summary = firstValue(parsed.values, v => v && (v.summary || (v.data && v.data.summary)));
+  const repairPlan = firstValue(parsed.values, v => v && (v.repairPlan || (v.data && v.data.repairPlan) || (v.codex && v.codex.repairPlan)));
+  rows.push({
+    name: "artifact coverage",
+    ok: !!(routeLike || probeLike || doctorLike),
+    evidence: [
+      routeLike ? "route" : "",
+      probeLike ? "probe" : "",
+      doctorLike ? "doctor" : ""
+    ].filter(Boolean).join(" · ") || "no recognized artifact shape",
+    nextStep: routeLike || probeLike || doctorLike ? "" : "paste agents-route.json, probe-data-readiness.json, or doctor-prompt-free.json"
+  });
+  rows.push({
+    name: "route policy evidence",
+    ok: !!policy,
+    evidence: policy ? routePolicySummary(policy) : "missing routePolicy",
+    nextStep: policy ? "" : "paste route/probe/doctor JSON that includes routePolicy"
+  });
+  rows.push({
+    name: "route candidate evidence",
+    ok: Array.isArray(candidates) && candidates.length > 0,
+    evidence: Array.isArray(candidates) && candidates.length > 0 ? routeCandidateSummary(candidates) : "missing routeCandidates",
+    nextStep: Array.isArray(candidates) && candidates.length > 0 ? "" : "paste agents-route.json or probe data with routeCandidates"
+  });
+  rows.push({
+    name: "quota freshness evidence",
+    ok: quotaEvidenceOK(summary, candidates),
+    evidence: quotaEvidenceText(summary, candidates),
+    nextStep: quotaEvidenceOK(summary, candidates) ? "" : "refresh quota and rerun live selftest or paste fresh probe data"
+  });
+  rows.push({
+    name: "repair plan evidence",
+    ok: Array.isArray(repairPlan),
+    evidence: Array.isArray(repairPlan) ? `${repairPlan.length} steps` : "missing repairPlan",
+    nextStep: Array.isArray(repairPlan) ? "" : "paste probe or doctor JSON to see runnable remediation evidence"
+  });
+  return rows;
+}
+
+function firstValue(values, picker) {
+  for (const value of values) {
+    const picked = picker(value);
+    if (picked) return picked;
+  }
+  return null;
+}
+
+function quotaEvidenceOK(summary, candidates) {
+  if (summary && summary.checkedAccounts > 0 && summary.freshQuotaAccounts === summary.checkedAccounts && summary.autoRouteFresh) return true;
+  return Array.isArray(candidates) && candidates.length > 0 && candidates.every(c => c && c.fresh);
+}
+
+function quotaEvidenceText(summary, candidates) {
+  if (summary) {
+    return `accounts ${summary.checkedAccounts || 0} fresh ${summary.freshQuotaAccounts || 0} stale ${summary.staleQuotaAccounts || 0} missing ${summary.missingQuotaAccounts || 0} autoFresh ${!!summary.autoRouteFresh}`;
+  }
+  if (Array.isArray(candidates) && candidates.length > 0) {
+    const fresh = candidates.filter(c => c && c.fresh).length;
+    return `fresh candidates ${fresh}/${candidates.length}`;
+  }
+  return "missing quota summary";
+}
+
 function renderEvidenceManifestRows(rows) {
   evidenceManifestResultEl.textContent = "";
   for (const row of rows) {
@@ -1453,6 +1555,7 @@ document.getElementById("refreshAllQuota").onclick = refreshAllQuota;
 document.getElementById("renderEvidenceManifest").onclick = renderEvidenceManifest;
 document.getElementById("clearEvidenceManifest").onclick = () => {
   evidenceManifestInputEl.value = "";
+  evidenceArtifactsInputEl.value = "";
   evidenceManifestResultEl.textContent = "";
 };
 document.getElementById("account").onchange = () => { markActiveAccount(); previewRoute(); };

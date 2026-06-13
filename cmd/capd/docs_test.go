@@ -68,6 +68,7 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"diagnostic package viewer",
 		"`manifest.json` or `summary.json`",
 		"without reading local files or exposing daemon tokens",
+		"compact QA report for route policy, route candidates, quota freshness",
 	} {
 		if !strings.Contains(readme, want) {
 			t.Fatalf("README missing prompt-free web refresh contract %q", want)
@@ -105,6 +106,7 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"diagnostic package viewer",
 		"`manifest.json` or `summary.json`",
 		"without reading local\nfiles from the browser",
+		"compact QA report\nfor route policy, route candidates, quota freshness",
 	} {
 		if !strings.Contains(testingDoc, want) {
 			t.Fatalf("testing docs missing prompt-free probe refresh contract %q", want)
