@@ -935,6 +935,8 @@ the native OS backend and keeps the source secret as a rollback path. Add
 			if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil {
 				result.RouteCandidates = candidates
 			}
+			policy := account.DefaultRoutePolicyEvidence()
+			result.RoutePolicy = &policy
 			if requireAllFreshQuota {
 				var stale []string
 				for _, row := range result.Accounts {
@@ -971,6 +973,13 @@ the native OS backend and keeps the source secret as a rollback path. Add
 			}
 			if result.AutoRoute != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s %s (%s)\n", result.AutoRoute.AccountID, smokeRouteEvidenceText(*result.AutoRoute), result.AutoRoute.Reason)
+			}
+			if result.RoutePolicy != nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "route policy: %s ttl=%ds unknown=%.2f tie-break=%.2f\n",
+					result.RoutePolicy.Name,
+					result.RoutePolicy.FreshTTLSeconds,
+					result.RoutePolicy.UnknownScore,
+					result.RoutePolicy.CurrentAccountTieBreak)
 			}
 			if len(result.RouteCandidates) > 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "route candidates:")
@@ -1069,6 +1078,7 @@ type codexSmokeResult struct {
 	SecretBackend   string                          `json:"secretBackend"`
 	AutoRoute       *codexSmokeAutoRoute            `json:"autoRoute,omitempty"`
 	RouteCandidates []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
+	RoutePolicy     *protocol.AccountRoutePolicy    `json:"routePolicy,omitempty"`
 	Accounts        []codexSmokeAccount             `json:"accounts"`
 	Issues          []string                        `json:"issues,omitempty"`
 	NextSteps       []string                        `json:"nextSteps,omitempty"`
@@ -1235,6 +1245,10 @@ func populateCodexSmokeCachedEvidence(result *codexSmokeResult, accounts *accoun
 		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil {
 			result.RouteCandidates = candidates
 		}
+	}
+	if result.RoutePolicy == nil {
+		policy := account.DefaultRoutePolicyEvidence()
+		result.RoutePolicy = &policy
 	}
 }
 

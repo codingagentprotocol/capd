@@ -47,6 +47,7 @@ type probeDataResult struct {
 	RouteDecision   *protocol.AgentRouteResult      `json:"routeDecision,omitempty"`
 	AutoRoute       *protocol.AccountRouteEvidence  `json:"autoRoute,omitempty"`
 	RouteCandidates []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
+	RoutePolicy     *protocol.AccountRoutePolicy    `json:"routePolicy,omitempty"`
 	Checks          []probeDataCheck                `json:"checks"`
 	NextSteps       []string                        `json:"nextSteps,omitempty"`
 	RepairPlan      []protocol.RepairStep           `json:"repairPlan,omitempty"`
@@ -152,6 +153,7 @@ func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBac
 			result.AccountsCheck = &accountsCheck
 			result.AutoRoute = accountsCheck.AutoRoute
 			result.RouteCandidates = accountsCheck.RouteCandidates
+			result.RoutePolicy = accountsCheck.RoutePolicy
 		}
 	} else {
 		params.RefreshQuota = true
@@ -170,6 +172,7 @@ func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBac
 			result.AccountsCheck = &accountsCheck
 			result.AutoRoute = accountsCheck.AutoRoute
 			result.RouteCandidates = accountsCheck.RouteCandidates
+			result.RoutePolicy = accountsCheck.RoutePolicy
 		}
 	}
 	route, perr := s.routeAgent(ctx, protocol.AgentRouteParams{
@@ -185,6 +188,9 @@ func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBac
 			if len(data.RouteCandidates) > 0 {
 				result.RouteCandidates = data.RouteCandidates
 			}
+			if data.RoutePolicy != nil {
+				result.RoutePolicy = data.RoutePolicy
+			}
 		}
 	} else {
 		result.RouteDecision = &route
@@ -193,6 +199,9 @@ func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBac
 		}
 		if len(route.RouteCandidates) > 0 {
 			result.RouteCandidates = route.RouteCandidates
+		}
+		if route.RoutePolicy != nil {
+			result.RoutePolicy = route.RoutePolicy
 		}
 	}
 	result.Checks = probeDataChecks(result, readiness, requireSecretBackend)

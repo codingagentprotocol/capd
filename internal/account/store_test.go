@@ -422,6 +422,23 @@ func TestRoutePolicyCanTuneFreshnessAndTieBreak(t *testing.T) {
 	}
 }
 
+func TestRoutePolicyEvidenceSummary(t *testing.T) {
+	summary := (RoutePolicy{
+		FreshTTL:               45 * time.Minute,
+		UnknownScore:           82,
+		CurrentAccountTieBreak: 0.25,
+	}).EvidenceSummary()
+	if summary.Name != "conservative-quota-pressure" || summary.FreshTTLSeconds != 2700 || summary.UnknownScore != 82 || summary.CurrentAccountTieBreak != 0.25 {
+		t.Fatalf("summary = %+v", summary)
+	}
+	if strings.Join(summary.QuotaWindows, ",") != "primary,secondary,code_review" {
+		t.Fatalf("quota windows = %+v", summary.QuotaWindows)
+	}
+	if !strings.Contains(summary.Scoring, "limiting quota pressure") {
+		t.Fatalf("scoring = %q", summary.Scoring)
+	}
+}
+
 func TestSelectQuotaRouteAccountTreatsInvalidQuotaAsUnknown(t *testing.T) {
 	st := newStore(t)
 	for _, acc := range []Account{

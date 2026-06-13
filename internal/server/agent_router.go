@@ -119,6 +119,8 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 	if selectedAccount.ID != "" && s.opts.Accounts != nil {
 		evidence := account.QuotaRouteEvidence(s.opts.Accounts, selectedAccount)
 		result.AccountRoute = &evidence
+		policy := account.DefaultRoutePolicyEvidence()
+		result.RoutePolicy = &policy
 		if candidates, err := account.QuotaRouteCandidates(s.opts.Accounts, codexauth.Provider); err == nil {
 			result.RouteCandidates = candidates
 		}
@@ -157,7 +159,8 @@ func (s *Server) routeFreshQuotaError(acc account.Account) *protocol.Error {
 		return perr
 	}
 	evidence := account.QuotaRouteEvidence(s.opts.Accounts, acc)
-	data := protocol.AgentRouteErrorData{AccountRoute: &evidence}
+	policy := account.DefaultRoutePolicyEvidence()
+	data := protocol.AgentRouteErrorData{AccountRoute: &evidence, RoutePolicy: &policy}
 	if ref, err := secret.ParseRef(acc.SecretRef); err == nil {
 		data.SecretBackend = ref.Backend
 	}

@@ -348,7 +348,7 @@ No params. → `{"agents": [{"id", "name", "bin", "version", "available", "capab
 Ask capd to pick an installed agent. Params mirror route signals:
 `{"prompt", "attachments", "accountId", "model", "effort", "capabilities", "prefer", "requireFreshQuota"}`.
 
-→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"accountId": "codex-acct", "secretBackend": "native", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "secondaryUsedPercent": 4, "codeReviewUsedPercent": 0, "limitingUsedPercent": 12, "limitingQuotaDimension": "primary", "score": 12, "checkedAt": 1781170000, "reason": "auto account codex-acct primary 12%"}, "routeCandidates": [{"accountId": "codex-acct", "secretBackend": "native", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "limitingUsedPercent": 12, "limitingQuotaDimension": "primary", "score": 12, "checkedAt": 1781170000, "reason": "auto account codex-acct primary 12%"}], "reason": "matched capabilities: effort, review"}`
+→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"accountId": "codex-acct", "secretBackend": "native", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "secondaryUsedPercent": 4, "codeReviewUsedPercent": 0, "limitingUsedPercent": 12, "limitingQuotaDimension": "primary", "score": 12, "checkedAt": 1781170000, "reason": "auto account codex-acct primary 12%"}, "routeCandidates": [{"accountId": "codex-acct", "secretBackend": "native", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "limitingUsedPercent": 12, "limitingQuotaDimension": "primary", "score": 12, "checkedAt": 1781170000, "reason": "auto account codex-acct primary 12%"}], "routePolicy": {"name": "conservative-quota-pressure", "freshTtlSeconds": 1800, "unknownScore": 75, "currentAccountTieBreak": 0.01, "quotaWindows": ["primary", "secondary", "code_review"]}, "reason": "matched capabilities: effort, review"}`
 
 When `accountId` is present, routing is account-aware and currently selects
 Codex only, because imported account runtimes are Codex-specific. Use
@@ -359,9 +359,10 @@ receive a conservative unknown score until `accounts/quota` or `agents/usage`
 refreshes them. Set `requireFreshQuota:true`
 with `accountId:"auto"` to fail instead of routing on missing or stale quota;
 that fresh-quota error includes safe `data.accountRoute`,
-`data.routeCandidates`, and `data.secretBackend` evidence so clients can show
-the stale or missing quota state and choose the matching readiness backend
-without exposing token material or SecretStore refs.
+`data.routeCandidates`, `data.routePolicy`, and `data.secretBackend` evidence
+so clients can show the stale or missing quota state, explain the active scoring
+policy, and choose the matching readiness backend without exposing token
+material or SecretStore refs.
 When account routing is in play, `accountRoute` reports the selected
 `accountId`, score, `quotaState` (`fresh`, `stale`, or `missing`), freshness,
 optional primary usage percent, and optional checked timestamp without exposing
@@ -372,7 +373,9 @@ fresh limiting quota percentage, missing/stale cached quota, or current-account
 tie-break. `routeCandidates` contains the same safe evidence for every
 imported candidate account, sorted by the same conservative score used for
 selection; when routing succeeds, `accountRoute` should match the first
-candidate.
+candidate. `routePolicy` is safe to display and describes the active
+deterministic policy: policy name, quota windows, freshness TTL, unknown quota
+score, and current-account tie-break.
 
 ### `agents/usage`
 

@@ -115,13 +115,24 @@ type AgentRouteResult struct {
 	AccountID       string                 `json:"accountId,omitempty"`
 	AccountRoute    *AccountRouteEvidence  `json:"accountRoute,omitempty"`
 	RouteCandidates []AccountRouteEvidence `json:"routeCandidates,omitempty"`
+	RoutePolicy     *AccountRoutePolicy    `json:"routePolicy,omitempty"`
 	Reason          string                 `json:"reason"`
 }
 
 type AgentRouteErrorData struct {
 	AccountRoute    *AccountRouteEvidence  `json:"accountRoute,omitempty"`
 	RouteCandidates []AccountRouteEvidence `json:"routeCandidates,omitempty"`
+	RoutePolicy     *AccountRoutePolicy    `json:"routePolicy,omitempty"`
 	SecretBackend   string                 `json:"secretBackend,omitempty"`
+}
+
+type AccountRoutePolicy struct {
+	Name                   string   `json:"name"`
+	Scoring                string   `json:"scoring"`
+	QuotaWindows           []string `json:"quotaWindows,omitempty"`
+	FreshTTLSeconds        int64    `json:"freshTtlSeconds"`
+	UnknownScore           float64  `json:"unknownScore"`
+	CurrentAccountTieBreak float64  `json:"currentAccountTieBreak"`
 }
 
 type AccountRouteEvidence struct {
@@ -215,6 +226,7 @@ type AccountsCheckResult struct {
 	Summary          AccountsCheckSummary   `json:"summary"`
 	AutoRoute        *AccountRouteEvidence  `json:"autoRoute,omitempty"`
 	RouteCandidates  []AccountRouteEvidence `json:"routeCandidates,omitempty"`
+	RoutePolicy      *AccountRoutePolicy    `json:"routePolicy,omitempty"`
 	RepairPlan       []RepairStep           `json:"repairPlan,omitempty"`
 	Accounts         []AccountCheckEvidence `json:"accounts"`
 }

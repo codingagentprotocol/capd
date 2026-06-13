@@ -85,6 +85,9 @@ func TestRouteCLIAccountAutoSelectsFreshLowestQuotaCodex(t *testing.T) {
 	if len(result.RouteCandidates) != 2 || result.RouteCandidates[0].AccountID != "codex-low" || result.RouteCandidates[1].AccountID != "codex-test" {
 		t.Fatalf("route candidates = %+v", result.RouteCandidates)
 	}
+	if result.RoutePolicy == nil || result.RoutePolicy.Name != "conservative-quota-pressure" || result.RoutePolicy.UnknownScore != 75 {
+		t.Fatalf("route policy = %+v", result.RoutePolicy)
+	}
 	if !strings.Contains(result.Reason, "primary 3%") {
 		t.Fatalf("reason = %q", result.Reason)
 	}

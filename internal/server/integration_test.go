@@ -719,6 +719,9 @@ func TestAgentsRouteWithAccountRequiresCodex(t *testing.T) {
 	if routed.AccountRoute == nil || routed.AccountRoute.AccountID != "codex-test" || routed.AccountRoute.QuotaState != protocol.AccountQuotaStateMissing || routed.AccountRoute.Fresh || routed.AccountRoute.PrimaryUsedPercent != nil {
 		t.Fatalf("account route = %+v", routed.AccountRoute)
 	}
+	if routed.RoutePolicy == nil || routed.RoutePolicy.Name != "conservative-quota-pressure" || routed.RoutePolicy.FreshTTLSeconds != int64(account.QuotaRouteCacheTTL/time.Second) {
+		t.Fatalf("route policy = %+v", routed.RoutePolicy)
+	}
 }
 
 func TestAgentsRouteAutoAccountChoosesLowestCachedQuota(t *testing.T) {
@@ -767,6 +770,9 @@ func TestAgentsRouteAutoAccountRequireFreshQuota(t *testing.T) {
 	}
 	if len(data.RouteCandidates) != 1 || data.RouteCandidates[0].AccountID != "codex-test" || data.RouteCandidates[0].SecretBackend != secret.BackendFile || data.RouteCandidates[0].QuotaState != protocol.AccountQuotaStateMissing {
 		t.Fatalf("fresh quota error data routeCandidates = %+v", data.RouteCandidates)
+	}
+	if data.RoutePolicy == nil || data.RoutePolicy.UnknownScore != 75 {
+		t.Fatalf("fresh quota error data routePolicy = %+v", data.RoutePolicy)
 	}
 	raw, err := json.Marshal(resp.Error.Data)
 	if err != nil {

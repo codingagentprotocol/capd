@@ -188,6 +188,7 @@ type doctorCodexReport struct {
 	AutoRouteCodeReview      *float64                        `json:"autoRouteCodeReviewUsedPercent,omitempty"`
 	AutoRouteLimiting        *float64                        `json:"autoRouteLimitingUsedPercent,omitempty"`
 	AutoRouteLimitingWindow  string                          `json:"autoRouteLimitingQuotaDimension,omitempty"`
+	RoutePolicy              *protocol.AccountRoutePolicy    `json:"routePolicy,omitempty"`
 	RouteCandidates          []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
 }
 
@@ -419,6 +420,8 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			report.Codex.AutoRouteLimiting = evidence.LimitingUsedPercent
 			report.Codex.AutoRouteLimitingWindow = evidence.LimitingQuotaDimension
 			report.Codex.AutoRouteReason = account.QuotaRouteReason(accounts, route)
+			policy := account.DefaultRoutePolicyEvidence()
+			report.Codex.RoutePolicy = &policy
 			if !report.Codex.AutoRouteFresh {
 				autoRouteFreshIssue = true
 			}
@@ -892,6 +895,13 @@ func printDoctorReport(cmd *cobra.Command, report doctorReport) {
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s quota=%s fresh=%t score=%.2f%s%s %s\n",
 			report.Codex.AutoRouteAccountID, report.Codex.AutoRouteQuotaState, report.Codex.AutoRouteFresh, report.Codex.AutoRouteScore, primary, limiting, report.Codex.AutoRouteReason)
+	}
+	if report.Codex.RoutePolicy != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "route policy: %s ttl=%ds unknown=%.2f tie-break=%.2f\n",
+			report.Codex.RoutePolicy.Name,
+			report.Codex.RoutePolicy.FreshTTLSeconds,
+			report.Codex.RoutePolicy.UnknownScore,
+			report.Codex.RoutePolicy.CurrentAccountTieBreak)
 	}
 	if len(report.Codex.RouteCandidates) > 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "route candidates:")

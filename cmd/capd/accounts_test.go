@@ -2126,6 +2126,9 @@ func TestCodexAccountsSmokeJSONIncludesAutoRouteEvidence(t *testing.T) {
 	if result.AutoRoute.Reason != "auto account codex-low primary 4%" {
 		t.Fatalf("auto route reason = %q", result.AutoRoute.Reason)
 	}
+	if result.RoutePolicy == nil || result.RoutePolicy.Name != "conservative-quota-pressure" || result.RoutePolicy.FreshTTLSeconds != int64(account.QuotaRouteCacheTTL/time.Second) {
+		t.Fatalf("route policy = %+v", result.RoutePolicy)
+	}
 }
 
 func TestCodexAccountsSmokeJSONSortsAccountsByID(t *testing.T) {

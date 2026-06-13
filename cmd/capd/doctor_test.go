@@ -580,6 +580,9 @@ func TestDoctorReportsMultiAccountQuotaAndAutoRoute(t *testing.T) {
 	if report.Codex.AutoRouteReason != "auto account codex-low primary 5%" {
 		t.Fatalf("codex route reason = %q", report.Codex.AutoRouteReason)
 	}
+	if report.Codex.RoutePolicy == nil || report.Codex.RoutePolicy.Name != "conservative-quota-pressure" || report.Codex.RoutePolicy.UnknownScore != 75 {
+		t.Fatalf("route policy = %+v", report.Codex.RoutePolicy)
+	}
 	if len(report.Codex.RouteCandidates) != 2 {
 		t.Fatalf("route candidates = %+v", report.Codex.RouteCandidates)
 	}

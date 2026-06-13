@@ -36,6 +36,22 @@ var DefaultQuotaRoutePolicy = RoutePolicy{
 	CurrentAccountTieBreak: currentTieBreak,
 }
 
+func DefaultRoutePolicyEvidence() protocol.AccountRoutePolicy {
+	return DefaultQuotaRoutePolicy.EvidenceSummary()
+}
+
+func (p RoutePolicy) EvidenceSummary() protocol.AccountRoutePolicy {
+	p = p.normalized()
+	return protocol.AccountRoutePolicy{
+		Name:                   "conservative-quota-pressure",
+		Scoring:                "lowest fresh limiting quota pressure; stale or missing quota uses unknownScore; current account receives a small tie-break",
+		QuotaWindows:           []string{"primary", "secondary", "code_review"},
+		FreshTTLSeconds:        int64(p.FreshTTL / time.Second),
+		UnknownScore:           p.UnknownScore,
+		CurrentAccountTieBreak: p.CurrentAccountTieBreak,
+	}
+}
+
 // SelectQuotaRouteAccount picks the provider account with the lowest routing
 // score. Fresh quota uses the highest pressure across known quota windows;
 // missing or stale quota is assigned a conservative unknown score, and the

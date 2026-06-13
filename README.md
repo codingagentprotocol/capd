@@ -473,8 +473,8 @@ flowchart TB
   do not dominate routing. The daemon projects that account into a dedicated
   `CODEX_HOME`. `agents/route` and `accounts/check` return `routeCandidates`
   sorted by the same score rule with safe `reason`, limiting quota-window
-  evidence, and safe `secretBackend` enum for each parseable candidate, and
-  `session/create` returns the resolved `accountId` so
+  evidence, a safe `routePolicy` summary, and safe `secretBackend` enum for
+  each parseable candidate, and `session/create` returns the resolved `accountId` so
   clients can audit auto-route choices without another lookup. The Codex app-server profile pool
   keeps it isolated from other accounts.
 

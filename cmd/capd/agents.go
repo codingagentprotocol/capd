@@ -412,6 +412,8 @@ func routeCLI(infos []protocol.AgentInfo, accounts *account.Store, params routeC
 	if selectedAccount.ID != "" && accounts != nil {
 		evidence := account.QuotaRouteEvidence(accounts, selectedAccount)
 		result.AccountRoute = &evidence
+		policy := account.DefaultRoutePolicyEvidence()
+		result.RoutePolicy = &policy
 		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil {
 			result.RouteCandidates = candidates
 		}
@@ -425,6 +427,8 @@ func routeCLIFreshQuotaError(accounts *account.Store, acc account.Account) error
 	if accounts != nil && acc.ID != "" {
 		route := account.QuotaRouteEvidence(accounts, acc)
 		data.AccountRoute = &route
+		policy := account.DefaultRoutePolicyEvidence()
+		data.RoutePolicy = &policy
 		lines = append(lines, "route: "+routeEvidenceText(route))
 		if candidates, err := account.QuotaRouteCandidates(accounts, codexauth.Provider); err == nil && len(candidates) > 0 {
 			data.RouteCandidates = candidates

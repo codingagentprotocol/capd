@@ -465,6 +465,10 @@ func accountsCheckErrorWithEvidence(perr *protocol.Error, result protocol.Accoun
 }
 
 func accountsCheckWithSummaryAndRepairPlan(result protocol.AccountsCheckResult, params protocol.AccountsCheckParams) protocol.AccountsCheckResult {
+	if result.AutoRoute != nil || len(result.RouteCandidates) > 0 {
+		policy := account.DefaultRoutePolicyEvidence()
+		result.RoutePolicy = &policy
+	}
 	result.Summary = accountsCheckSummary(result, params)
 	result.RepairPlan = accountsCheckRepairPlan(result, params)
 	return result

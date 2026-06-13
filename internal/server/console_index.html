@@ -387,8 +387,10 @@ async function checkAccounts(readinessGate = false) {
     }
     const result = await call("accounts/check", params);
     const route = result.autoRoute ? ` · auto ${result.autoRoute.accountId || ""} ${routeEvidenceSummary(result.autoRoute)}` : "";
+    const policy = routePolicySummary(result.routePolicy);
     if (readinessGate) line("ev-sys", `· readiness quota refreshed ${result.quotaRefreshed ? "yes" : "no"}`);
     line("ev-sys", `· 账号检查完成 ${result.checkedAccounts} 个${route}`);
+    if (policy) line("ev-sys", `· route policy ${policy}`);
     const evidence = accountCheckSummary(result.accounts || []);
     if (evidence) line("ev-sys", `· quota evidence ${evidence}`);
     renderAccountDiagnostics(result);
@@ -399,7 +401,9 @@ async function checkAccounts(readinessGate = false) {
     line("ev-err", `✗ ${label}: ${e.message || JSON.stringify(e)}`);
     if (e.data) {
       const route = e.data.autoRoute ? ` · auto ${e.data.autoRoute.accountId || ""} ${routeEvidenceSummary(e.data.autoRoute)}` : "";
+      const policy = routePolicySummary(e.data.routePolicy);
       line("ev-sys", `· partial evidence ${e.data.checkedAccounts || 0} 个${route}`);
+      if (policy) line("ev-sys", `· route policy ${policy}`);
       const evidence = accountCheckSummary(e.data.accounts || []);
       if (evidence) line("ev-sys", `· partial quota evidence ${evidence}`);
       renderAccountDiagnostics(e.data);
@@ -929,6 +933,8 @@ function routeDecisionSummary(routed) {
   if (routed.accountRoute) parts.push(routeEvidenceSummary(routed.accountRoute));
   const candidates = routeCandidateSummary(routed.routeCandidates);
   if (candidates) parts.push(`candidates ${candidates}`);
+  const policy = routePolicySummary(routed.routePolicy);
+  if (policy) parts.push(`policy ${policy}`);
   if (routed.reason) parts.push(routed.reason);
   return parts.join(" · ");
 }
@@ -949,6 +955,17 @@ function routeEvidenceSummary(route) {
   if (hasNumber(route.score)) parts.push(`score ${route.score}`);
   if (route.checkedAt) parts.push(`checked ${new Date(route.checkedAt * 1000).toLocaleString()}`);
   if (route.reason) parts.push(route.reason);
+  return parts.join(" ");
+}
+
+function routePolicySummary(policy) {
+  if (!policy) return "";
+  const parts = [];
+  if (policy.name) parts.push(policy.name);
+  if (hasNumber(policy.freshTtlSeconds)) parts.push(`ttl ${policy.freshTtlSeconds}s`);
+  if (hasNumber(policy.unknownScore)) parts.push(`unknown ${policy.unknownScore}`);
+  if (hasNumber(policy.currentAccountTieBreak)) parts.push(`tie ${policy.currentAccountTieBreak}`);
+  if (Array.isArray(policy.quotaWindows) && policy.quotaWindows.length) parts.push(`windows ${policy.quotaWindows.join("/")}`);
   return parts.join(" ");
 }
 
