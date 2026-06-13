@@ -133,6 +133,9 @@ type probeEvidenceReport struct {
 	RouteDecisionOK bool                         `json:"routeDecisionOk"`
 	QuotaFresh      bool                         `json:"quotaFresh"`
 	RepairPlanSteps int                          `json:"repairPlanSteps"`
+	AuditPresent    bool                         `json:"auditPresent"`
+	AuditEvents     int                          `json:"auditEvents"`
+	AuditSafe       bool                         `json:"auditSafe"`
 	Issues          []string                     `json:"issues,omitempty"`
 }
 
@@ -164,6 +167,8 @@ type probeEvidenceArtifact struct {
 	RouteDecisionOK bool   `json:"routeDecisionOk"`
 	QuotaFresh      bool   `json:"quotaFresh"`
 	RepairPlanSteps int    `json:"repairPlanSteps"`
+	AuditEvents     int    `json:"auditEvents,omitempty"`
+	AuditSafe       bool   `json:"auditSafe,omitempty"`
 }
 
 type probeDataOptions struct {
@@ -410,6 +415,13 @@ func loadProbeEvidenceReport(manifestPath string, artifactPaths []string) (probe
 		if artifact.RouteDecisionOK {
 			report.RouteDecisionOK = true
 		}
+		if artifact.Kind == "audit" {
+			report.AuditPresent = true
+			report.AuditEvents += artifact.AuditEvents
+			if artifact.AuditSafe {
+				report.AuditSafe = true
+			}
+		}
 	}
 	report.Checks = probeEvidenceChecks(report)
 	report.Issues = probeEvidenceIssues(report.Checks)
@@ -420,7 +432,7 @@ func loadProbeEvidenceReport(manifestPath string, artifactPaths []string) (probe
 func manifestArtifactPaths(manifest probeEvidenceManifest) []string {
 	seen := map[string]bool{}
 	paths := []string{}
-	for _, key := range []string{"agentsRoute", "probeData", "doctor", "accountsSmoke", "accountsCheck", "health", "accountsList"} {
+	for _, key := range []string{"agentsRoute", "probeData", "doctor", "accountsSmoke", "accountsCheck", "health", "accountsList", "audit"} {
 		path := resolveManifestArtifactPath(manifest, manifest.Artifacts[key])
 		if path == "" || seen[path] {
 			continue
@@ -497,6 +509,11 @@ func loadProbeEvidenceArtifact(path string) (probeEvidenceArtifact, error) {
 		return probeEvidenceArtifact{}, fmt.Errorf("decode evidence artifact %s: %w", path, err)
 	}
 	artifact := probeEvidenceArtifact{Path: path, Kind: probeEvidenceArtifactKind(data)}
+	if artifact.Kind == "audit" {
+		artifact.AuditEvents = auditEventCount(data)
+		artifact.AuditSafe = auditArtifactSafe(raw)
+		return artifact, nil
+	}
 	artifact.RoutePolicy = mapHasNested(data, "routePolicy") || mapHasNested(data, "codex", "routePolicy") || mapHasNested(data, "data", "routePolicy")
 	candidates := firstArray(data, []string{"routeCandidates"}, []string{"data", "routeCandidates"}, []string{"codex", "routeCandidates"})
 	artifact.RouteCandidates = len(candidates)
@@ -563,6 +580,8 @@ func probeEvidenceArtifactKind(data map[string]any) string {
 		return "probe"
 	case mapHasNested(data, "codex"):
 		return "doctor"
+	case stringField(data, "source") == "audit" || mapHasNested(data, "events"):
+		return "audit"
 	default:
 		return "unknown"
 	}
@@ -578,10 +597,17 @@ func printProbeEvidenceReport(cmd *cobra.Command, report probeEvidenceReport) {
 	fmt.Fprintf(cmd.OutOrStdout(), "route decision: %t\n", report.RouteDecisionOK)
 	fmt.Fprintf(cmd.OutOrStdout(), "quota fresh: %t\n", report.QuotaFresh)
 	fmt.Fprintf(cmd.OutOrStdout(), "repair plan: %d steps\n", report.RepairPlanSteps)
+	if report.AuditPresent {
+		fmt.Fprintf(cmd.OutOrStdout(), "audit events: %d safe=%t\n", report.AuditEvents, report.AuditSafe)
+	}
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ARTIFACT\tKIND\tPOLICY\tCANDIDATES\tFRESH\tROUTE\tQUOTA\tREPAIR")
+	fmt.Fprintln(w, "ARTIFACT\tKIND\tPOLICY\tCANDIDATES\tFRESH\tROUTE\tQUOTA\tREPAIR\tAUDIT")
 	for _, artifact := range report.Artifacts {
-		fmt.Fprintf(w, "%s\t%s\t%t\t%d\t%d\t%t\t%t\t%d\n", artifact.Path, artifact.Kind, artifact.RoutePolicy, artifact.RouteCandidates, artifact.FreshCandidates, artifact.RouteDecisionOK, artifact.QuotaFresh, artifact.RepairPlanSteps)
+		auditSummary := ""
+		if artifact.Kind == "audit" {
+			auditSummary = fmt.Sprintf("%d safe=%t", artifact.AuditEvents, artifact.AuditSafe)
+		}
+		fmt.Fprintf(w, "%s\t%s\t%t\t%d\t%d\t%t\t%t\t%d\t%s\n", artifact.Path, artifact.Kind, artifact.RoutePolicy, artifact.RouteCandidates, artifact.FreshCandidates, artifact.RouteDecisionOK, artifact.QuotaFresh, artifact.RepairPlanSteps, auditSummary)
 	}
 	_ = w.Flush()
 	checks := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
@@ -654,6 +680,7 @@ tr:last-child td{border-bottom:0} code{font-family:ui-monospace,SFMono-Regular,M
   <div class="metric"><span class="muted">Route decision</span><b>{{.RouteDecisionOK}}</b></div>
   <div class="metric"><span class="muted">Quota fresh</span><b>{{.QuotaFresh}}</b></div>
   <div class="metric"><span class="muted">Repair steps</span><b>{{.RepairPlanSteps}}</b></div>
+  <div class="metric"><span class="muted">Audit events</span><b>{{.AuditEvents}}</b></div>
 </div>
 {{if .RoutePolicy}}<h2>Route Policy</h2><p><code>{{routePolicyHTML .RoutePolicy}}</code></p>{{end}}
 <h2>Checks</h2>
@@ -663,8 +690,8 @@ tr:last-child td{border-bottom:0} code{font-family:ui-monospace,SFMono-Regular,M
 </table>
 <h2>Artifacts</h2>
 <table>
-<thead><tr><th>Path</th><th>Kind</th><th>Policy</th><th>Candidates</th><th>Fresh</th><th>Route</th><th>Quota</th><th>Repair</th></tr></thead>
-<tbody>{{range .Artifacts}}<tr><td><code>{{.Path}}</code></td><td>{{.Kind}}</td><td>{{.RoutePolicy}}</td><td>{{.RouteCandidates}}</td><td>{{.FreshCandidates}}</td><td>{{.RouteDecisionOK}}</td><td>{{.QuotaFresh}}</td><td>{{.RepairPlanSteps}}</td></tr>{{end}}</tbody>
+<thead><tr><th>Path</th><th>Kind</th><th>Policy</th><th>Candidates</th><th>Fresh</th><th>Route</th><th>Quota</th><th>Repair</th><th>Audit</th></tr></thead>
+<tbody>{{range .Artifacts}}<tr><td><code>{{.Path}}</code></td><td>{{.Kind}}</td><td>{{.RoutePolicy}}</td><td>{{.RouteCandidates}}</td><td>{{.FreshCandidates}}</td><td>{{.RouteDecisionOK}}</td><td>{{.QuotaFresh}}</td><td>{{.RepairPlanSteps}}</td><td>{{if eq .Kind "audit"}}{{.AuditEvents}} safe={{.AuditSafe}}{{end}}</td></tr>{{end}}</tbody>
 </table>
 {{if .Issues}}<h2>Issues</h2><ul>{{range .Issues}}<li>{{.}}</li>{{end}}</ul>{{end}}
 </main>
@@ -715,6 +742,12 @@ func probeEvidenceChecks(report probeEvidenceReport) []probeEvidenceCheck {
 			Evidence: fmt.Sprintf("quotaFresh=%t", report.QuotaFresh),
 			NextStep: missingEvidenceStep(report.QuotaFresh, "refresh quota and rerun make live-codex-selftest"),
 		},
+		{
+			Name:     "audit metadata",
+			OK:       !report.AuditPresent || report.AuditSafe,
+			Evidence: auditEvidence(report),
+			NextStep: missingEvidenceStep(!report.AuditPresent || report.AuditSafe, "regenerate support bundle after removing unsafe audit artifact fields"),
+		},
 	}
 }
 
@@ -744,9 +777,18 @@ func (check probeEvidenceCheck) EvidenceIssue() string {
 		return "routeDecisionOk evidence missing"
 	case "quota freshness":
 		return "fresh quota evidence missing"
+	case "audit metadata":
+		return "audit metadata contains unsafe evidence"
 	default:
 		return check.Name + " failed"
 	}
+}
+
+func auditEvidence(report probeEvidenceReport) string {
+	if !report.AuditPresent {
+		return "not included"
+	}
+	return fmt.Sprintf("%d events safe=%t", report.AuditEvents, report.AuditSafe)
 }
 
 func routePolicyEvidence(policy *protocol.AccountRoutePolicy) string {
@@ -754,6 +796,36 @@ func routePolicyEvidence(policy *protocol.AccountRoutePolicy) string {
 		return "missing"
 	}
 	return routePolicyText(*policy)
+}
+
+func auditEventCount(data map[string]any) int {
+	if events := firstArray(data, []string{"events"}, []string{"data", "events"}); len(events) > 0 {
+		return len(events)
+	}
+	return 0
+}
+
+func auditArtifactSafe(raw []byte) bool {
+	lower := strings.ToLower(string(raw))
+	for _, term := range []string{
+		"access_token",
+		"refresh_token",
+		"secretref",
+		"secret_ref",
+		"authjson",
+		"rawauth",
+		"raw_auth",
+		"localpath",
+		"local_path",
+		"credential",
+		"/users/",
+		"\\\\users\\\\",
+	} {
+		if strings.Contains(lower, term) {
+			return false
+		}
+	}
+	return true
 }
 
 func missingEvidenceStep(ok bool, step string) string {

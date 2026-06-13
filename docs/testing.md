@@ -158,6 +158,9 @@ For automation, `capd probe evidence --manifest
 listed artifacts and exits non-zero when route policy, route candidates, fresh
 quota evidence, route decision evidence, backend, daemon mode, or a passed
 selftest status is missing.
+When a support bundle includes `audit.json`, the same report counts audit events
+and fails unsafe audit evidence containing access tokens, SecretStore refs, raw
+auth fields, credential strings, or local paths.
 Add `--html /tmp/capd-live-evidence/report.html` to write a standalone QA
 report from the same safe summary without embedding raw artifact JSON.
 For support handoff or CI artifacts, `capd support bundle --out
