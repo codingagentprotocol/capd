@@ -810,7 +810,7 @@ func TestAccountsCheckJSONErrorSuggestsSecondAccountSafely(t *testing.T) {
 		t.Fatalf("json error output = %q: %v", out.String(), err)
 	}
 	for _, want := range []string{
-		"import another Codex account through CAP with: capd accounts import --auth /path/to/auth.json",
+		daemonSecondImportNextStep(),
 		"or import locally with: import a second Codex account with: capd accounts codex import --auth /path/to/auth.json",
 	} {
 		if !containsString(failure.NextSteps, want) {
@@ -987,7 +987,7 @@ func TestAccountsImportCallsDaemonRPCWithRepeatedAuthFlags(t *testing.T) {
 func TestAccountsImportNextStep(t *testing.T) {
 	cases := map[int]string{
 		0: "",
-		1: "import a second Codex account with: capd accounts import --auth /path/to/auth.json",
+		1: daemonSecondImportNextStep(),
 		2: "verify readiness with: capd accounts check --json --readiness --timeout 2m",
 		3: "verify readiness with: capd accounts check --json --readiness --timeout 2m",
 	}

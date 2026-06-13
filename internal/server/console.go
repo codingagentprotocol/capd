@@ -312,12 +312,13 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 		credentialBackend = secretBackend
 	}
 	runtimeReady, runtimeEvidence := accountRuntimeEvidence(checked, accounts)
+	multiAccountImportStep := "import at least two accounts with: capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json, or batch import with: CAPD_CODEX_AUTH_PATHS=/path/a/auth.json:/path/b/auth.json capd accounts import"
 	checks := []probeDataCheck{
 		{Name: "daemon health", OK: true, Evidence: "health ok"},
 		{Name: probeAccountDataCheckName(result.PromptFree), OK: result.AccountsCheck != nil, Evidence: checkedEvidence(checked, secretBackend, secretStates), NextStep: missingStep(result.AccountsCheck != nil, "start capd with account support enabled")},
 		{Name: "account credentials", OK: result.PromptFree || credentialReady, Evidence: promptFreeEvidence(result.PromptFree, credentialEvidence, "not checked in prompt-free probe"), NextStep: missingStep(result.PromptFree || credentialReady, probeCredentialNextStep(accounts, credentialBackend))},
 		{Name: "account runtime", OK: result.PromptFree || runtimeReady, Evidence: promptFreeEvidence(result.PromptFree, runtimeEvidence, "not checked in prompt-free probe"), NextStep: missingStep(result.PromptFree || runtimeReady, "project account runtimes with accounts/project or rerun accounts/check")},
-		{Name: "multi-account readiness", OK: !readiness || checked >= 2, Evidence: countEvidence(checked, 2), NextStep: missingStep(!readiness || checked >= 2, "import at least two accounts with: capd accounts import --auth /path/a --auth /path/b")},
+		{Name: "multi-account readiness", OK: !readiness || checked >= 2, Evidence: countEvidence(checked, 2), NextStep: missingStep(!readiness || checked >= 2, multiAccountImportStep)},
 		{Name: "quota freshness", OK: !readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), Evidence: quotaFreshEvidence(quotaFresh, len(accounts)), NextStep: missingStep(!readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), "refresh and verify daemon-side readiness with: "+routeReadinessCommand)},
 		{Name: "auto route data", OK: autoRoute != nil, Evidence: routeEvidenceTextPtr(autoRoute), NextStep: missingStep(autoRoute != nil, "import accounts, then preview with: capd agents route --account auto --json")},
 		{Name: "auto route fresh", OK: !readiness || routeFresh, Evidence: routeEvidenceTextPtr(autoRoute), NextStep: missingStep(!readiness || routeFresh, "refresh and verify daemon-side readiness with: "+routeReadinessCommand)},

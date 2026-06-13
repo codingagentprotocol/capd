@@ -350,7 +350,7 @@ func accountsCheckErrorNextSteps(message string, partial protocol.AccountsCheckR
 		if requiredBackend != "" {
 			backend = requiredBackend
 		}
-		steps = append(steps, "import another Codex account through CAP with: capd accounts import --auth /path/to/auth.json")
+		steps = append(steps, daemonSecondImportNextStep())
 		if backend != "" {
 			steps = append(steps, "or import locally with: "+codexLocalImportNextStep(backend, true))
 		}
@@ -410,6 +410,10 @@ func accountsCheckReadinessCommandFromEnv() string {
 		backend = ""
 	}
 	return accountsCheckReadinessCommand(backend)
+}
+
+func daemonSecondImportNextStep() string {
+	return "import another Codex account through CAP with: capd accounts import --auth /path/to/auth.json, or batch import with: CAPD_CODEX_AUTH_PATHS=/path/a/auth.json" + string(os.PathListSeparator) + "/path/b/auth.json capd accounts import"
 }
 
 func accountsCheckHasSecretState(result protocol.AccountsCheckResult, state string) bool {
@@ -992,7 +996,7 @@ func accountsImportNextStep(importedAccounts int) string {
 		return ""
 	}
 	if importedAccounts < 2 {
-		return "import a second Codex account with: capd accounts import --auth /path/to/auth.json"
+		return daemonSecondImportNextStep()
 	}
 	return "verify readiness with: " + accountsCheckReadinessCommandFromEnv()
 }

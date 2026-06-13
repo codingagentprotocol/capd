@@ -598,9 +598,9 @@ func doctorImportNextStep(daemonOK bool, requireSecretBackend string) string {
 
 func doctorSecondImportNextStep(daemonOK bool, requireSecretBackend string) string {
 	if daemonOK {
-		return "import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-preflight"
+		return daemonSecondImportNextStep() + ", then run: make live-codex-preflight"
 	}
-	return doctorStartDaemonNextStep(requireSecretBackend) + ", then import a second Codex account through CAP with: capd accounts import --auth /path/to/auth.json, then run: make live-codex-preflight"
+	return doctorStartDaemonNextStep(requireSecretBackend) + ", then " + daemonSecondImportNextStep() + ", then run: make live-codex-preflight"
 }
 
 func doctorAccountImportCheckNextStep(imported int, daemonOK bool, requireSecretBackend string) string {
