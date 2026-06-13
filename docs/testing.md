@@ -177,7 +177,7 @@ route-candidate reason evidence, concurrent CAP `accounts/quota all` plus fresh 
 guards, quota RawJSON redaction, invalid quota percent hardening, daemon-side
 `accounts/check` readiness, doctor CAP/WebSocket account checks, WebSocket
 disconnect/reconnect session continuity, Web probe readiness summaries, probe native SecretStore defaults,
-`/healthz` backend gates, direct smoke route-candidate evidence, CLI shortcut
+SecretStore recovery next steps, `/healthz` backend gates, direct smoke route-candidate evidence, CLI shortcut
 parameters, direct SecretStore JSON roundtrip, migration
 readback-before-metadata-update safety, browser token cleanup documentation, and
 secret-leak guards with local test backends.

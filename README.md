@@ -181,8 +181,9 @@ coverage, run `make verify-secretstore`; for a no-real-account Codex
 multi-account quota/routing/readiness regression, run
 `make verify-codex-readiness-sim`. That simulated gate also covers the safe Web
 Console/Probe prompt-free refresh contract, Web probe summaries, probe
-readiness SecretStore defaults, `/healthz` backend requirement, and direct
-SecretStore JSON roundtrip without touching live Codex accounts.
+readiness SecretStore defaults, SecretStore recovery next steps, `/healthz`
+backend requirement, and direct SecretStore JSON roundtrip without touching live
+Codex accounts.
 `capd doctor --json --fail --timeout 2m` is a safe
 readiness audit for live Codex work: it checks daemon health, Codex CLI
 availability, imported account count, per-account SecretStore credential
