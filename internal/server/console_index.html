@@ -716,11 +716,13 @@ function boolWord(value) {
 
 function accountCheckSummary(accounts) {
   return accounts.map(a => {
-    const parts = [a.id || "unknown", a.quotaState || "missing"];
+    const parts = [a.id || "unknown", accountQuotaState(a)];
     if (a.secretState) parts.push(`secret ${a.secretState}`);
-    if (typeof a.quotaFresh === "boolean") parts.push(a.quotaFresh ? "fresh" : "not-fresh");
-    if (hasNumber(a.primaryUsedPercent)) parts.push(`primary ${a.primaryUsedPercent}%`);
-    if (a.quotaCheckedAt) parts.push(`checked ${new Date(a.quotaCheckedAt * 1000).toLocaleString()}`);
+    if (typeof a.quotaFresh === "boolean") parts.push(accountQuotaFresh(a) ? "fresh" : "not-fresh");
+    const primary = accountPrimaryUsedPercent(a);
+    const checkedAt = accountQuotaCheckedAt(a);
+    if (hasNumber(primary)) parts.push(`primary ${primary}%`);
+    if (checkedAt) parts.push(`checked ${new Date(checkedAt * 1000).toLocaleString()}`);
     return parts.join(" ");
   }).join(" · ");
 }
@@ -902,7 +904,7 @@ function accountQuotaFresh(a) {
 }
 
 function accountQuotaCheckedAt(a) {
-  return (a && a.quotaCheckedAt) || (a && a.quota && a.quota.checkedAt) || 0;
+  return (a && a.quotaCheckedAt) || (a && a.checkedAt) || (a && a.quota && a.quota.checkedAt) || 0;
 }
 
 function accountPrimaryUsedPercent(a) {
@@ -1024,8 +1026,22 @@ async function refreshAllQuota() {
     await loadAccounts();
   } catch (e) {
     line("ev-err", `✗ quota 批量刷新失败: ${e.message || JSON.stringify(e)}`);
+    renderQuotaAllPartialFailure(e.data);
   } finally {
     button.disabled = false;
+  }
+}
+
+function renderQuotaAllPartialFailure(data) {
+  if (!data) return;
+  const refreshed = data.refreshed || data.accounts || [];
+  if (refreshed.length) {
+    line("ev-sys", `· quota partial refreshed ${refreshed.length} 个`);
+    line("ev-sys", `· quota partial evidence ${accountCheckSummary(refreshed)}`);
+  }
+  if (data.failedAccount) line("ev-sys", `· quota failed account ${data.failedAccount}`);
+  if (Array.isArray(data.nextSteps)) {
+    for (const step of data.nextSteps) line("ev-sys", `· next ${step}`);
   }
 }
 
