@@ -176,6 +176,7 @@ func TestReferenceDocsCoverRunFreshQuotaRecovery(t *testing.T) {
 	for _, want := range []string{
 		"`--account auto --require-fresh-quota` fails",
 		"`capd accounts check --json --readiness`",
+		"`LIVE_SECRET_BACKEND=<backend> make live-codex-preflight`",
 		"`capd agents route --account auto --require-fresh-quota --json`",
 		"prints any safe daemon-provided\n`accountRoute`, `routeCandidates`, and `secretBackend` evidence",
 		"prefer that safe account\nSecretStore backend when present",

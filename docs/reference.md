@@ -155,6 +155,8 @@ that point back to the shared readiness path and prefer that safe account
 SecretStore backend when present:
 `capd accounts check --json --readiness` to refresh and verify daemon-side quota
 evidence, or
+`LIVE_SECRET_BACKEND=<backend> make live-codex-preflight` to run the full
+multi-account/SecretStore/Web readiness chain before the final prompt, or
 `capd agents route --account auto --require-fresh-quota --json` to preview the
 route gate before sending another prompt.
 

@@ -252,7 +252,7 @@ func runTaskErrorWithNextStep(err error, o runOpts) error {
 		return nil
 	}
 	if o.requireFreshQuota && strings.Contains(strings.ToLower(err.Error()), "fresh") {
-		return fmt.Errorf("%w%s\nnext: refresh and verify daemon-side readiness with: %s\nnext: preview routing with: capd agents route --account auto --require-fresh-quota --json", err, runTaskRouteErrorEvidence(err), runTaskReadinessCommand(err))
+		return fmt.Errorf("%w%s\nnext: refresh and verify daemon-side readiness with: %s\nnext: run full live preflight with: %s\nnext: preview routing with: capd agents route --account auto --require-fresh-quota --json", err, runTaskRouteErrorEvidence(err), runTaskReadinessCommand(err), runTaskLivePreflightCommand(err))
 	}
 	return err
 }
@@ -262,6 +262,21 @@ func runTaskReadinessCommand(err error) string {
 		return accountsCheckReadinessCommand(backend)
 	}
 	return accountsCheckReadinessCommandFromEnv()
+}
+
+func runTaskLivePreflightCommand(err error) string {
+	backend := runTaskRouteSecretBackend(err)
+	if backend == "" {
+		var normalizeErr error
+		backend, normalizeErr = secret.NormalizeBackend(os.Getenv(secret.EnvBackend))
+		if normalizeErr != nil {
+			backend = ""
+		}
+	}
+	if backend == "" {
+		return "make live-codex-preflight"
+	}
+	return "LIVE_SECRET_BACKEND=" + backend + " make live-codex-preflight"
 }
 
 func runTaskRouteSecretBackend(err error) string {
