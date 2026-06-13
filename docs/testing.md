@@ -163,8 +163,8 @@ to `go run ./cmd/capd`; pass `CAPD_BIN=./capd` to validate a specific build.
 If preflight fails, the selftest prints a prompt-free readiness gap summary
 first, then daemon health, safe Codex account metadata, fresh route gate JSON,
 and smoke JSON. Set `LIVE_DIAGNOSE_SECRETSTORE=1` only when you want the
-additional doctor/probe readiness diagnostics that may touch native SecretStore
-prompts.
+additional doctor, daemon-side accounts/check, and probe readiness diagnostics
+that may touch native SecretStore prompts.
 
 Without real Codex accounts, run the deterministic simulated gate:
 
@@ -207,8 +207,8 @@ summary, daemon health, safe `capd accounts codex list --json` metadata, and
 the multi-account smoke gate; by default it does not run SecretStore-reading
 checks. Set `LIVE_DIAGNOSE_SECRETSTORE=1` when you want failure diagnostics to
 also run SecretStore-reading checks such as
-`capd doctor --json --fail --verify-secretstore` and authenticated
-`/probe/data` readiness.
+`capd doctor --json --fail --verify-secretstore`, `capd accounts check --json
+--readiness`, and authenticated `/probe/data` readiness.
 If a daemon is already healthy on the target port but reports a different
 SecretStore backend, the selftest fails immediately and asks you to restart
 that daemon instead of trying to start a second process on the same port.

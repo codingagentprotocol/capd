@@ -183,6 +183,7 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`,
 		`case "$diagnose_secretstore" in`,
 		`"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true`,
+		`"$bin" accounts check --json --readiness --require-secret-backend "$backend" --timeout 2m || true`,
 		`"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true`,
 		`LIVE_RUN_PROMPT`,
 		`if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then`,
@@ -196,9 +197,10 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		t.Fatal("live selftest must pass CAPD_BIN so preflight reuses the tested binary")
 	}
 	optionalDoctor := `"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true`
+	optionalAccountsCheck := `"$bin" accounts check --json --readiness --require-secret-backend "$backend" --timeout 2m || true`
 	optionalProbe := `"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true`
 	gate := strings.Index(script, `case "$diagnose_secretstore" in`)
-	if strings.Index(script, optionalDoctor) < gate || strings.Index(script, optionalProbe) < gate {
+	if strings.Index(script, optionalDoctor) < gate || strings.Index(script, optionalAccountsCheck) < gate || strings.Index(script, optionalProbe) < gate {
 		t.Fatal("live selftest must keep prompt-prone diagnostics behind optional SecretStore gate")
 	}
 	failureStart := strings.Index(script, "live-codex-preflight failed; safe diagnostics follow")
@@ -210,7 +212,7 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		strings.Index(defaultFailureBlock, `"$bin" agents route --account auto --require-fresh-quota --json || true`) < strings.Index(defaultFailureBlock, `"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`)) {
 		t.Fatal("live selftest default failure diagnostics must show fresh route evidence between account list and smoke")
 	}
-	for _, forbidden := range []string{`"$bin" doctor `, `"$bin" probe data --json --readiness`} {
+	for _, forbidden := range []string{`"$bin" doctor `, `"$bin" accounts check --json --readiness`, `"$bin" probe data --json --readiness`} {
 		if strings.Contains(defaultFailureBlock, forbidden) {
 			t.Fatalf("live selftest default failure diagnostics must stay prompt-free, found %q", forbidden)
 		}

@@ -79,6 +79,7 @@ if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; t
 	case "$diagnose_secretstore" in
 		1|true|TRUE|yes|YES)
 			"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true
+			"$bin" accounts check --json --readiness --require-secret-backend "$backend" --timeout 2m || true
 			if health; then
 				"$bin" probe data --json --readiness --require-secret-backend "$backend" --timeout 2m --fail || true
 			fi
