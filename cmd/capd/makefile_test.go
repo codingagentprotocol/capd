@@ -163,18 +163,26 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 	script := string(data)
 	for _, want := range []string{
 		`bin="${CAPD_LIVE_DAEMON_BIN:-${TMPDIR:-/tmp}/capd-live-daemon-$$}"`,
+		`summary="${CAPD_LIVE_SUMMARY:-}"`,
 		"bin_owned=0",
+		"write_summary()",
+		`if [ -z "$summary" ]; then`,
+		`>"$summary"`,
 		`go build -o "$bin" ./cmd/capd`,
 		`"$bin" health --json --require-secret-backend "$backend"`,
 		"health_any_backend()",
 		"but not with ${backend} SecretStore",
 		`"$bin" health --json >&2 || true`,
 		"restart it with: capd start --secret-backend $backend",
+		`write_summary "failed" "secret-backend"`,
 		`"$bin" start --host "$host" --port "$port" --secret-backend "$backend"`,
+		`write_summary "failed" "daemon-health"`,
+		`write_summary "failed" "daemon-start"`,
 		`kill "$daemon_pid"`,
 		`if [ "$bin_owned" -eq 1 ]; then`,
 		`rm -f "$bin"`,
 		"live-codex-preflight failed; safe diagnostics follow",
+		`write_summary "failed" "live-codex-preflight"`,
 		"readiness gaps to resolve: >=2 imported Codex accounts, fresh quota for auto-route/all accounts, ${backend} SecretStore, and daemon/Web readiness",
 		`diagnose_secretstore="${LIVE_DIAGNOSE_SECRETSTORE:-0}"`,
 		`"$bin" health --json --require-secret-backend "$backend" || true`,
@@ -189,6 +197,8 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`LIVE_RUN_PROMPT`,
 		`if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then`,
 		`"$bin" run --agent codex --account auto --require-fresh-quota "$prompt"`,
+		`write_summary "failed" "live-prompt"`,
+		`write_summary "passed" "complete"`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("live selftest script missing safety contract %q", want)

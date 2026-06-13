@@ -9,6 +9,7 @@ host="${CAPD_HOST:-127.0.0.1}"
 port="${CAPD_PORT:-7777}"
 log="${CAPD_LIVE_DAEMON_LOG:-${TMPDIR:-/tmp}/capd-live-daemon-$$.log}"
 bin="${CAPD_LIVE_DAEMON_BIN:-${TMPDIR:-/tmp}/capd-live-daemon-$$}"
+summary="${CAPD_LIVE_SUMMARY:-}"
 bin_owned=0
 
 export CAPD_HOST="$host"
@@ -16,6 +17,36 @@ export CAPD_PORT="$port"
 export CAPD_SECRET_BACKEND="$backend"
 
 daemon_pid=""
+
+json_escape() {
+	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+write_summary() {
+	if [ -z "$summary" ]; then
+		return 0
+	fi
+	status="$(json_escape "$1")"
+	stage="$(json_escape "$2")"
+	detail="$(json_escape "${3:-}")"
+	backend_json="$(json_escape "$backend")"
+	host_json="$(json_escape "$host")"
+	port_json="$(json_escape "$port")"
+	diagnose_json="$(json_escape "$diagnose_secretstore")"
+	run_prompt_json="$(json_escape "$run_prompt")"
+	{
+		printf '{\n'
+		printf '  "status": "%s",\n' "$status"
+		printf '  "stage": "%s",\n' "$stage"
+		printf '  "detail": "%s",\n' "$detail"
+		printf '  "backend": "%s",\n' "$backend_json"
+		printf '  "host": "%s",\n' "$host_json"
+		printf '  "port": "%s",\n' "$port_json"
+		printf '  "diagnoseSecretStore": "%s",\n' "$diagnose_json"
+		printf '  "runPrompt": "%s"\n' "$run_prompt_json"
+		printf '}\n'
+	} >"$summary"
+}
 
 cleanup() {
 	if [ -n "$daemon_pid" ]; then
@@ -47,6 +78,7 @@ elif health_any_backend; then
 	echo "capd daemon is running at ${host}:${port}, but not with ${backend} SecretStore" >&2
 	"$bin" health --json >&2 || true
 	echo "restart it with: capd start --secret-backend $backend" >&2
+	write_summary "failed" "secret-backend" "daemon is running with a different SecretStore backend"
 	exit 1
 else
 	echo "starting temporary capd daemon at ${host}:${port} with ${backend} SecretStore"
@@ -58,11 +90,13 @@ else
 		if [ "$i" -ge 40 ]; then
 			echo "capd daemon did not become healthy; log: $log" >&2
 			tail -n 80 "$log" >&2 || true
+			write_summary "failed" "daemon-health" "temporary daemon did not become healthy"
 			exit 1
 		fi
 		if ! kill -0 "$daemon_pid" >/dev/null 2>&1; then
 			echo "capd daemon exited before becoming healthy; log: $log" >&2
 			tail -n 80 "$log" >&2 || true
+			write_summary "failed" "daemon-start" "temporary daemon exited before becoming healthy"
 			exit 1
 		fi
 		sleep 1
@@ -72,6 +106,7 @@ fi
 if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then
 	echo "live-codex-preflight failed; safe diagnostics follow" >&2
 	echo "readiness gaps to resolve: >=2 imported Codex accounts, fresh quota for auto-route/all accounts, ${backend} SecretStore, and daemon/Web readiness" >&2
+	write_summary "failed" "live-codex-preflight" "readiness gaps: accounts, quota, SecretStore, or daemon/Web readiness"
 	"$bin" health --json --require-secret-backend "$backend" || true
 	"$bin" accounts --secret-backend "$backend" codex list --json || true
 	"$bin" agents route --account auto --require-fresh-quota --json || true
@@ -92,6 +127,11 @@ fi
 case "$run_prompt" in
 	1|true|TRUE|yes|YES)
 		echo "running live Codex prompt with quota-aware auto account"
-		"$bin" run --agent codex --account auto --require-fresh-quota "$prompt"
+		if ! "$bin" run --agent codex --account auto --require-fresh-quota "$prompt"; then
+			write_summary "failed" "live-prompt" "quota-aware Codex prompt failed"
+			exit 1
+		fi
 		;;
 esac
+
+write_summary "passed" "complete" "live Codex selftest completed"

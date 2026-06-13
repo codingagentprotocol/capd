@@ -165,6 +165,10 @@ first, then daemon health, safe Codex account metadata, fresh route gate JSON,
 and smoke JSON. Set `LIVE_DIAGNOSE_SECRETSTORE=1` only when you want the
 additional doctor, daemon-side accounts/check, and probe readiness diagnostics
 that may touch native SecretStore prompts.
+Set `CAPD_LIVE_SUMMARY=/tmp/capd-live-summary.json` to write a small machine-readable
+selftest result with `status`, `stage`, `backend`, `host`, and `port` so CI or
+long-running tasks can tell whether the failure happened in daemon startup,
+preflight, or the final live prompt.
 
 Without real Codex accounts, run the deterministic simulated gate:
 
