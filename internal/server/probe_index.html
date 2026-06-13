@@ -208,6 +208,8 @@ function routePolicyText(policy) {
   if (typeof policy.freshTtlSeconds === "number") bits.push(`ttl ${policy.freshTtlSeconds}s`);
   if (typeof policy.unknownScore === "number") bits.push(`unknown ${policy.unknownScore}`);
   if (typeof policy.currentAccountTieBreak === "number") bits.push(`tie ${policy.currentAccountTieBreak}`);
+  if (typeof policy.recentFailurePenalty === "number") bits.push(`health penalty ${policy.recentFailurePenalty}`);
+  if (typeof policy.recentFailureTtlSeconds === "number") bits.push(`health ttl ${policy.recentFailureTtlSeconds}s`);
   if (Array.isArray(policy.quotaWindows) && policy.quotaWindows.length) bits.push(`windows ${policy.quotaWindows.join("/")}`);
   return bits.join(" ");
 }

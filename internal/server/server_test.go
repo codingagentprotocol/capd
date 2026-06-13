@@ -200,7 +200,7 @@ func TestProbeServedWithSecurityHeaders(t *testing.T) {
 		t.Fatalf("csp = %q", got)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"CAPD Probe", "accounts/check", "accounts/list", "accounts/quota", "agents/usage", "agents/route", "/healthz?format=json", "/probe/data", "Authorization:`Bearer ${TOKEN}`", "fetchProbeData", "httpProbe", "fallbackResult", "fallbackHealth", "http probe error", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "health: fallbackHealth", "protocolVersion", "secretBackend", "secretState", "credentialReadable", "runtimeReady", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "nextSteps", "repairPlan", "repairStepClassification", "repairCommandBinary", "step.execution", "server classified repair step", "manual reason:", "outside repair runner allowlist", "requires --include-final", "expectedEvidence", "checks", "validationRows", "showTests", "daemon health", "account metadata", "account credentials", "account runtime", "not checked in prompt-free refresh", "safe no-prompt audit", "use Readiness only when ready for SecretStore credential checks", "use Readiness only when ready for runtime projection checks", "promptFreeDoctorCommand", "credentialAccessNextStep", "access-denied", "macOS Keychain access was denied", "approve macOS Keychain access, or restart with file SecretStore and re-import accounts", "project account runtimes with accounts/project", "multi-account readiness", "quota freshness", "auto route fresh", "require native secret", "native secret backend", "readiness gate", "rpcError", "e.data", "routeDecision = e.data", "e.data.accountRoute || route", "readinessCommand", "doctorCommand", "capd doctor --prompt-free --json --fail", "capd accounts check --json --readiness", "--require-secret-backend ${backend}", "--timeout 2m", "capd agents route --account auto --require-fresh-quota --json", "capd start --secret-backend native", "deep verify with:", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "routePolicy", "route policy", "routePolicyText", "freshTtlSeconds", "unknownScore", "currentAccountTieBreak", "decision.reason", "readinessSummaryText", "http summary", "summary.ready", "summary.checkedAccounts", "summary.secretBackendOk", "RPC_TIMEOUT_MS = 12000", "LONG_RPC_TIMEOUT_MS = 120000", "rpcTimeoutFor", "lightweightAccountsResult", "accountQuotaState", "accountQuotaFresh", "accountQuotaCheckedAt", "accountPrimaryUsedPercent", "a.quotaState", "a.quotaFresh", "a.quotaCheckedAt", "a.primaryUsedPercent", `call("accounts/list", { provider:"codex" })`, "http probe: skipped for prompt-free refresh", `method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)`, `timeout after ${timeoutMS}ms`, "clearTimeout(pending.timer)"} {
+	for _, want := range []string{"CAPD Probe", "accounts/check", "accounts/list", "accounts/quota", "agents/usage", "agents/route", "/healthz?format=json", "/probe/data", "Authorization:`Bearer ${TOKEN}`", "fetchProbeData", "httpProbe", "fallbackResult", "fallbackHealth", "http probe error", "fetchHealthInfo", "healthEvidence", "health: healthInfo", "health: fallbackHealth", "protocolVersion", "secretBackend", "secretState", "credentialReadable", "runtimeReady", "requireMultiple", "requireAllFreshQuota", "Evidence JSON", "Validation Tests", "Next step", "nextStep", "nextSteps", "repairPlan", "repairStepClassification", "repairCommandBinary", "step.execution", "server classified repair step", "manual reason:", "outside repair runner allowlist", "requires --include-final", "expectedEvidence", "checks", "validationRows", "showTests", "daemon health", "account metadata", "account credentials", "account runtime", "not checked in prompt-free refresh", "safe no-prompt audit", "use Readiness only when ready for SecretStore credential checks", "use Readiness only when ready for runtime projection checks", "promptFreeDoctorCommand", "credentialAccessNextStep", "access-denied", "macOS Keychain access was denied", "approve macOS Keychain access, or restart with file SecretStore and re-import accounts", "project account runtimes with accounts/project", "multi-account readiness", "quota freshness", "auto route fresh", "require native secret", "native secret backend", "readiness gate", "rpcError", "e.data", "routeDecision = e.data", "e.data.accountRoute || route", "readinessCommand", "doctorCommand", "capd doctor --prompt-free --json --fail", "capd accounts check --json --readiness", "--require-secret-backend ${backend}", "--timeout 2m", "capd agents route --account auto --require-fresh-quota --json", "capd start --secret-backend native", "deep verify with:", "nativeSecretNextStep", "readinessError", "routeError", "routeDecision", "routeDecisionText", "routeCandidates", "route candidates", "routeCandidateText", "routePolicy", "route policy", "routePolicyText", "freshTtlSeconds", "unknownScore", "currentAccountTieBreak", "recentFailurePenalty", "recentFailureTtlSeconds", "health penalty", "health ttl", "decision.reason", "readinessSummaryText", "http summary", "summary.ready", "summary.checkedAccounts", "summary.secretBackendOk", "RPC_TIMEOUT_MS = 12000", "LONG_RPC_TIMEOUT_MS = 120000", "rpcTimeoutFor", "lightweightAccountsResult", "accountQuotaState", "accountQuotaFresh", "accountQuotaCheckedAt", "accountPrimaryUsedPercent", "a.quotaState", "a.quotaFresh", "a.quotaCheckedAt", "a.primaryUsedPercent", `call("accounts/list", { provider:"codex" })`, "http probe: skipped for prompt-free refresh", `method === "accounts/check" && (params.refreshQuota || params.requireFreshQuota || params.requireAllFreshQuota || params.requireMultiple)`, `timeout after ${timeoutMS}ms`, "clearTimeout(pending.timer)"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("probe HTML missing %q", want)
 		}
@@ -269,19 +269,51 @@ func TestProbeDataRequiresAuthorizationHeader(t *testing.T) {
 
 func TestProbeDataAcceptsScopedProbeReadToken(t *testing.T) {
 	s, _ := newTestServer(t)
-	token, err := security.MintScopedToken("test-token", security.TokenScopeProbeRead, time.Hour, time.Now())
-	if err != nil {
-		t.Fatal(err)
+	for _, scope := range []string{security.TokenScopeProbeRead, security.TokenScopeConsoleRead, security.TokenScopeConsole} {
+		token, err := security.MintScopedToken("test-token", scope, time.Hour, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/probe/data", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		s.handleProbeData(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status = %d body=%s", scope, rec.Code, rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), "test-token") || strings.Contains(rec.Body.String(), token) {
+			t.Fatalf("%s probe data leaked token: %s", scope, rec.Body.String())
+		}
 	}
-	req := httptest.NewRequest(http.MethodGet, "/probe/data", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := httptest.NewRecorder()
-	s.handleProbeData(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
-	}
-	if strings.Contains(rec.Body.String(), "test-token") || strings.Contains(rec.Body.String(), token) {
-		t.Fatalf("probe data leaked token: %s", rec.Body.String())
+}
+
+func TestBrowserPagesUseOneShotURLTokenAndHeaderAuth(t *testing.T) {
+	for name, html := range map[string]string{
+		"console": consoleHTML,
+		"probe":   probeHTML,
+	} {
+		for _, want := range []string{
+			`const params = new URLSearchParams(location.search);`,
+			`const TOKEN = params.get("token") || "";`,
+			`history.replaceState`,
+			`headers:`,
+			`Authorization:`,
+			"`Bearer ${TOKEN}`",
+		} {
+			if !strings.Contains(html, want) {
+				t.Fatalf("%s page missing browser token contract %q", name, want)
+			}
+		}
+		for _, forbidden := range []string{
+			"localStorage.setItem",
+			"sessionStorage.setItem",
+			`searchParams.set("token", TOKEN)`,
+			"?token=${TOKEN}",
+		} {
+			if strings.Contains(html, forbidden) {
+				t.Fatalf("%s page contains forbidden token persistence %q", name, forbidden)
+			}
+		}
 	}
 }
 
@@ -943,6 +975,10 @@ func TestConsoleStaticContract(t *testing.T) {
 		"freshTtlSeconds",
 		"unknownScore",
 		"currentAccountTieBreak",
+		"recentFailurePenalty",
+		"recentFailureTtlSeconds",
+		"health penalty",
+		"health ttl",
 		"route.primaryUsedPercent",
 		"route.secondaryUsedPercent",
 		"route.codeReviewUsedPercent",

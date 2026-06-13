@@ -1137,6 +1137,8 @@ function routePolicySummary(policy) {
   if (hasNumber(policy.freshTtlSeconds)) parts.push(`ttl ${policy.freshTtlSeconds}s`);
   if (hasNumber(policy.unknownScore)) parts.push(`unknown ${policy.unknownScore}`);
   if (hasNumber(policy.currentAccountTieBreak)) parts.push(`tie ${policy.currentAccountTieBreak}`);
+  if (hasNumber(policy.recentFailurePenalty)) parts.push(`health penalty ${policy.recentFailurePenalty}`);
+  if (hasNumber(policy.recentFailureTtlSeconds)) parts.push(`health ttl ${policy.recentFailureTtlSeconds}s`);
   if (Array.isArray(policy.quotaWindows) && policy.quotaWindows.length) parts.push(`windows ${policy.quotaWindows.join("/")}`);
   return parts.join(" ");
 }
