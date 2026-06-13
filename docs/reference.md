@@ -242,7 +242,11 @@ which is the recommended persistent setup for live multi-account Codex checks.
 If `--secret-backend` is omitted, `capd service install` also honors
 `CAPD_SECRET_BACKEND` at install time and writes the selected backend into the
 service arguments so launchd/systemd/Windows SCM do not need to inherit shell
-environment variables later.
+environment variables later. `install` also accepts and persists `--host`,
+`--port`, and `--origins`; without those flags it captures non-default
+`CAPD_HOST`, `CAPD_PORT`, and `CAPD_ORIGINS` values at install time so Web
+Console, probe, and CAP/WebSocket clients keep using the same address after the
+daemon moves into the background.
 
 ## Environment variables
 

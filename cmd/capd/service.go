@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/config"
@@ -20,11 +21,14 @@ func newServiceCmd() *cobra.Command {
 	for _, action := range []string{"install", "uninstall", "start", "stop", "restart", "status"} {
 		action := action
 		var secretBackend string
+		var host string
+		var port int
+		var origins []string
 		actionCmd := &cobra.Command{
 			Use:   action,
 			Short: action + " the capd service",
 			RunE: func(cmd *cobra.Command, _ []string) error {
-				opts, err := serviceOptionsFor(action, cmd, secretBackend)
+				opts, err := serviceOptionsFor(action, cmd, secretBackend, host, port, origins)
 				if err != nil {
 					return err
 				}
@@ -59,6 +63,9 @@ func newServiceCmd() *cobra.Command {
 		}
 		if action == "install" {
 			actionCmd.Flags().StringVar(&secretBackend, "secret-backend", "", "SecretStore backend for the installed daemon (file or native; default CAPD_SECRET_BACKEND/file)")
+			actionCmd.Flags().StringVar(&host, "host", config.DefaultHost, "address for the installed daemon to bind (default CAPD_HOST/127.0.0.1)")
+			actionCmd.Flags().IntVar(&port, "port", config.DefaultPort, "port for the installed daemon to listen on (default CAPD_PORT/7777)")
+			actionCmd.Flags().StringSliceVar(&origins, "origins", nil, "extra browser origins for the installed daemon WebSocket (default CAPD_ORIGINS)")
 		}
 		cmd.AddCommand(actionCmd)
 	}
@@ -72,24 +79,45 @@ func (noopProgram) Stop(service.Service) error  { return nil }
 
 type serviceOptions struct {
 	SecretBackend string
+	Host          string
+	Port          int
+	Origins       []string
 }
 
-func serviceOptionsFor(action string, cmd *cobra.Command, secretBackendFlag string) (serviceOptions, error) {
+func serviceOptionsFor(action string, cmd *cobra.Command, secretBackendFlag string, hostFlag string, portFlag int, originsFlag []string) (serviceOptions, error) {
 	if action != "install" {
 		return serviceOptions{}, nil
 	}
-	backend := config.Load().SecretBackend
+	cfg := config.Load()
+	backend := cfg.SecretBackend
 	if cmd.Flags().Changed("secret-backend") {
 		backend = secretBackendFlag
 	}
-	if backend == "" {
-		return serviceOptions{}, nil
+	opts := serviceOptions{}
+	if backend != "" {
+		backend, err := secret.NormalizeBackend(backend)
+		if err != nil {
+			return serviceOptions{}, err
+		}
+		opts.SecretBackend = backend
 	}
-	backend, err := secret.NormalizeBackend(backend)
-	if err != nil {
-		return serviceOptions{}, err
+	if cmd.Flags().Changed("host") {
+		cfg.Host = hostFlag
 	}
-	return serviceOptions{SecretBackend: backend}, nil
+	if cmd.Flags().Changed("port") {
+		cfg.Port = portFlag
+	}
+	if cmd.Flags().Changed("origins") {
+		cfg.Origins = originsFlag
+	}
+	if cfg.Host != config.DefaultHost {
+		opts.Host = cfg.Host
+	}
+	if cfg.Port != config.DefaultPort {
+		opts.Port = cfg.Port
+	}
+	opts.Origins = append([]string(nil), cfg.Origins...)
+	return opts, nil
 }
 
 func newService(opts serviceOptions) (service.Service, error) {
@@ -103,6 +131,17 @@ func newService(opts serviceOptions) (service.Service, error) {
 
 func serviceConfig(exe string, opts serviceOptions) *service.Config {
 	args := []string{"start"}
+	if opts.Host != "" {
+		args = append(args, "--host", opts.Host)
+	}
+	if opts.Port != 0 {
+		args = append(args, "--port", strconv.Itoa(opts.Port))
+	}
+	for _, origin := range opts.Origins {
+		if origin != "" {
+			args = append(args, "--origins", origin)
+		}
+	}
 	if opts.SecretBackend != "" {
 		args = append(args, "--secret-backend", opts.SecretBackend)
 	}

@@ -99,6 +99,7 @@ never runs as root):
 capd start --secret-backend native                                  # foreground
 capd service install --secret-backend native && capd service start  # persistent
 # or: CAPD_SECRET_BACKEND=native capd service install && capd service start
+# custom CAPD_HOST / CAPD_PORT / CAPD_ORIGINS are captured at install time
 ```
 
 The local web console is served by the daemon at
