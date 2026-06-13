@@ -67,6 +67,17 @@ func TestSupportBundleWritesSafeEvidencePackage(t *testing.T) {
 	if manifest["status"] != "failed" || manifest["stage"] != "support-bundle" || manifest["daemonMode"] != "external" {
 		t.Fatalf("manifest = %+v", manifest)
 	}
+	artifacts, ok := manifest["artifacts"].(map[string]any)
+	if !ok || artifacts["audit"] != "audit.json" {
+		t.Fatalf("manifest missing audit artifact: %+v", manifest)
+	}
+	report, err := loadProbeEvidenceReport(filepath.Join(outDir, "manifest.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.AuditPresent || report.AuditEvents != 1 || !report.AuditSafe {
+		t.Fatalf("report audit evidence = present %t events %d safe %t", report.AuditPresent, report.AuditEvents, report.AuditSafe)
+	}
 	for _, name := range []string{"manifest.json", "doctor-prompt-free.json", "agents-route.json", "audit.json", "health.json", "report.html"} {
 		data, err := os.ReadFile(filepath.Join(outDir, name))
 		if err != nil {
