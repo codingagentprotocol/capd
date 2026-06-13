@@ -47,6 +47,11 @@
   .repair .cmd { color:#58a6ff; margin-top:4px; overflow-wrap:anywhere; }
   .repair .expect { color:#8b949e; margin-top:4px; }
   .repair .status { color:#8b949e; margin-top:4px; }
+  #evidencePackage { border:1px solid #30363d; border-radius:8px; padding:10px; margin:0 0 12px; background:#010409; }
+  #evidencePackage .head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; color:#e6edf3; }
+  #evidencePackage textarea { width:100%; min-height:86px; box-sizing:border-box; resize:vertical; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:8px; font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #evidencePackage .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  #evidenceManifestResult { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:6px; margin-top:8px; }
   #main { display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:12px; align-items:stretch; }
   #sessions, #log { background:#010409; border:1px solid #30363d; border-radius:8px; padding:12px; height:520px; overflow-y:auto; }
   #log { white-space:pre-wrap; }
@@ -95,6 +100,15 @@
 <div id="accountDiagnostics"></div>
 <div id="readinessChecks"></div>
 <div id="repairPlan"></div>
+<div id="evidencePackage">
+  <div class="head"><span>Live selftest evidence manifest</span><span class="empty">paste manifest.json or summary.json</span></div>
+  <textarea id="evidenceManifestInput" spellcheck="false" placeholder='{"manifestVersion":1,"status":"passed","artifacts":{"agentsRoute":"..."}}'></textarea>
+  <div class="actions">
+    <button id="renderEvidenceManifest">查看诊断包</button>
+    <button id="clearEvidenceManifest">清空</button>
+  </div>
+  <div id="evidenceManifestResult"></div>
+</div>
 <div id="main">
   <div id="sessions">
     <div id="sessionHead"><span>Sessions</span><button id="refreshSessions">刷新</button></div>
@@ -124,6 +138,8 @@ const readinessEl = document.getElementById("readiness");
 const accountDiagnosticsEl = document.getElementById("accountDiagnostics");
 const readinessChecksEl = document.getElementById("readinessChecks");
 const repairPlanEl = document.getElementById("repairPlan");
+const evidenceManifestInputEl = document.getElementById("evidenceManifestInput");
+const evidenceManifestResultEl = document.getElementById("evidenceManifestResult");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
 const RPC_TIMEOUT_MS = 12000;
@@ -1265,6 +1281,142 @@ async function connect() {
   await loadSessions();
 }
 
+function renderEvidenceManifest() {
+  evidenceManifestResultEl.textContent = "";
+  const raw = evidenceManifestInputEl.value.trim();
+  if (!raw) {
+    renderEvidenceManifestRows([{ name: "manifest", ok: false, evidence: "empty input", nextStep: "paste manifest.json or summary.json from CAPD_LIVE_EVIDENCE_DIR/CAPD_LIVE_SUMMARY" }]);
+    return;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    renderEvidenceManifestRows([{ name: "manifest JSON", ok: false, evidence: e.message || String(e), nextStep: "paste valid JSON from manifest.json or summary.json" }]);
+    return;
+  }
+  const normalized = normalizeEvidenceManifest(parsed);
+  renderEvidenceManifestRows(evidenceManifestRows(normalized));
+}
+
+function normalizeEvidenceManifest(data) {
+  const artifacts = data.artifacts || {};
+  if (data.manifestVersion) {
+    return {
+      source: "manifest.json",
+      version: data.manifestVersion,
+      status: data.status || "",
+      stage: data.stage || "",
+      detail: data.detail || "",
+      backend: data.backend || "",
+      daemonMode: data.daemonMode || "",
+      artifacts
+    };
+  }
+  if (data.summaryVersion) {
+    return {
+      source: "summary.json",
+      version: data.summaryVersion,
+      status: data.status || "",
+      stage: data.stage || "",
+      detail: data.detail || "",
+      backend: data.backend || "",
+      daemonMode: data.daemonMode || "",
+      artifacts: {
+        manifest: data.evidenceManifestPath || "",
+        agentsRoute: data.routeEvidencePath || "",
+        probeData: data.probeEvidencePath || "",
+        doctor: data.doctorEvidencePath || "",
+        repairPlan: data.repairPlanPath || ""
+      }
+    };
+  }
+  return {
+    source: "unknown",
+    version: "",
+    status: "",
+    stage: "",
+    detail: "missing manifestVersion or summaryVersion",
+    backend: "",
+    daemonMode: "",
+    artifacts
+  };
+}
+
+function evidenceManifestRows(manifest) {
+  const okStatus = manifest.status === "passed" || manifest.status === "running";
+  const rows = [
+    {
+      name: "diagnostic package",
+      ok: !!manifest.version && manifest.source !== "unknown",
+      evidence: `${manifest.source} v${manifest.version || "?"}`,
+      nextStep: manifest.source === "unknown" ? "paste CAPD live selftest manifest.json or summary.json" : ""
+    },
+    {
+      name: "selftest status",
+      ok: okStatus,
+      evidence: [manifest.status || "unknown", manifest.stage || "", manifest.detail || ""].filter(Boolean).join(" · "),
+      nextStep: okStatus ? "" : "open the listed artifacts and fix the failed account, quota, SecretStore, or route gate"
+    },
+    {
+      name: "SecretStore backend",
+      ok: !!manifest.backend,
+      evidence: manifest.backend ? `secret ${manifest.backend}` : "missing backend",
+      nextStep: manifest.backend ? "" : "rerun live selftest with CAPD_LIVE_SUMMARY and CAPD_LIVE_EVIDENCE_DIR"
+    },
+    {
+      name: "daemon mode",
+      ok: !!manifest.daemonMode,
+      evidence: manifest.daemonMode || "missing daemon mode",
+      nextStep: manifest.daemonMode ? "" : "rerun live selftest so daemon mode is recorded"
+    }
+  ];
+  const artifactNames = [
+    ["manifest", "manifest index"],
+    ["health", "daemon health"],
+    ["accountsList", "account metadata"],
+    ["agentsRoute", "route evidence"],
+    ["probeData", "probe evidence"],
+    ["doctor", "doctor evidence"],
+    ["accountsSmoke", "account smoke"],
+    ["accountsCheck", "accounts/check readiness"],
+    ["repairPlan", "repair plan"]
+  ];
+  for (const [key, label] of artifactNames) {
+    if (!(key in manifest.artifacts)) continue;
+    const path = manifest.artifacts[key] || "";
+    rows.push({
+      name: label,
+      ok: !!path,
+      evidence: path || "not captured",
+      nextStep: path ? "" : "artifact is optional or was not produced for this selftest path"
+    });
+  }
+  return rows;
+}
+
+function renderEvidenceManifestRows(rows) {
+  evidenceManifestResultEl.textContent = "";
+  for (const row of rows) {
+    const box = document.createElement("div");
+    box.className = "check " + (row.ok ? "pass" : "fail");
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = `${row.ok ? "pass" : "fail"} · ${row.name}`;
+    const evidence = document.createElement("div");
+    evidence.className = "evidence";
+    evidence.textContent = row.evidence || "";
+    box.append(name, evidence);
+    if (row.nextStep) {
+      const next = document.createElement("div");
+      next.className = "next";
+      next.textContent = row.nextStep;
+      box.appendChild(next);
+    }
+    evidenceManifestResultEl.appendChild(box);
+  }
+}
+
 document.getElementById("send").onclick = async () => {
   try {
     const prompt = document.getElementById("prompt").value.trim();
@@ -1298,6 +1450,11 @@ document.getElementById("checkAccounts").onclick = () => checkAccounts(false);
 document.getElementById("checkReady").onclick = () => checkAccounts(true);
 document.getElementById("refreshSelectedQuota").onclick = refreshSelectedQuota;
 document.getElementById("refreshAllQuota").onclick = refreshAllQuota;
+document.getElementById("renderEvidenceManifest").onclick = renderEvidenceManifest;
+document.getElementById("clearEvidenceManifest").onclick = () => {
+  evidenceManifestInputEl.value = "";
+  evidenceManifestResultEl.textContent = "";
+};
 document.getElementById("account").onchange = () => { markActiveAccount(); previewRoute(); };
 document.getElementById("requireFreshQuota").onchange = previewRoute;
 document.getElementById("prompt").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("send").click(); });

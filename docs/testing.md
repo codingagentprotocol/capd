@@ -136,6 +136,10 @@ diagnostics without repeated OS credential prompts. Their ordinary next steps
 prefer `capd doctor --prompt-free`; use the console's `就绪门禁`, the probe's
 `Readiness`, `--readiness`, or `--require-secret-backend native` when you
 intentionally want the native SecretStore gate.
+The full console also has a diagnostic package viewer for pasting live selftest
+`manifest.json` or `summary.json` output and checking the recorded route, probe,
+doctor, smoke, and SecretStore evidence artifact paths without reading local
+files from the browser.
 
 After importing multiple accounts and starting the daemon in another terminal,
 the same live preflight is available without sending a prompt:

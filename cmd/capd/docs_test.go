@@ -65,6 +65,9 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"opening either page does\nnot read account SecretStore credentials",
 		"not checked in prompt-free refresh",
 		"ordinary next\nsteps point first to `capd doctor --prompt-free`",
+		"diagnostic package viewer",
+		"`manifest.json` or `summary.json`",
+		"without reading local files or exposing daemon tokens",
 	} {
 		if !strings.Contains(readme, want) {
 			t.Fatalf("README missing prompt-free web refresh contract %q", want)
@@ -99,6 +102,9 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"console's `就绪门禁`",
 		"without repeated OS credential prompts",
 		"ordinary next steps\nprefer `capd doctor --prompt-free`",
+		"diagnostic package viewer",
+		"`manifest.json` or `summary.json`",
+		"without reading local\nfiles from the browser",
 	} {
 		if !strings.Contains(testingDoc, want) {
 			t.Fatalf("testing docs missing prompt-free probe refresh contract %q", want)
