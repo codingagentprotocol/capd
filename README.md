@@ -330,7 +330,9 @@ early prompt-free failures distinguishable from actual credential or projection
 failures.
 
 Every flag, protocol field, and event is documented in
-[docs/reference.md](docs/reference.md).
+[docs/reference.md](docs/reference.md). The forward plan is tracked in
+[docs/roadmap.md](docs/roadmap.md), with concrete acceptance gates for account
+intelligence, security hardening, performance, and adapter extensibility.
 
 ### Permission modes
 

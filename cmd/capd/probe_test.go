@@ -94,6 +94,36 @@ func TestProbeEvidenceCmdSummarizesManifestArtifacts(t *testing.T) {
 	}
 }
 
+func TestProbeEvidenceCmdInfersRouteDecisionFromAgentsRoute(t *testing.T) {
+	dir := t.TempDir()
+	manifest := filepath.Join(dir, "manifest.json")
+	route := filepath.Join(dir, "agents-route.json")
+	writeTestFile(t, manifest, `{"manifestVersion":1,"status":"passed","stage":"complete","backend":"native","daemonMode":"temporary","artifacts":{"agentsRoute":"agents-route.json"}}`)
+	writeTestFile(t, route, `{"agent":{"id":"codex","available":true},"accountId":"codex-live","accountRoute":{"accountId":"codex-live","secretBackend":"native","quotaState":"fresh","fresh":true,"primaryUsedPercent":9,"secondaryUsedPercent":54,"codeReviewUsedPercent":0,"limitingUsedPercent":54,"limitingQuotaDimension":"secondary","score":54,"reason":"auto account codex-live secondary 54%"},"routeCandidates":[{"accountId":"codex-live","secretBackend":"native","quotaState":"fresh","fresh":true,"primaryUsedPercent":9,"secondaryUsedPercent":54,"codeReviewUsedPercent":0,"limitingUsedPercent":54,"limitingQuotaDimension":"secondary","score":54}],"routePolicy":{"name":"conservative-quota-pressure","freshTtlSeconds":1800,"unknownScore":75,"currentAccountTieBreak":0.01,"quotaWindows":["primary","secondary","code_review"]},"reason":"matched capabilities: effort, review"}`)
+
+	var out bytes.Buffer
+	cmd := newProbeCmd()
+	cmd.SetArgs([]string{"evidence", "--manifest", manifest, "--fail"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{
+		"ok: true",
+		"route candidates: 1 fresh=1",
+		"route decision: true",
+		"quota fresh: true",
+		"agents-route.json  route",
+		"route decision       true  routeDecisionOk=true",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("text missing %q: %s", want, text)
+		}
+	}
+}
+
 func TestProbeEvidenceCmdJSONAndFail(t *testing.T) {
 	dir := t.TempDir()
 	summary := filepath.Join(dir, "summary.json")
