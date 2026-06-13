@@ -400,6 +400,7 @@ func TestEvidenceMatrixCoversCodexAccountPlaneGoal(t *testing.T) {
 		"capd console --probe --require-secret-backend native",
 		"capd probe evidence --manifest /tmp/capd-live-evidence/manifest.json --fail",
 		"at least two Codex accounts are imported through the daemon-side path",
+		"protocol-level Console smoke that creates, sends, and cancels a fake session over WebSocket",
 		"the full Web Console can create a session using a `console` scoped token",
 		"contain no access tokens, refresh\n  tokens, raw auth JSON, SecretStore refs",
 	} {

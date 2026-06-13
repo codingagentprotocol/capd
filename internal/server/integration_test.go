@@ -29,6 +29,7 @@ import (
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/audit"
+	"github.com/codingagentprotocol/capd/internal/security"
 	"github.com/codingagentprotocol/capd/internal/session"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
@@ -256,6 +257,27 @@ func dialClient(t *testing.T, ts *httptest.Server, token string) *testClient {
 	return c
 }
 
+func dialClientWithSubprotocol(t *testing.T, ts *httptest.Server, token string) *testClient {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	t.Cleanup(cancel)
+	wsURL := strings.Replace(ts.URL, "http://", "ws://", 1)
+	subprotocol := webSocketAuthSubprotocol(token)
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		Subprotocols: []string{subprotocol},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := conn.Subprotocol(); got != subprotocol {
+		t.Fatalf("subprotocol = %q", got)
+	}
+	t.Cleanup(func() { conn.CloseNow() })
+	c := &testClient{t: t, conn: conn, ctx: ctx, resps: map[int]*protocol.Response{}}
+	go c.readLoop()
+	return c
+}
+
 func (c *testClient) readLoop() {
 	for {
 		_, data, err := c.conn.Read(c.ctx)
@@ -308,11 +330,16 @@ func (c *testClient) call(method string, params any) *protocol.Response {
 
 func (c *testClient) waitEvent(typ protocol.EventType) protocol.Event {
 	c.t.Helper()
+	return c.waitEventWhere(typ, nil)
+}
+
+func (c *testClient) waitEventWhere(typ protocol.EventType, pred func(protocol.Event) bool) protocol.Event {
+	c.t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		c.mu.Lock()
 		for _, ev := range c.events {
-			if ev.Type == typ {
+			if ev.Type == typ && (pred == nil || pred(ev)) {
 				c.mu.Unlock()
 				return ev
 			}
@@ -551,6 +578,45 @@ func TestAgentsRouteAndAutoCreate(t *testing.T) {
 	c.mustResult(c.call(protocol.MethodSessionList, struct{}{}), &list)
 	if len(list.Sessions) != 1 || list.Sessions[0].SessionID != created.SessionID || list.Sessions[0].AgentID != "fake" {
 		t.Fatalf("sessions = %+v", list.Sessions)
+	}
+}
+
+func TestConsoleScopedTokenCanCreateSendAndCancelTaskOverWebSocket(t *testing.T) {
+	ts, _ := newIntegration(t)
+	scoped, err := security.MintScopedToken("it-token", security.TokenScopeConsole, time.Hour, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := dialClientWithSubprotocol(t, ts, scoped)
+	c.mustResult(c.call(protocol.MethodInitialize, protocol.InitializeParams{
+		ProtocolVersion: protocol.Version,
+		Client:          protocol.ClientInfo{Name: "console-smoke"},
+	}), nil)
+
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake"}), &created)
+	if created.SessionID == "" {
+		t.Fatalf("created = %+v", created)
+	}
+	c.mustResult(c.call(protocol.MethodTaskSend, protocol.TaskSendParams{
+		SessionID: created.SessionID,
+		Prompt:    "console smoke",
+	}), nil)
+	output := c.waitEventWhere(protocol.EventOutputText, func(ev protocol.Event) bool {
+		text, _ := ev.Data["text"].(string)
+		return text == "echo:console smoke"
+	})
+	if output.SessionID != created.SessionID {
+		t.Fatalf("output session = %q, want %q", output.SessionID, created.SessionID)
+	}
+
+	c.mustResult(c.call(protocol.MethodTaskCancel, protocol.TaskCancelParams{SessionID: created.SessionID}), nil)
+	canceled := c.waitEventWhere(protocol.EventTaskDone, func(ev protocol.Event) bool {
+		canceled, _ := ev.Data["canceled"].(bool)
+		return canceled
+	})
+	if canceled.SessionID != created.SessionID {
+		t.Fatalf("cancel session = %q, want %q", canceled.SessionID, created.SessionID)
 	}
 }
 
