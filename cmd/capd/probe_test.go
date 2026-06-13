@@ -89,6 +89,50 @@ func TestProbeDataTextPrintsReadinessSummary(t *testing.T) {
 	}
 }
 
+func TestProbeDataTextPrintsPromptFreeMode(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := writeTokenForTest(home, "tok-probe-prompt-free"); err != nil {
+		t.Fatal(err)
+	}
+	var rawQuery string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true,"promptFree":true,"summary":{"ready":true,"readiness":false,"checkedAccounts":1,"requiredAccounts":2,"missingAccounts":1,"freshQuotaAccounts":1,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteAccountId":"codex-a","autoRouteFresh":true,"routeDecisionOk":true,"routeCandidates":1,"secretBackend":"native","secretBackendOk":true},"health":{"version":"test","protocolVersion":"0.1","secretBackend":"native"},"accountsCheck":{"provider":"codex","secretBackend":"native","checkedAccounts":1},"autoRoute":{"accountId":"codex-a","secretBackend":"native","quotaState":"fresh","fresh":true},"checks":[{"name":"account metadata","ok":true,"evidence":"1, need 1, secret native, secretState unknown"},{"name":"account credentials","ok":true,"evidence":"not checked in prompt-free probe"},{"name":"account runtime","ok":true,"evidence":"not checked in prompt-free probe"}]}`))
+	}))
+	defer ts.Close()
+	host, port := splitTestURL(t, ts.URL)
+	t.Setenv("CAPD_HOST", host)
+	t.Setenv("CAPD_PORT", port)
+
+	var out bytes.Buffer
+	cmd := newProbeCmd()
+	cmd.SetArgs([]string{"data"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if rawQuery != "" {
+		t.Fatalf("query = %q", rawQuery)
+	}
+	text := out.String()
+	for _, want := range []string{
+		"mode: prompt-free account metadata (SecretStore and runtime not checked)",
+		"account metadata: 1 checked, secret native",
+		"account credentials  true  not checked in prompt-free probe",
+		"account runtime      true  not checked in prompt-free probe",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("text missing %q: %s", want, text)
+		}
+	}
+	if strings.Contains(text, "tok-probe-prompt-free") {
+		t.Fatalf("output leaked token: %s", text)
+	}
+}
+
 func TestProbeDataTextPrintsPartialRouteCandidates(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

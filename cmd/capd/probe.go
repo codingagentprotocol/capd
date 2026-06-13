@@ -192,6 +192,9 @@ func daemonProbeData(ctx context.Context, cfg config.Config, opts probeDataOptio
 func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int) {
 	fmt.Fprintf(cmd.OutOrStdout(), "status: %d\n", status)
 	fmt.Fprintf(cmd.OutOrStdout(), "ok: %t\n", result.OK)
+	if result.PromptFree {
+		fmt.Fprintln(cmd.OutOrStdout(), "mode: prompt-free account metadata (SecretStore and runtime not checked)")
+	}
 	health := []string{}
 	if result.Health.Version != "" {
 		health = append(health, "version "+result.Health.Version)
@@ -206,7 +209,11 @@ func printProbeDataText(cmd *cobra.Command, result probeDataResponse, status int
 		fmt.Fprintf(cmd.OutOrStdout(), "health: %s\n", strings.Join(health, ", "))
 	}
 	if result.AccountsCheck != nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "accounts: %d checked, secret %s\n", result.AccountsCheck.CheckedAccounts, result.AccountsCheck.SecretBackend)
+		label := "accounts/check"
+		if result.PromptFree {
+			label = "account metadata"
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "%s: %d checked, secret %s\n", label, result.AccountsCheck.CheckedAccounts, result.AccountsCheck.SecretBackend)
 	}
 	if result.Summary.RequiredAccounts > 0 {
 		fmt.Fprintf(cmd.OutOrStdout(), "summary: ready=%t accounts=%d/%d missing=%d quota fresh=%d stale=%d missing=%d autoFresh=%t routeDecision=%t routeCandidates=%d secretOK=%t\n",
