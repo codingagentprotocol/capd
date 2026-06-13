@@ -127,6 +127,7 @@ func TestReferenceDocsCoverProbeEvidence(t *testing.T) {
 		"validates saved live selftest evidence without contacting the daemon",
 		"follows artifact paths from the manifest or summary",
 		"route policy, route candidate count, fresh quota evidence",
+		"emits a `checks` array for CI/Web consumers",
 		"`--fail` exits non-zero",
 	} {
 		if !strings.Contains(reference, want) {

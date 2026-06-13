@@ -116,12 +116,20 @@ type probeEvidenceReport struct {
 	OK              bool                         `json:"ok"`
 	Manifest        probeEvidenceManifest        `json:"manifest"`
 	Artifacts       []probeEvidenceArtifact      `json:"artifacts,omitempty"`
+	Checks          []probeEvidenceCheck         `json:"checks"`
 	RoutePolicy     *protocol.AccountRoutePolicy `json:"routePolicy,omitempty"`
 	RouteCandidates int                          `json:"routeCandidates"`
 	FreshCandidates int                          `json:"freshCandidates"`
 	QuotaFresh      bool                         `json:"quotaFresh"`
 	RepairPlanSteps int                          `json:"repairPlanSteps"`
 	Issues          []string                     `json:"issues,omitempty"`
+}
+
+type probeEvidenceCheck struct {
+	Name     string `json:"name"`
+	OK       bool   `json:"ok"`
+	Evidence string `json:"evidence"`
+	NextStep string `json:"nextStep,omitempty"`
 }
 
 type probeEvidenceManifest struct {
@@ -387,7 +395,8 @@ func loadProbeEvidenceReport(manifestPath string, artifactPaths []string) (probe
 			report.QuotaFresh = true
 		}
 	}
-	report.Issues = probeEvidenceIssues(report)
+	report.Checks = probeEvidenceChecks(report)
+	report.Issues = probeEvidenceIssues(report.Checks)
 	report.OK = len(report.Issues) == 0
 	return report, nil
 }
@@ -531,29 +540,6 @@ func probeEvidenceArtifactKind(data map[string]any) string {
 	}
 }
 
-func probeEvidenceIssues(report probeEvidenceReport) []string {
-	issues := []string{}
-	if report.Manifest.Status != "passed" {
-		issues = append(issues, "selftest status is "+emptyAs(report.Manifest.Status, "missing"))
-	}
-	if report.Manifest.Backend == "" {
-		issues = append(issues, "SecretStore backend missing")
-	}
-	if report.Manifest.DaemonMode == "" {
-		issues = append(issues, "daemon mode missing")
-	}
-	if report.RoutePolicy == nil {
-		issues = append(issues, "routePolicy evidence missing")
-	}
-	if report.RouteCandidates == 0 {
-		issues = append(issues, "routeCandidates evidence missing")
-	}
-	if !report.QuotaFresh {
-		issues = append(issues, "fresh quota evidence missing")
-	}
-	return issues
-}
-
 func printProbeEvidenceReport(cmd *cobra.Command, report probeEvidenceReport) {
 	fmt.Fprintf(cmd.OutOrStdout(), "ok: %t\n", report.OK)
 	fmt.Fprintf(cmd.OutOrStdout(), "manifest: %s %s status=%s stage=%s backend=%s daemon=%s\n", report.Manifest.Source, report.Manifest.Path, report.Manifest.Status, report.Manifest.Stage, report.Manifest.Backend, report.Manifest.DaemonMode)
@@ -569,9 +555,99 @@ func printProbeEvidenceReport(cmd *cobra.Command, report probeEvidenceReport) {
 		fmt.Fprintf(w, "%s\t%s\t%t\t%d\t%d\t%t\t%d\n", artifact.Path, artifact.Kind, artifact.RoutePolicy, artifact.RouteCandidates, artifact.FreshCandidates, artifact.QuotaFresh, artifact.RepairPlanSteps)
 	}
 	_ = w.Flush()
+	checks := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
+	fmt.Fprintln(checks, "CHECK\tOK\tEVIDENCE\tNEXT_STEP")
+	for _, check := range report.Checks {
+		fmt.Fprintf(checks, "%s\t%t\t%s\t%s\n", check.Name, check.OK, check.Evidence, check.NextStep)
+	}
+	_ = checks.Flush()
 	for _, issue := range report.Issues {
 		fmt.Fprintf(cmd.OutOrStdout(), "issue: %s\n", issue)
 	}
+}
+
+func probeEvidenceChecks(report probeEvidenceReport) []probeEvidenceCheck {
+	return []probeEvidenceCheck{
+		{
+			Name:     "selftest status",
+			OK:       report.Manifest.Status == "passed",
+			Evidence: emptyAs(report.Manifest.Status, "missing"),
+			NextStep: missingEvidenceStep(report.Manifest.Status == "passed", "rerun make live-codex-selftest and inspect the saved artifacts"),
+		},
+		{
+			Name:     "SecretStore backend",
+			OK:       report.Manifest.Backend != "",
+			Evidence: emptyAs(report.Manifest.Backend, "missing"),
+			NextStep: missingEvidenceStep(report.Manifest.Backend != "", "rerun selftest so backend evidence is recorded"),
+		},
+		{
+			Name:     "daemon mode",
+			OK:       report.Manifest.DaemonMode != "",
+			Evidence: emptyAs(report.Manifest.DaemonMode, "missing"),
+			NextStep: missingEvidenceStep(report.Manifest.DaemonMode != "", "rerun selftest so daemon mode is recorded"),
+		},
+		{
+			Name:     "route policy",
+			OK:       report.RoutePolicy != nil,
+			Evidence: routePolicyEvidence(report.RoutePolicy),
+			NextStep: missingEvidenceStep(report.RoutePolicy != nil, "include agents-route.json, probe-data-readiness.json, or doctor-prompt-free.json"),
+		},
+		{
+			Name:     "route candidates",
+			OK:       report.RouteCandidates > 0,
+			Evidence: fmt.Sprintf("%d candidates, %d fresh", report.RouteCandidates, report.FreshCandidates),
+			NextStep: missingEvidenceStep(report.RouteCandidates > 0, "include agents-route.json or probe-data-readiness.json"),
+		},
+		{
+			Name:     "quota freshness",
+			OK:       report.QuotaFresh,
+			Evidence: fmt.Sprintf("quotaFresh=%t", report.QuotaFresh),
+			NextStep: missingEvidenceStep(report.QuotaFresh, "refresh quota and rerun make live-codex-selftest"),
+		},
+	}
+}
+
+func probeEvidenceIssues(checks []probeEvidenceCheck) []string {
+	issues := []string{}
+	for _, check := range checks {
+		if !check.OK {
+			issues = append(issues, check.EvidenceIssue())
+		}
+	}
+	return issues
+}
+
+func (check probeEvidenceCheck) EvidenceIssue() string {
+	switch check.Name {
+	case "selftest status":
+		return "selftest status is " + check.Evidence
+	case "SecretStore backend":
+		return "SecretStore backend missing"
+	case "daemon mode":
+		return "daemon mode missing"
+	case "route policy":
+		return "routePolicy evidence missing"
+	case "route candidates":
+		return "routeCandidates evidence missing"
+	case "quota freshness":
+		return "fresh quota evidence missing"
+	default:
+		return check.Name + " failed"
+	}
+}
+
+func routePolicyEvidence(policy *protocol.AccountRoutePolicy) string {
+	if policy == nil {
+		return "missing"
+	}
+	return routePolicyText(*policy)
+}
+
+func missingEvidenceStep(ok bool, step string) string {
+	if ok {
+		return ""
+	}
+	return step
 }
 
 func stringField(data map[string]any, key string) string {

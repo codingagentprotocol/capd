@@ -82,6 +82,9 @@ func TestProbeEvidenceCmdSummarizesManifestArtifacts(t *testing.T) {
 		"route candidates: 1 fresh=1",
 		"quota fresh: true",
 		"repair plan: 0 steps",
+		"selftest status      true  passed",
+		"route policy         true  conservative-quota-pressure",
+		"quota freshness      true  quotaFresh=true",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("text missing %q: %s", want, text)
@@ -106,7 +109,7 @@ func TestProbeEvidenceCmdJSONAndFail(t *testing.T) {
 		t.Fatalf("err = %v output=%s", err, out.String())
 	}
 	text := out.String()
-	for _, want := range []string{`"ok": false`, `"source": "summary.json"`, `"status": "failed"`, `"routeCandidates": 1`, `"freshCandidates": 0`, `"routePolicy evidence missing"`, `"fresh quota evidence missing"`} {
+	for _, want := range []string{`"ok": false`, `"source": "summary.json"`, `"status": "failed"`, `"routeCandidates": 1`, `"freshCandidates": 0`, `"checks":`, `"name": "selftest status"`, `"name": "route policy"`, `"name": "quota freshness"`, `"routePolicy evidence missing"`, `"fresh quota evidence missing"`} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("json missing %q: %s", want, text)
 		}
