@@ -234,7 +234,8 @@ manual action unless the command is made runnable and, for the final gate,
 `--include-final` is supplied. `/probe/data` and `capd repair run --json`
 attach `execution.runnable` plus `execution.reason` to repair steps; the Web
 Console and compact Probe render that server-provided classification, with a
-local fallback for older daemons.
+local fallback for older daemons. The Console renders repair plans returned by
+both `/probe/data` deep verification and direct `accounts/check` readiness.
 For unattended release checks, `make
 live-codex-selftest` starts a temporary daemon when needed, waits for health,
 runs the same preflight, and cleans up only the daemon it started. The final

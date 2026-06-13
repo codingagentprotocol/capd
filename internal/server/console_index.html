@@ -392,6 +392,7 @@ async function checkAccounts(readinessGate = false) {
     const evidence = accountCheckSummary(result.accounts || []);
     if (evidence) line("ev-sys", `· quota evidence ${evidence}`);
     renderAccountDiagnostics(result);
+    renderAccountsCheckRepairPlan(result);
     await loadAccounts();
   } catch (e) {
     const label = readinessGate ? "就绪门禁失败" : "账号检查失败";
@@ -402,9 +403,21 @@ async function checkAccounts(readinessGate = false) {
       const evidence = accountCheckSummary(e.data.accounts || []);
       if (evidence) line("ev-sys", `· partial quota evidence ${evidence}`);
       renderAccountDiagnostics(e.data);
+      renderAccountsCheckRepairPlan(e.data);
     }
   } finally {
     button.disabled = false;
+  }
+}
+
+function renderAccountsCheckRepairPlan(result) {
+  const steps = result && result.repairPlan || [];
+  renderRepairPlan(steps);
+  for (const step of steps) {
+    const classification = repairStepClassification(step);
+    line("ev-sys", `· repair ${step.id || "step"} ${classification.runnable ? "runnable" : "manual"}: ${step.command || ""}`);
+    if (!classification.runnable && classification.reason) line("ev-sys", `· manual reason ${classification.reason}`);
+    if (step.expectedEvidence) line("ev-sys", `· expect ${step.expectedEvidence}`);
   }
 }
 

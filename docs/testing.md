@@ -327,6 +327,8 @@ before checking cached freshness, without printing raw backend usage JSON. The
 JSON form preserves safe partial evidence when a gate fails, including the
 shared `repairPlan` with `execution.runnable` and `execution.reason` so it can
 be compared directly with `/probe/data` and `capd repair run --json`.
+The Web Console renders that repair plan from both the direct `accounts/check`
+buttons and the `/probe/data` deep verification path.
 If quota refresh fails midway, the partial evidence reflects any quota snapshots
 successfully refreshed before the failing account, so readiness logs show which
 accounts are already fresh and which account blocked the run.

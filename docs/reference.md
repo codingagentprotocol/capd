@@ -67,6 +67,9 @@ the compact Probe includes the same classification in its summary text. Manual
 steps include foreground daemon startup, shell environment changes, placeholder
 auth paths, commands outside the repair allowlist, and the final live preflight
 unless it is explicitly included.
+The Console renders repair plans returned by both `深度验证` (`/probe/data`) and
+the direct `检查账号` / `就绪门禁` `accounts/check` path, so browser users see the
+same daemon-side remediation plan without switching tools.
 When the native SecretStore gate is enabled, the console and probe distinguish
 backend mismatches from deeper OS SecretStore verification and point the latter to
 `capd doctor --json --fail --verify-secretstore --require-secret-backend native`.
