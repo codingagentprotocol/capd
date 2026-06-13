@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -124,7 +127,7 @@ func buildSecretStoreReport(ctx context.Context, opts secretStoreOptions) (secre
 		if err := doctorSecretStoreRoundTrip(ctx, secrets); err != nil {
 			check.OK = false
 			check.Evidence = "roundtrip failed for backend " + secrets.Backend()
-			check.NextStep = "verify native SecretStore support with: make verify-secretstore"
+			check.NextStep = secretStoreRoundTripNextStep(secrets.Backend(), err)
 			report.Issues = append(report.Issues, "SecretStore roundtrip failed")
 			report.NextSteps = append(report.NextSteps, check.NextStep)
 		}
@@ -168,4 +171,30 @@ func secretStoreBackendMismatchNextStep(requireBackend string) string {
 		return "restart or rerun with the required SecretStore backend"
 	}
 	return "restart or rerun with: capd secretstore check --secret-backend " + requireBackend + " --require-backend " + requireBackend + " --timeout 2m"
+}
+
+func secretStoreRoundTripNextStep(backend string, err error) string {
+	rerun := "capd secretstore check --secret-backend " + backend + " --roundtrip --require-backend " + backend + " --timeout 2m"
+	if backend != secret.BackendNative {
+		return "rerun SecretStore roundtrip with: " + rerun
+	}
+	text := strings.ToLower(fmt.Sprint(err))
+	switch {
+	case strings.Contains(text, "keychain") || strings.Contains(text, "status -128"):
+		return "approve macOS Keychain access, then rerun: " + rerun + " (or restart with file SecretStore and re-import accounts for no-prompt local testing)"
+	case strings.Contains(text, "secret-tool") || strings.Contains(text, "secret service"):
+		return "install libsecret secret-tool and unlock the Linux Secret Service/keyring, then rerun: " + rerun
+	case strings.Contains(text, "credential"):
+		return "check Windows Credential Manager availability for the current user, then rerun: " + rerun
+	case errors.Is(err, secret.ErrNativeUnavailable):
+		return "verify native SecretStore support with: make verify-secretstore"
+	case runtime.GOOS == "darwin":
+		return "approve macOS Keychain access, then rerun: " + rerun + " (or restart with file SecretStore and re-import accounts for no-prompt local testing)"
+	case runtime.GOOS == "linux":
+		return "install libsecret secret-tool and unlock the Linux Secret Service/keyring, then rerun: " + rerun
+	case runtime.GOOS == "windows":
+		return "check Windows Credential Manager availability for the current user, then rerun: " + rerun
+	default:
+		return "verify native SecretStore support with: make verify-secretstore, then rerun: " + rerun
+	}
 }

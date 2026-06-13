@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -93,5 +94,68 @@ func TestSecretStoreCheckRejectsUnknownBackend(t *testing.T) {
 	err := cmd.Execute()
 	if err == nil || !strings.Contains(err.Error(), `unknown secret backend "mystery"`) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSecretStoreRoundTripNextStepsArePlatformSpecificAndSafe(t *testing.T) {
+	tests := []struct {
+		name     string
+		backend  string
+		err      error
+		contains []string
+	}{
+		{
+			name:    "mac keychain denied",
+			backend: "native",
+			err:     errors.New("macOS keychain status -128"),
+			contains: []string{
+				"approve macOS Keychain access",
+				"capd secretstore check --secret-backend native --roundtrip --require-backend native --timeout 2m",
+				"file SecretStore",
+			},
+		},
+		{
+			name:    "linux secret service",
+			backend: "native",
+			err:     errors.New("secret-tool store failed: Secret Service is locked"),
+			contains: []string{
+				"install libsecret secret-tool",
+				"unlock the Linux Secret Service/keyring",
+				"capd secretstore check --secret-backend native --roundtrip --require-backend native --timeout 2m",
+			},
+		},
+		{
+			name:    "windows credential manager",
+			backend: "native",
+			err:     errors.New("Credential Manager unavailable"),
+			contains: []string{
+				"Windows Credential Manager",
+				"capd secretstore check --secret-backend native --roundtrip --require-backend native --timeout 2m",
+			},
+		},
+		{
+			name:    "file backend",
+			backend: "file",
+			err:     errors.New("write failed"),
+			contains: []string{
+				"rerun SecretStore roundtrip",
+				"capd secretstore check --secret-backend file --roundtrip --require-backend file --timeout 2m",
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := secretStoreRoundTripNextStep(tc.backend, tc.err)
+			for _, want := range tc.contains {
+				if !strings.Contains(got, want) {
+					t.Fatalf("next step %q missing %q", got, want)
+				}
+			}
+			for _, leaked := range []string{"access_token", "refresh_token", "native-access-secret", "native-refresh-secret"} {
+				if strings.Contains(got, leaked) {
+					t.Fatalf("next step leaked %q: %s", leaked, got)
+				}
+			}
+		})
 	}
 }

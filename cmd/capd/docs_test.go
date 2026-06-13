@@ -451,3 +451,36 @@ func TestDocsCoverVerifyCodexGoalTarget(t *testing.T) {
 		}
 	}
 }
+
+func TestReferenceDocsCoverSecretStorePlatformRecovery(t *testing.T) {
+	referenceData, err := os.ReadFile("../../docs/reference.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	matrixData, err := os.ReadFile("../../docs/evidence-matrix.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := string(referenceData)
+	matrix := string(matrixData)
+	for _, want := range []string{
+		"Failed native roundtrips return safe platform-specific next steps",
+		"macOS Keychain access",
+		"Linux Secret Service/`secret-tool`",
+		"Windows Credential Manager",
+		"without embedding credential material or command output",
+	} {
+		if !strings.Contains(reference, want) {
+			t.Fatalf("reference docs missing SecretStore recovery contract %q", want)
+		}
+	}
+	for _, want := range []string{
+		"platform-specific recovery next steps",
+		"safe Keychain/Secret Service/Credential Manager recovery text",
+		"Keep expanding native SecretStore recovery hints",
+	} {
+		if !strings.Contains(matrix, want) {
+			t.Fatalf("evidence matrix missing SecretStore recovery contract %q", want)
+		}
+	}
+}
