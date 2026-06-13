@@ -71,6 +71,7 @@ fi
 
 if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; then
 	echo "live-codex-preflight failed; safe diagnostics follow" >&2
+	echo "readiness gaps to resolve: >=2 imported Codex accounts, fresh quota for auto-route/all accounts, ${backend} SecretStore, and daemon/Web readiness" >&2
 	"$bin" health --json --require-secret-backend "$backend" || true
 	"$bin" accounts --secret-backend "$backend" codex list --json || true
 	"$bin" agents route --account auto --require-fresh-quota --json || true

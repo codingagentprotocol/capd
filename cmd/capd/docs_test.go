@@ -241,7 +241,7 @@ func TestTestingDocsCoverLiveSelftestDaemonSafety(t *testing.T) {
 		"starts a\ntemporary foreground daemon in the background",
 		"cleans up that temporary process on exit",
 		"If the live preflight fails",
-		"prints prompt-free diagnostics",
+		"prints a prompt-free readiness gap\nsummary",
 		"daemon health, safe `capd accounts codex list --json` metadata",
 		"multi-account smoke gate",
 		"by default it does not run SecretStore-reading\nchecks",
