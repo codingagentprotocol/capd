@@ -63,7 +63,7 @@ func TestProbeDataTextPrintsReadinessSummary(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rawQuery = r.URL.RawQuery
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"ok":true,"summary":{"ready":true,"readiness":true,"checkedAccounts":2,"requiredAccounts":2,"missingAccounts":0,"freshQuotaAccounts":2,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteAccountId":"codex-a","autoRouteFresh":true,"routeDecisionOk":true,"routeCandidates":2,"secretBackend":"native","requiredSecretBackend":"native","secretBackendOk":true},"health":{"version":"test","protocolVersion":"0.1","secretBackend":"native"},"accountsCheck":{"provider":"codex","secretBackend":"native","checkedAccounts":2},"autoRoute":{"accountId":"codex-a","secretBackend":"native","quotaState":"fresh","fresh":true},"checks":[{"name":"daemon health","ok":true,"evidence":"health ok"}]}`))
+		w.Write([]byte(`{"ok":true,"summary":{"ready":true,"readiness":true,"checkedAccounts":2,"requiredAccounts":2,"missingAccounts":0,"freshQuotaAccounts":2,"staleQuotaAccounts":0,"missingQuotaAccounts":0,"autoRouteAccountId":"codex-a","autoRouteFresh":true,"routeDecisionOk":true,"routeCandidates":2,"secretBackend":"native","requiredSecretBackend":"native","secretBackendOk":true},"health":{"version":"test","protocolVersion":"0.1","secretBackend":"native"},"accountsCheck":{"provider":"codex","secretBackend":"native","checkedAccounts":2},"autoRoute":{"accountId":"codex-a","secretBackend":"native","quotaState":"fresh","fresh":true},"routePolicy":{"name":"conservative-quota-pressure","freshTtlSeconds":1800,"unknownScore":75,"currentAccountTieBreak":0.01,"quotaWindows":["primary","secondary","code_review"]},"checks":[{"name":"daemon health","ok":true,"evidence":"health ok"}]}`))
 	}))
 	defer ts.Close()
 	host, port := splitTestURL(t, ts.URL)
@@ -82,7 +82,7 @@ func TestProbeDataTextPrintsReadinessSummary(t *testing.T) {
 		t.Fatalf("query = %q", rawQuery)
 	}
 	text := out.String()
-	for _, want := range []string{"summary: ready=true accounts=2/2 missing=0 quota fresh=2 stale=0 missing=0 autoFresh=true routeDecision=true routeCandidates=2 secretOK=true", "secret backend: actual=native required=native ok=true", "auto route: codex-a fresh fresh=true secret=native"} {
+	for _, want := range []string{"summary: ready=true accounts=2/2 missing=0 quota fresh=2 stale=0 missing=0 autoFresh=true routeDecision=true routeCandidates=2 secretOK=true", "secret backend: actual=native required=native ok=true", "auto route: codex-a fresh fresh=true secret=native", "route policy: conservative-quota-pressure ttl=1800s unknown=75.00 tie-break=0.01 windows=primary/secondary/code_review"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("text missing %q: %s", want, text)
 		}
@@ -143,7 +143,7 @@ func TestProbeDataTextPrintsPartialRouteCandidates(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusFailedDependency)
-		w.Write([]byte(`{"ok":false,"summary":{"ready":false,"readiness":true,"checkedAccounts":2,"requiredAccounts":2,"missingAccounts":0,"freshQuotaAccounts":0,"staleQuotaAccounts":1,"missingQuotaAccounts":1,"autoRouteAccountId":"codex-a","autoRouteFresh":false,"routeDecisionOk":false,"routeCandidates":2,"secretBackend":"native","requiredSecretBackend":"native","secretBackendOk":true},"health":{"version":"test","protocolVersion":"0.1","secretBackend":"native"},"autoRoute":{"accountId":"codex-a","secretBackend":"native","quotaState":"stale","fresh":false,"primaryUsedPercent":34.5},"routeCandidates":[{"accountId":"codex-a","secretBackend":"native","quotaState":"stale","fresh":false,"primaryUsedPercent":34.5,"score":50,"reason":"stale quota"},{"accountId":"codex-b","secretBackend":"file","quotaState":"missing","fresh":false,"score":50,"reason":"missing quota"}],"checks":[{"name":"Codex auto route freshness","ok":false,"evidence":"codex-a stale fresh=false","nextStep":"refresh quota"}],"nextSteps":["refresh quota"],"repairPlan":[{"id":"refresh-quota-readiness","title":"Refresh quota and verify daemon-side readiness","command":"capd accounts check --json --readiness --require-secret-backend native --timeout 2m","expectedEvidence":"probe summary shows quotaRefreshed=true and autoRouteFresh=true","requiresDaemon":true,"requiresSecret":true}],"errors":[{"source":"agents/route","code":-32602,"message":"auto account codex-a without fresh cached quota"}]}`))
+		w.Write([]byte(`{"ok":false,"summary":{"ready":false,"readiness":true,"checkedAccounts":2,"requiredAccounts":2,"missingAccounts":0,"freshQuotaAccounts":0,"staleQuotaAccounts":1,"missingQuotaAccounts":1,"autoRouteAccountId":"codex-a","autoRouteFresh":false,"routeDecisionOk":false,"routeCandidates":2,"secretBackend":"native","requiredSecretBackend":"native","secretBackendOk":true},"health":{"version":"test","protocolVersion":"0.1","secretBackend":"native"},"autoRoute":{"accountId":"codex-a","secretBackend":"native","quotaState":"stale","fresh":false,"primaryUsedPercent":34.5},"routePolicy":{"name":"conservative-quota-pressure","freshTtlSeconds":1800,"unknownScore":75,"currentAccountTieBreak":0.01,"quotaWindows":["primary","secondary","code_review"]},"routeCandidates":[{"accountId":"codex-a","secretBackend":"native","quotaState":"stale","fresh":false,"primaryUsedPercent":34.5,"score":50,"reason":"stale quota"},{"accountId":"codex-b","secretBackend":"file","quotaState":"missing","fresh":false,"score":50,"reason":"missing quota"}],"checks":[{"name":"Codex auto route freshness","ok":false,"evidence":"codex-a stale fresh=false","nextStep":"refresh quota"}],"nextSteps":["refresh quota"],"repairPlan":[{"id":"refresh-quota-readiness","title":"Refresh quota and verify daemon-side readiness","command":"capd accounts check --json --readiness --require-secret-backend native --timeout 2m","expectedEvidence":"probe summary shows quotaRefreshed=true and autoRouteFresh=true","requiresDaemon":true,"requiresSecret":true}],"errors":[{"source":"agents/route","code":-32602,"message":"auto account codex-a without fresh cached quota"}]}`))
 	}))
 	defer ts.Close()
 	host, port := splitTestURL(t, ts.URL)
@@ -162,6 +162,7 @@ func TestProbeDataTextPrintsPartialRouteCandidates(t *testing.T) {
 	for _, want := range []string{
 		"status: 424",
 		"auto route: codex-a stale fresh=false secret=native",
+		"route policy: conservative-quota-pressure ttl=1800s unknown=75.00 tie-break=0.01 windows=primary/secondary/code_review",
 		"route candidates: codex-a stale fresh=false secret=native primary=34.5% stale quota; codex-b missing fresh=false secret=file missing quota",
 		"error: agents/route code=-32602 auto account codex-a without fresh cached quota",
 		"next: refresh quota",
