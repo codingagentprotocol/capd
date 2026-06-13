@@ -37,6 +37,21 @@ json_escape() {
 	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+evidence_manifest_path() {
+	path="$1"
+	if [ -z "$path" ]; then
+		printf ''
+		return 0
+	fi
+	prefix="${evidence_dir%/}/"
+	rel="${path#"$prefix"}"
+	if [ "$rel" != "$path" ]; then
+		printf '%s' "$rel"
+		return 0
+	fi
+	printf '%s' "$path"
+}
+
 write_summary() {
 	if [ -z "$summary" ]; then
 		return 0
@@ -97,13 +112,13 @@ write_evidence_manifest() {
 	host_json="$(json_escape "$host")"
 	port_json="$(json_escape "$port")"
 	daemon_mode_json="$(json_escape "$daemon_mode")"
-	health_json="$(json_escape "$evidence_health")"
-	accounts_json="$(json_escape "$evidence_accounts")"
-	route_json="$(json_escape "$evidence_route")"
-	probe_json="$(json_escape "$evidence_probe")"
-	doctor_json="$(json_escape "$evidence_doctor")"
-	smoke_json="$(json_escape "$evidence_smoke")"
-	accounts_check_json="$(json_escape "$evidence_accounts_check")"
+	health_json="$(json_escape "$(evidence_manifest_path "$evidence_health")")"
+	accounts_json="$(json_escape "$(evidence_manifest_path "$evidence_accounts")")"
+	route_json="$(json_escape "$(evidence_manifest_path "$evidence_route")")"
+	probe_json="$(json_escape "$(evidence_manifest_path "$evidence_probe")")"
+	doctor_json="$(json_escape "$(evidence_manifest_path "$evidence_doctor")")"
+	smoke_json="$(json_escape "$(evidence_manifest_path "$evidence_smoke")")"
+	accounts_check_json="$(json_escape "$(evidence_manifest_path "$evidence_accounts_check")")"
 	{
 		printf '{\n'
 		printf '  "manifestVersion": 1,\n'

@@ -199,11 +199,14 @@ Set `CAPD_LIVE_EVIDENCE_DIR=/tmp/capd-live-evidence` to persist safe JSON
 evidence artifacts. On success the directory receives the final
 `agents-route.json`, `probe-data-readiness.json`, and `doctor-prompt-free.json`
 outputs, plus a `manifest.json` index. The summary JSON records the manifest and
-primary evidence paths. Those files prove the live account count, fresh quota
-gate, active `routePolicy`, route-candidate ordering, and SecretStore backend
-without exposing tokens or reading shell logs. Successful selftest runs validate
-that package with `capd probe evidence --manifest ... --fail` before reporting
-`status:"passed"`. On
+primary evidence paths. The summary keeps absolute paths for local CI lookup;
+the manifest stores artifact paths relative to the evidence directory so the
+package can be archived or uploaded and still validated later. Those files prove
+the live account count, fresh quota gate, active `routePolicy`, route-candidate
+ordering, and SecretStore backend without exposing tokens or reading shell logs.
+Successful selftest runs validate that package with
+`capd probe evidence --manifest ... --fail` before reporting `status:"passed"`.
+On
 preflight failure, the same directory captures prompt-free failure diagnostics
 such as `accounts-list.json`, `agents-route.json`, `probe-data-prompt-free.json`,
 and `accounts-smoke.json`; enabling `LIVE_DIAGNOSE_SECRETSTORE=1` also captures

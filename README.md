@@ -256,9 +256,12 @@ from the final route gate, `/probe/data` readiness gate, and prompt-free doctor
 report; the directory also gets a `manifest.json` index and the summary includes
 the manifest plus primary evidence paths so long tasks can prove account count,
 fresh quota, route policy, route candidates, and SecretStore backend without
-scraping shell logs. On successful selftest runs, the script also validates that
-package with `capd probe evidence --manifest ... --fail` before reporting
-`status:"passed"`. `make live-codex-readiness` runs the
+scraping shell logs. The summary keeps absolute paths for local CI lookup,
+while `manifest.json` records artifacts relative to the evidence directory so
+the package stays portable after upload or archive. On successful selftest runs,
+the script also validates that package with
+`capd probe evidence --manifest ... --fail` before reporting `status:"passed"`.
+`make live-codex-readiness` runs the
 same preflight and then sends the final live prompt. Override the final prompt with
 `LIVE_PROMPT="..." make live-codex-readiness`; override the backend only for
 intentional testing with `LIVE_SECRET_BACKEND=file`. The target runs every live
