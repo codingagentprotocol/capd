@@ -1007,9 +1007,13 @@ func codexLocalImportNextStep(secretBackend string, second bool) string {
 		cmd = "capd accounts --secret-backend " + secretBackend + " codex import"
 	}
 	if second {
-		return "import a second Codex account with: " + cmd + " --auth /path/to/auth.json"
+		return "import a second Codex account with: " + cmd + " --auth /path/to/auth.json, or batch import with: " + codexAuthPathsEnvExample(cmd)
 	}
 	return "import Codex auth with: " + cmd
+}
+
+func codexAuthPathsEnvExample(cmd string) string {
+	return "CAPD_CODEX_AUTH_PATHS=/path/a/auth.json" + string(os.PathListSeparator) + "/path/b/auth.json " + cmd
 }
 
 func smokeRouteEvidenceText(route codexSmokeAutoRoute) string {

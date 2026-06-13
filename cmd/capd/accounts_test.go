@@ -811,7 +811,7 @@ func TestAccountsCheckJSONErrorSuggestsSecondAccountSafely(t *testing.T) {
 	}
 	for _, want := range []string{
 		daemonSecondImportNextStep(),
-		"or import locally with: import a second Codex account with: capd accounts codex import --auth /path/to/auth.json",
+		"or import locally with: import a second Codex account with: capd accounts codex import --auth /path/to/auth.json, or batch import with: " + codexAuthPathsEnvExample("capd accounts codex import"),
 	} {
 		if !containsString(failure.NextSteps, want) {
 			t.Fatalf("json failure nextSteps missing %q: %+v", want, failure.NextSteps)
@@ -2269,7 +2269,7 @@ func TestCodexAccountsSmokeRequireMultipleReturnsPartialAccountEvidence(t *testi
 	if len(result.RouteCandidates) != 1 || result.RouteCandidates[0].AccountID != "codex-test" || result.RouteCandidates[0].Reason != "auto account codex-test without fresh cached quota; current account tie-break" {
 		t.Fatalf("partial route candidates = %+v", result.RouteCandidates)
 	}
-	if !containsString(result.NextSteps, "import a second Codex account with: capd accounts codex import --auth /path/to/auth.json") {
+	if !containsString(result.NextSteps, codexLocalImportNextStep(secret.BackendFile, true)) {
 		t.Fatalf("next steps = %+v", result.NextSteps)
 	}
 	if !containsString(result.NextSteps, "refresh quota and rerun smoke with: capd accounts codex smoke --json --quota --require-fresh-quota --require-secret-backend file --timeout 2m") {
@@ -2510,7 +2510,7 @@ func TestCodexAccountsSmokeJSONFailureKeepsPartialEvidence(t *testing.T) {
 	if got.OK || got.CheckedAccounts != 1 || got.SecretBackend != "file" || !containsString(got.Issues, "expected multiple Codex accounts, found 1") {
 		t.Fatalf("result = %+v", got)
 	}
-	if !containsString(got.NextSteps, "import a second Codex account with: capd accounts codex import --auth /path/to/auth.json") {
+	if !containsString(got.NextSteps, codexLocalImportNextStep(secret.BackendFile, true)) {
 		t.Fatalf("nextSteps = %+v", got.NextSteps)
 	}
 	if got.AutoRoute == nil || got.AutoRoute.AccountID != "codex-test" || !got.AutoRoute.Fresh || got.AutoRoute.Primary == nil || *got.AutoRoute.Primary != 4 {
@@ -2536,10 +2536,10 @@ func TestCodexAccountsSmokeNativeImportNextStep(t *testing.T) {
 	if got := codexLocalImportNextStep(secret.BackendNative, false); got != "import Codex auth with: capd accounts --secret-backend native codex import" {
 		t.Fatalf("import next step = %q", got)
 	}
-	if got := codexLocalImportNextStep(secret.BackendNative, true); got != "import a second Codex account with: capd accounts --secret-backend native codex import --auth /path/to/auth.json" {
+	if got := codexLocalImportNextStep(secret.BackendNative, true); got != "import a second Codex account with: capd accounts --secret-backend native codex import --auth /path/to/auth.json, or batch import with: "+codexAuthPathsEnvExample("capd accounts --secret-backend native codex import") {
 		t.Fatalf("second import next step = %q", got)
 	}
-	if got := codexLocalImportNextStep(secret.BackendFile, true); got != "import a second Codex account with: capd accounts codex import --auth /path/to/auth.json" {
+	if got := codexLocalImportNextStep(secret.BackendFile, true); got != "import a second Codex account with: capd accounts codex import --auth /path/to/auth.json, or batch import with: "+codexAuthPathsEnvExample("capd accounts codex import") {
 		t.Fatalf("file import next step = %q", got)
 	}
 }

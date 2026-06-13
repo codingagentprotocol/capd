@@ -577,7 +577,7 @@ function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, ro
   const routeFreshNextStep = promptFree ? `safe no-prompt audit: ${promptFreeDoctor}; deep route gate: capd agents route --account auto --require-fresh-quota --json` : "刷新 quota 后运行 capd agents route --account auto --require-fresh-quota --json";
   const readinessEvidence = promptFree ? "prompt-free diagnostic; SecretStore credentials and runtime not checked" : (readinessError || "no blocking readiness error");
   const readinessNext = promptFree ? `run explicit readiness when ready for SecretStore access: ${readinessNextStep}` : (readinessError ? "按 partial evidence 修复账号、quota 或 SecretStore 后重跑就绪门禁" : "");
-  const multiAccountNextStep = "导入至少两个账号: capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json，或使用 CAPD_CODEX_AUTH_PATHS=/path/a/auth.json:/path/b/auth.json capd accounts import";
+  const multiAccountNextStep = "导入至少两个账号: capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json，或使用 CAPD_CODEX_AUTH_PATHS 批量导入（macOS/Linux 用 ':'，Windows 用 ';' 分隔）";
   return [
     { name: "daemon health", ok: true, evidence: "health ok", nextStep: "" },
     { name: "Codex multi-account import", ok: checked >= 2, evidence: `checked ${checked}, need 2`, nextStep: checked >= 2 ? "" : multiAccountNextStep },

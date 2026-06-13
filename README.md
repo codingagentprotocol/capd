@@ -156,6 +156,7 @@ capd agents route --account auto --require-fresh-quota --json
 capd accounts codex import   # import local ~/.codex/auth.json into capd
 capd accounts codex import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # batch import explicit paths
 CAPD_CODEX_AUTH_PATHS="/tmp/a/auth.json:/tmp/b/auth.json" capd accounts codex import # batch import on macOS/Linux
+CAPD_CODEX_AUTH_PATHS="C:\tmp\a\auth.json;C:\tmp\b\auth.json" capd accounts codex import # batch import on Windows
 capd accounts codex list --json # imported accounts, current marker, safe secret backend and quota metadata
 capd accounts codex project  # create a per-account CODEX_HOME projection
 capd accounts codex migrate-secrets --from file --to native --dry-run # preview moving older imports to native SecretStore
@@ -173,6 +174,7 @@ curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe
 capd health --json --require-secret-backend native # confirm daemon /healthz plus version/protocol/secret backend
 capd accounts import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # daemon-side CAP import
 CAPD_CODEX_AUTH_PATHS="/tmp/a/auth.json:/tmp/b/auth.json" capd accounts import # daemon-side CAP batch import on macOS/Linux
+CAPD_CODEX_AUTH_PATHS="C:\tmp\a\auth.json;C:\tmp\b\auth.json" capd accounts import # daemon-side CAP batch import on Windows
 capd accounts check --json   # daemon-side accounts/check smoke evidence with compact summary
 capd accounts check --json --readiness # daemon-side multi-account readiness gate
 capd agents route --account auto --require-fresh-quota --json
@@ -477,6 +479,29 @@ v0.1.0, verified end to end against live agents. Next: the inspector web
 console, Claude Code deep alignment (interactive approvals via its
 stream-json control protocol), and an out-of-process adapter SDK so the
 community can add agents in any language.
+
+Self-evolution backlog for the Codex account plane:
+
+- Readiness autopilot: turn `doctor`, `probe/data`, and `accounts/check`
+  findings into ranked repair plans with exact commands, expected evidence, and
+  a final gate to rerun.
+- Account-aware routing policy: add pluggable scoring weights for quota,
+  freshness, account health, recent failures, and user intent while keeping the
+  conservative default deterministic.
+- Token health timeline: persist safe quota and route decisions as time-series
+  metadata so the console can show freshness, drift, and repeated failure
+  patterns without storing token material.
+- SecretStore hardening: add backend migration dry-run reports, stale secret
+  detection, and platform-specific recovery hints for macOS Keychain, Windows
+  Credential Manager, and Linux Secret Service.
+- Web console operations: add one-click import/check/route workflows over CAP
+  with bounded timeouts, redacted logs, and a downloadable readiness artifact.
+- Release gates: promote live multi-account readiness into a CI-friendly
+  selftest artifact that proves account count, fresh quotas, native SecretStore,
+  prompt-free Web probe, and fresh auto-route selection before a live run.
+- Adapter SDK boundary: move Codex-specific subprocess assumptions behind the
+  adapter/proc boundary and prepare the same account contract for future
+  out-of-process adapters.
 
 The protocol specification lives in
 [coding-agent-protocol](https://github.com/codingagentprotocol/coding-agent-protocol).

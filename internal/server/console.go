@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -312,7 +313,7 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 		credentialBackend = secretBackend
 	}
 	runtimeReady, runtimeEvidence := accountRuntimeEvidence(checked, accounts)
-	multiAccountImportStep := "import at least two accounts with: capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json, or batch import with: CAPD_CODEX_AUTH_PATHS=/path/a/auth.json:/path/b/auth.json capd accounts import"
+	multiAccountImportStep := multiAccountImportNextStep()
 	checks := []probeDataCheck{
 		{Name: "daemon health", OK: true, Evidence: "health ok"},
 		{Name: probeAccountDataCheckName(result.PromptFree), OK: result.AccountsCheck != nil, Evidence: checkedEvidence(checked, secretBackend, secretStates), NextStep: missingStep(result.AccountsCheck != nil, "start capd with account support enabled")},
@@ -334,6 +335,10 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 		})
 	}
 	return checks
+}
+
+func multiAccountImportNextStep() string {
+	return "import at least two accounts with: capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json, or batch import with: CAPD_CODEX_AUTH_PATHS=/path/a/auth.json" + string(os.PathListSeparator) + "/path/b/auth.json capd accounts import"
 }
 
 func probeAccountDataCheckName(promptFree bool) string {

@@ -355,7 +355,7 @@ func TestProbeDataReadinessReturnsPartialEvidenceOnFailure(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "multi-account readiness") {
 		t.Fatalf("body missing readiness checks: %s", rec.Body.String())
 	}
-	wantNext := "import at least two accounts with: capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json, or batch import with: CAPD_CODEX_AUTH_PATHS=/path/a/auth.json:/path/b/auth.json capd accounts import"
+	wantNext := multiAccountImportNextStep()
 	if !probeNextStepsContain(got.NextSteps, wantNext) {
 		t.Fatalf("nextSteps missing %q: %+v", wantNext, got.NextSteps)
 	}
@@ -715,7 +715,9 @@ func TestConsoleStaticContract(t *testing.T) {
 		"accountsImportNextStep",
 		"继续导入第二个 Codex 账号",
 		"import a second Codex account, then run safe no-prompt audit",
-		"CAPD_CODEX_AUTH_PATHS=/path/a/auth.json:/path/b/auth.json capd accounts import",
+		"CAPD_CODEX_AUTH_PATHS",
+		"macOS/Linux",
+		"Windows",
 		"运行就绪门禁或 ",
 		"checkAccounts",
 		"检查账号",

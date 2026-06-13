@@ -312,7 +312,7 @@ function validationRows({ healthOK, result, route, routeDecision, readiness, req
   const runtimePromptFreeNextStep = `safe no-prompt audit: ${promptFreeDoctor}; use Readiness only when ready for runtime projection checks`;
   const quotaNextStep = promptFree ? `safe no-prompt audit: ${promptFreeDoctor}; deep quota refresh: ${readinessCommand(requiredBackend)}` : `refresh and verify daemon-side readiness with: ${readinessCommand(requiredBackend)}`;
   const routeFreshNextStep = promptFree ? `safe no-prompt audit: ${promptFreeDoctor}; deep route gate: capd agents route --account auto --require-fresh-quota --json` : `refresh and verify daemon-side readiness with: ${readinessCommand(requiredBackend)}`;
-  const multiAccountNextStep = "import at least two accounts with: capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json, or batch import with: CAPD_CODEX_AUTH_PATHS=/path/a/auth.json:/path/b/auth.json capd accounts import";
+  const multiAccountNextStep = "import at least two accounts with: capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json, or batch import with CAPD_CODEX_AUTH_PATHS using ':' on macOS/Linux or ';' on Windows";
   const rows = [
     { name:"daemon health", ok:!!healthOK, evidence:healthEvidence(healthOK), nextStep:healthOK ? "" : "start capd with: capd start" },
     { name:promptFree ? "account metadata" : "accounts/check data", ok:!!result, evidence:result ? `${result.checkedAccounts || 0} account(s), secret ${secretBackend}, secretState ${promptFree ? "not checked" : secretStates}` : "accounts/check failed", nextStep:result ? "" : "check daemon logs and retry accounts/check" },

@@ -78,13 +78,15 @@ Import at least one Codex `auth.json`, then run the local smoke check:
 capd accounts codex import
 capd accounts codex import --auth /tmp/acct-a/auth.json --auth /tmp/acct-b/auth.json
 CAPD_CODEX_AUTH_PATHS="/tmp/acct-a/auth.json:/tmp/acct-b/auth.json" capd accounts codex import
+CAPD_CODEX_AUTH_PATHS="C:\tmp\acct-a\auth.json;C:\tmp\acct-b\auth.json" capd accounts codex import
 capd accounts codex smoke
 capd accounts codex smoke --json
 ```
 
 Repeat `--auth` for explicit multi-account imports. `CAPD_CODEX_AUTH_PATHS`
 uses the OS path-list separator (`:` on macOS/Linux, `;` on Windows) and is
-only used when `--auth` is not supplied.
+only used when `--auth` is not supplied. Prefer repeated `--auth` flags when
+sharing commands across platforms.
 
 For real quota validation:
 
@@ -116,6 +118,7 @@ curl -H "Authorization: Bearer $(cat ~/.capd/token)" "http://127.0.0.1:7777/prob
 capd health --json --require-secret-backend native
 capd accounts import --auth /tmp/acct-a/auth.json --auth /tmp/acct-b/auth.json
 CAPD_CODEX_AUTH_PATHS="/tmp/acct-a/auth.json:/tmp/acct-b/auth.json" capd accounts import
+CAPD_CODEX_AUTH_PATHS="C:\tmp\acct-a\auth.json;C:\tmp\acct-b\auth.json" capd accounts import
 capd accounts check --json
 capd accounts check --json --readiness
 capd agents usage codex --account auto
