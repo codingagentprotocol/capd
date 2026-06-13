@@ -611,7 +611,25 @@ function renderProbeDataResult(data) {
 
 function renderRepairPlan(steps) {
   repairPlanEl.textContent = "";
-  for (const [index, step] of (steps || []).entries()) {
+  steps = steps || [];
+  const runnableSteps = steps.filter(step => repairStepClassification(step).runnable);
+  if (steps.length) {
+    const controls = document.createElement("div");
+    controls.className = "repair controls";
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = `Repair plan · ${steps.length} step(s), ${runnableSteps.length} runnable`;
+    const dryRunAll = document.createElement("button");
+    dryRunAll.textContent = "Dry-run plan";
+    dryRunAll.onclick = () => runRepairSteps(steps, false, dryRunAll);
+    const runRunnable = document.createElement("button");
+    runRunnable.textContent = "Run runnable steps";
+    runRunnable.disabled = runnableSteps.length === 0;
+    runRunnable.onclick = () => runRepairSteps(runnableSteps, true, runRunnable);
+    controls.append(title, dryRunAll, runRunnable);
+    repairPlanEl.appendChild(controls);
+  }
+  for (const [index, step] of steps.entries()) {
     const classification = repairStepClassification(step);
     const box = document.createElement("div");
     box.className = "repair " + (classification.runnable ? "runnable" : "manual");

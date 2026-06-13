@@ -577,7 +577,8 @@ Self-evolution backlog for the Codex account plane:
   a final gate to rerun. Doctor, `/probe/data`, and the Web Console now share
   the public `protocol.RepairStep` shape, the CLI has an approval-gated repair
   runner, and browser diagnostics classify each step as runnable or manual. The
-  next evolution is wiring the console to trigger approved repair runs directly.
+  Console can dry-run the whole plan and run the ordered runnable subset through
+  the daemon `repair/run` RPC.
 - Account-aware routing policy: `internal/account.RoutePolicy` now centralizes
   quota freshness, unknown-score risk, recent-failure health, task class, and
   current-account tie-break tuning while keeping the conservative default

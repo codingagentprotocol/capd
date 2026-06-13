@@ -76,8 +76,8 @@ proves all of the following on this machine:
 - Persist richer quota drift snapshots beyond the current safe recent
   `routeHistory` projection so the console can show long-term freshness and
   repeated failure patterns without storing tokens.
-- Expand Web Console repair execution from single approved runnable steps to
-  ordered multi-step guided runs with richer progress UI.
+- Expand Web Console repair execution with richer progress UI for
+  ordered multi-step guided runs.
 - Add a browser-rendered smoke test that opens `/console/`, drives the existing
   protocol-level fake session path through real DOM clicks, and verifies
   prompt-free diagnostics visually.

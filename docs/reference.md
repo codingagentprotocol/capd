@@ -169,8 +169,9 @@ foreground daemon startup, and no final live preflight unless `--include-final`
 is also supplied. The Web Console and Probe render the same runnable/manual
 classification from server-provided `execution` evidence, with a local fallback
 for older daemons, so browser diagnostics agree with CLI execution policy. The
-Web Console calls the daemon `repair/run` RPC for per-step dry-runs and approved
-execution, while scoped read-only browser tokens are rejected.
+Web Console calls the daemon `repair/run` RPC for per-step dry-runs,
+whole-plan dry-runs, and approved execution of the ordered runnable subset,
+while scoped read-only browser tokens are rejected.
 Without `--yes`, `--execute` asks the user to type `execute` before running
 anything.
 Repair execution is intentionally bounded: one run evaluates at most 20 steps,
