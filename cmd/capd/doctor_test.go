@@ -174,6 +174,59 @@ func TestDoctorRepairPlanOnlyHonorsFailFlag(t *testing.T) {
 	}
 }
 
+func TestDoctorRepairCommandsOnly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+	if err := writeTokenForTest(home, "tok-doctor-commands"); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	cmd := newDoctorCmd()
+	cmd.SetArgs([]string{"--repair-commands", "--prompt-free", "--require-secret-backend", "native"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	lines := compactStrings(strings.Split(out.String(), "\n"))
+	want := []string{
+		"capd start --secret-backend native",
+		"capd accounts import --auth /path/a/auth.json --auth /path/b/auth.json",
+		"make live-codex-preflight",
+	}
+	for _, command := range want {
+		if !containsString(lines, command) {
+			t.Fatalf("repair commands missing %q: %q", command, out.String())
+		}
+	}
+	for _, forbidden := range []string{"tok-doctor-commands", home, `"summary"`, "repair plan:", "command:"} {
+		if strings.Contains(out.String(), forbidden) {
+			t.Fatalf("repair commands leaked or included formatted report %q: %s", forbidden, out.String())
+		}
+	}
+}
+
+func TestDoctorRepairCommandsOnlyHonorsFailFlag(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CAPD_HOST", "127.0.0.1")
+	t.Setenv("CAPD_PORT", "1")
+	var out bytes.Buffer
+	cmd := newDoctorCmd()
+	cmd.SetArgs([]string{"--repair-commands", "--fail"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "readiness issue") {
+		t.Fatalf("err = %v output=%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "capd start") || strings.Contains(out.String(), "Usage:") || strings.Contains(out.String(), "Error:") {
+		t.Fatalf("repair command output not clean: %s", out.String())
+	}
+}
+
 func TestDoctorDaemonNextStepHonorsRequiredSecretBackend(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

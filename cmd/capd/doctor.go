@@ -29,6 +29,7 @@ func newDoctorCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			jsonOut, _ := cmd.Flags().GetBool("json")
 			repairPlanOut, _ := cmd.Flags().GetBool("repair-plan")
+			repairCommandsOut, _ := cmd.Flags().GetBool("repair-commands")
 			failOnIssues, _ := cmd.Flags().GetBool("fail")
 			verifySecretStore, _ := cmd.Flags().GetBool("verify-secretstore")
 			promptFree, _ := cmd.Flags().GetBool("prompt-free")
@@ -51,6 +52,19 @@ func newDoctorCmd() *cobra.Command {
 			})
 			if err != nil {
 				return err
+			}
+			if repairCommandsOut {
+				for _, step := range report.RepairPlan {
+					if step.Command != "" {
+						fmt.Fprintln(cmd.OutOrStdout(), step.Command)
+					}
+				}
+				if failOnIssues && !report.OK {
+					cmd.SilenceUsage = true
+					cmd.SilenceErrors = true
+					return fmt.Errorf("doctor found %d readiness issue(s)", len(report.Issues))
+				}
+				return nil
 			}
 			if repairPlanOut {
 				out, _ := json.MarshalIndent(report.RepairPlan, "", "  ")
@@ -81,6 +95,7 @@ func newDoctorCmd() *cobra.Command {
 	}
 	cmd.Flags().Bool("json", false, "print machine-readable readiness evidence without token material")
 	cmd.Flags().Bool("repair-plan", false, "print only the ordered repair plan as JSON without other readiness evidence")
+	cmd.Flags().Bool("repair-commands", false, "print only repair plan commands, one per line")
 	cmd.Flags().Bool("fail", false, "return a non-zero exit code when readiness issues are found, including with --json")
 	cmd.Flags().Bool("verify-secretstore", false, "write, read, and delete a diagnostic secret to verify the active SecretStore backend")
 	cmd.Flags().Bool("prompt-free", false, "skip account SecretStore credential reads for a fast metadata/quota/routing preflight")

@@ -4,7 +4,7 @@ LIVE_SECRET_BACKEND ?= native
 CAPD_BIN ?= go run ./cmd/capd
 LDFLAGS := -X github.com/codingagentprotocol/capd/internal/daemon.Version=$(VERSION)
 
-.PHONY: build run test vet tidy verify verify-secretstore verify-codex-readiness-sim live-codex-repair-plan live-codex-preflight live-codex-readiness live-codex-selftest
+.PHONY: build run test vet tidy verify verify-secretstore verify-codex-readiness-sim live-codex-repair-plan live-codex-repair-commands live-codex-preflight live-codex-readiness live-codex-selftest
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o capd ./cmd/capd
@@ -43,6 +43,9 @@ verify-codex-readiness-sim:
 
 live-codex-repair-plan:
 	@CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) doctor --repair-plan --prompt-free --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
+
+live-codex-repair-commands:
+	@CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) doctor --repair-commands --prompt-free --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m
 
 live-codex-preflight:
 	@echo "live-codex-preflight requires >=2 imported Codex accounts, CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND), and a running daemon from: capd start --secret-backend $(LIVE_SECRET_BACKEND)"
