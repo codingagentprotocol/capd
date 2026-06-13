@@ -20,6 +20,13 @@ The same deterministic core suite is available as:
 make verify
 ```
 
+The local Codex account-plane audit, including the deterministic suite,
+simulated multi-account readiness gate, and native SecretStore backend gate, is:
+
+```bash
+make verify-codex-goal
+```
+
 ## Native SecretStore
 
 The default test suite compiles every native backend but only touches real OS

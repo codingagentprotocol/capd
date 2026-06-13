@@ -15,7 +15,7 @@ func TestLiveCodexReadinessUsesOneSecretBackend(t *testing.T) {
 	for _, want := range []string{
 		"LIVE_SECRET_BACKEND ?= native",
 		"CAPD_BIN ?= go run ./cmd/capd",
-		"verify-codex-readiness-sim live-codex-repair-plan live-codex-repair-commands live-codex-preflight live-codex-readiness live-codex-selftest",
+		"verify-codex-readiness-sim verify-codex-goal live-codex-repair-plan live-codex-repair-commands live-codex-preflight live-codex-readiness live-codex-selftest",
 		"live-codex-repair-plan:",
 		"@CAPD_SECRET_BACKEND=$(LIVE_SECRET_BACKEND) $(CAPD_BIN) doctor --repair-plan --prompt-free --require-secret-backend $(LIVE_SECRET_BACKEND) --timeout 2m",
 		"live-codex-repair-commands:",
@@ -361,6 +361,23 @@ func TestVerifySecretStoreTargetCoversNativeBackends(t *testing.T) {
 	} {
 		if !strings.Contains(makefile, want) {
 			t.Fatalf("Makefile verify-secretstore target missing %q", want)
+		}
+	}
+}
+
+func TestVerifyCodexGoalTargetChainsLocalAuditGates(t *testing.T) {
+	data, err := os.ReadFile("../../Makefile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	makefile := string(data)
+	for _, want := range []string{
+		"verify-codex-goal",
+		"verify-codex-goal: verify verify-codex-readiness-sim verify-secretstore",
+		"Codex account-plane deterministic, simulated readiness, and SecretStore gates passed",
+	} {
+		if !strings.Contains(makefile, want) {
+			t.Fatalf("Makefile verify-codex-goal target missing %q", want)
 		}
 	}
 }

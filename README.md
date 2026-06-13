@@ -196,6 +196,7 @@ capd accounts check --json --readiness # daemon-side multi-account readiness gat
 capd agents route --account auto --require-fresh-quota --json
 ```
 
+For the full local Codex account-plane audit, run `make verify-codex-goal`.
 For deterministic local regression, run `make verify`; for native SecretStore
 coverage, run `make verify-secretstore`; for a no-real-account Codex
 multi-account quota/routing/readiness regression, run

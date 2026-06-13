@@ -24,10 +24,16 @@ before declaring the full goal complete.
 Run these before treating a change as release-sized:
 
 ```bash
+make verify-codex-goal
 make verify
 make verify-codex-readiness-sim
 make verify-secretstore
 ```
+
+`make verify-codex-goal` is the one-command local audit: it runs the full
+deterministic suite, the simulated Codex multi-account readiness gate, and the
+native SecretStore backend gate. It still does not replace the live/native
+account evidence below.
 
 Run these when real native Codex accounts are available:
 

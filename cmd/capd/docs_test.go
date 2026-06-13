@@ -391,9 +391,11 @@ func TestEvidenceMatrixCoversCodexAccountPlaneGoal(t *testing.T) {
 		"Evidence package and support bundle",
 		"Runtime stability and reconnect",
 		"Security by contract",
+		"make verify-codex-goal",
 		"make verify",
 		"make verify-codex-readiness-sim",
 		"make verify-secretstore",
+		"one-command local audit",
 		"capd accounts --secret-backend native codex quota all --timeout 2m",
 		"capd accounts check --json --readiness --require-secret-backend native --timeout 2m",
 		"capd agents route --account auto --require-fresh-quota --json",
@@ -422,6 +424,30 @@ func TestReadmeLinksEvidenceMatrix(t *testing.T) {
 	} {
 		if !strings.Contains(readme, want) {
 			t.Fatalf("README missing evidence matrix link %q", want)
+		}
+	}
+}
+
+func TestDocsCoverVerifyCodexGoalTarget(t *testing.T) {
+	readmeData, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testingData, err := os.ReadFile("../../docs/testing.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, doc := range map[string]string{
+		"README":  string(readmeData),
+		"testing": string(testingData),
+	} {
+		for _, want := range []string{
+			"make verify-codex-goal",
+			"Codex account-plane",
+		} {
+			if !strings.Contains(doc, want) {
+				t.Fatalf("%s missing verify-codex-goal contract %q", name, want)
+			}
 		}
 	}
 }
