@@ -413,8 +413,10 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 			return nil, asProtocolError(err)
 		}
 		if err := sess.Approve(ctx, params.ApprovalID, params.Decision); err != nil {
+			s.recordApprovalAudit(params, "failed")
 			return nil, asProtocolError(err)
 		}
+		s.recordApprovalAudit(params, "ok")
 		return protocol.OKResult{OK: true}, nil
 
 	case protocol.MethodTaskCancel:

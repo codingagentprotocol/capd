@@ -47,9 +47,11 @@ func (s *Server) routeAgent(ctx context.Context, params protocol.AgentRouteParam
 	defer func() {
 		if perr != nil {
 			s.metrics.recordRouteDecision("", false)
+			s.recordRouteAudit(params, protocol.AgentRouteResult{}, perr)
 			return
 		}
 		s.metrics.recordRouteDecision(result.Agent.ID, true)
+		s.recordRouteAudit(params, result, nil)
 	}()
 	params.Model = strings.TrimSpace(params.Model)
 	params.Effort = strings.TrimSpace(params.Effort)

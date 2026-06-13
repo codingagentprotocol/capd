@@ -160,8 +160,10 @@ contexts.
 
 **Status:** foundational append-only JSONL audit storage and support bundle
 export are in place. CLI account import, route decisions, `secretstore check`,
-and repair runner execution now write safe audit metadata; next steps are
-wiring approval decisions and daemon-side account actions into that audit sink.
+repair runner execution, daemon-side account import, daemon-side route
+decisions, and daemon-side approval replies now write safe audit metadata; next
+steps are wiring any future Web-triggered repair execution and deeper approval
+policy details into that audit sink.
 
 ## P3 Performance And Reliability
 

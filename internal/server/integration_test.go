@@ -28,6 +28,7 @@ import (
 	"github.com/codingagentprotocol/capd/internal/account/codexauth"
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/adapter"
+	"github.com/codingagentprotocol/capd/internal/audit"
 	"github.com/codingagentprotocol/capd/internal/session"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
@@ -364,6 +365,7 @@ func newIntegration(t *testing.T) (*httptest.Server, *scriptedAdapter) {
 
 func newIntegrationWithToken(t *testing.T, token string) (*httptest.Server, *scriptedAdapter) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	fake := &scriptedAdapter{}
 	reg := adapter.NewRegistry(fake)
 	st, err := session.OpenStore(t.TempDir() + "/it.db")
@@ -391,6 +393,7 @@ func newCodexAccountIntegrationServer(t *testing.T) (*Server, *httptest.Server, 
 	fake := &scriptedAdapter{id: "codex"}
 	reg := adapter.NewRegistry(fake)
 	dir := t.TempDir()
+	t.Setenv("HOME", dir)
 	st, err := session.OpenStore(filepath.Join(dir, "sessions.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -864,6 +867,13 @@ func TestAgentsRouteAutoAccountChoosesLowestCachedQuota(t *testing.T) {
 	}
 	if !strings.Contains(routed.Reason, "auto account codex-low") {
 		t.Fatalf("reason = %q", routed.Reason)
+	}
+	events, err := audit.Recent("", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Type != "agents.route" || events[0].Actor != "daemon" || events[0].Outcome != "ok" || events[0].Data["agent"] != "codex" || events[0].Data["account"] != "codex-low" || events[0].Data["accountMode"] != protocol.AccountAuto || events[0].Data["quotaState"] != string(protocol.AccountQuotaStateFresh) || events[0].Data["quotaFresh"] != true {
+		t.Fatalf("audit events = %+v", events)
 	}
 }
 
@@ -3311,6 +3321,16 @@ func TestApprovalRoundTrip(t *testing.T) {
 	c.mustResult(c.call(protocol.MethodApprovalReply, protocol.ApprovalReplyParams{
 		SessionID: created.SessionID, ApprovalID: approvalID, Decision: protocol.DecisionApprove,
 	}), nil)
+	events, err := audit.Recent("", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Type != "approval.reply" || events[0].Actor != "daemon" || events[0].Outcome != "ok" || events[0].Data["session"] != created.SessionID || events[0].Data["decision"] != protocol.DecisionApprove {
+		t.Fatalf("audit events = %+v", events)
+	}
+	if strings.Contains(fmt.Sprint(events), "need-approval") || strings.Contains(fmt.Sprint(events), "command") {
+		t.Fatalf("approval audit leaked prompt or command detail: %+v", events)
+	}
 
 	if res := c.waitEvent(protocol.EventToolResult); res.Data["output"] != "ran-after-approve" {
 		t.Fatalf("tool result = %v", res.Data)
@@ -3322,6 +3342,13 @@ func TestApprovalRoundTrip(t *testing.T) {
 		SessionID: created.SessionID, ApprovalID: "nope", Decision: protocol.DecisionDeny,
 	}); resp.Error == nil {
 		t.Fatal("bogus approval id should error")
+	}
+	events, err = audit.Recent("", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || events[1].Type != "approval.reply" || events[1].Outcome != "failed" || events[1].Data["decision"] != protocol.DecisionDeny {
+		t.Fatalf("audit events after failed approval = %+v", events)
 	}
 }
 

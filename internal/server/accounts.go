@@ -306,8 +306,10 @@ func (s *Server) importAccount(ctx context.Context, params protocol.AccountsImpo
 	for _, authPath := range authPaths {
 		result, err := importer.ImportAuthJSON(ctx, authPath)
 		if err != nil {
+			s.recordAccountImportAudit("failed", provider, s.opts.Secrets.Backend(), "", "")
 			return protocol.AccountsImportResult{}, protocol.NewError(protocol.CodeInvalidParams, "import account: %s", codexauth.SafeImportError(err, authPath))
 		}
+		s.recordAccountImportAudit("ok", provider, s.opts.Secrets.Backend(), result.Account.ID, result.Account.AuthMode)
 		imported = append(imported, accountSummary(result.Account, account.QuotaSnapshot{}))
 	}
 	current, err := s.opts.Accounts.CurrentAccount(provider)

@@ -1010,6 +1010,23 @@ func TestAccountsImportCallsDaemonRPCWithRepeatedAuthFlags(t *testing.T) {
 	if strings.Contains(out.String(), firstPath) || strings.Contains(out.String(), "first-access-secret") || strings.Contains(out.String(), token) {
 		t.Fatalf("accounts import text leaked data: %s", out.String())
 	}
+	events, auditErr := audit.Recent("", 10)
+	if auditErr != nil {
+		t.Fatal(auditErr)
+	}
+	if len(events) != 5 {
+		t.Fatalf("audit events = %+v", events)
+	}
+	for _, ev := range events {
+		if ev.Type != "accounts.import" || ev.Actor != "daemon" || ev.Outcome != "ok" || ev.Data["provider"] != codexauth.Provider || ev.Data["backend"] != secret.BackendFile {
+			t.Fatalf("audit event = %+v", ev)
+		}
+	}
+	for _, leaked := range []string{token, firstPath, secondPath, "first-access-secret", "second-access-secret", "first-refresh-secret", "second-refresh-secret", home} {
+		if strings.Contains(fmt.Sprint(events), leaked) {
+			t.Fatalf("accounts import audit leaked %q: %+v", leaked, events)
+		}
+	}
 }
 
 func TestAccountsImportNextStep(t *testing.T) {
