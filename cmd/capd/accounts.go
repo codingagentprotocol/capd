@@ -836,6 +836,8 @@ the native OS backend and keeps the source secret as a rollback path. Add
 					Email:              acc.Email,
 					AuthMode:           acc.AuthMode,
 					ProjectedCodexHome: profile.CodexHome,
+					SecretChecked:      true,
+					RuntimeChecked:     true,
 					ProjectionOK:       true,
 					RuntimeEnvOK:       projection.RuntimeEnvOK,
 					AuthJSONPrivate:    projection.AuthJSONPrivate,
@@ -1091,6 +1093,8 @@ func codexSmokeSecretFailureRow(acc account.Account, backendOK bool, state strin
 		ID:              acc.ID,
 		Email:           acc.Email,
 		AuthMode:        acc.AuthMode,
+		SecretChecked:   true,
+		RuntimeChecked:  false,
 		SecretBackendOK: backendOK,
 		SecretReadable:  false,
 		SecretState:     state,
@@ -1227,6 +1231,8 @@ type codexSmokeAccount struct {
 	Email              string   `json:"email,omitempty"`
 	AuthMode           string   `json:"authMode,omitempty"`
 	ProjectedCodexHome string   `json:"projectedCodexHome"`
+	SecretChecked      bool     `json:"secretChecked"`
+	RuntimeChecked     bool     `json:"runtimeChecked"`
 	ProjectionOK       bool     `json:"projectionOk"`
 	RuntimeEnvOK       bool     `json:"runtimeEnvOk"`
 	AuthJSONPrivate    bool     `json:"authJsonPrivate"`

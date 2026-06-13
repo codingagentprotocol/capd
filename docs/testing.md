@@ -247,9 +247,11 @@ selection, and optionally ChatGPT backend quota refresh. It prints only account
 metadata, projection paths, quota percentages, projection booleans, and the
 selected `autoRoute.accountId`, `autoRoute.quotaState` (`fresh`, `stale`, or
 `missing`), sorted `routeCandidates`, plus `secretBackend`; per-account rows include
-`secretBackendOk`, `secretReadable`, `secretState`, `quotaState`, `quotaFresh`,
-and `quotaCheckedAt` fields; text output mirrors those safe secret/runtime/quota
-columns for terminal checks. Token material is never printed. Use
+`secretChecked`, `runtimeChecked`, `secretBackendOk`, `secretReadable`,
+`secretState`, `quotaState`, `quotaFresh`, and `quotaCheckedAt` fields. Early
+prompt-free failures leave the checked booleans false, distinguishing cached
+metadata from a failed SecretStore or runtime check; text output mirrors those
+safe secret/runtime/quota columns for terminal checks. Token material is never printed. Use
 `--require-fresh-quota` to fail unless the auto-route decision is backed by a
 fresh cached quota snapshot; use `--require-all-fresh-quota` to fail unless
 every imported account has fresh cached quota. Use

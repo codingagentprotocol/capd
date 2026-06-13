@@ -251,7 +251,9 @@ candidate summary when the Web diagnostics path has partial evidence. The
 for CLI, Web, Probe, and automation clients.
 Local `capd accounts codex smoke --json` uses the same safe `secretState`
 vocabulary, so SecretStore read failures still return partial account evidence
-without token material.
+without token material. Its `secretChecked` and `runtimeChecked` booleans make
+early prompt-free failures distinguishable from actual credential or projection
+failures.
 
 Every flag, protocol field, and event is documented in
 [docs/reference.md](docs/reference.md).

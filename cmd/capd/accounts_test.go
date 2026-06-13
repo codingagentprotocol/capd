@@ -1850,7 +1850,7 @@ func TestCodexAccountsSmokeJSONWithoutLeakingSecrets(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 	acc := result.Accounts[0]
-	if acc.ID != "codex-test" || !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK || !acc.SecretBackendOK || !acc.SecretReadable || acc.SecretState != protocol.AccountSecretStateReadable || acc.PrimaryUsed != "0.0%" || acc.PrimaryUsedPercent == nil || *acc.PrimaryUsedPercent != 0 || acc.QuotaState != protocol.AccountQuotaStateFresh || !acc.QuotaFresh || acc.QuotaCheckedAt == 0 {
+	if acc.ID != "codex-test" || !acc.SecretChecked || !acc.RuntimeChecked || !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK || !acc.SecretBackendOK || !acc.SecretReadable || acc.SecretState != protocol.AccountSecretStateReadable || acc.PrimaryUsed != "0.0%" || acc.PrimaryUsedPercent == nil || *acc.PrimaryUsedPercent != 0 || acc.QuotaState != protocol.AccountQuotaStateFresh || !acc.QuotaFresh || acc.QuotaCheckedAt == 0 {
 		t.Fatalf("account = %+v", acc)
 	}
 	if result.AutoRoute == nil || result.AutoRoute.AccountID != "codex-test" {
@@ -1887,7 +1887,7 @@ func TestCodexAccountsSmokeJSONKeepsPartialSecretFailureEvidence(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatalf("json err = %v output=%s", err, out.String())
 	}
-	if result.OK || result.CheckedAccounts != 1 || len(result.Accounts) != 1 || result.Accounts[0].SecretState != protocol.AccountSecretStateMissing || result.Accounts[0].SecretReadable {
+	if result.OK || result.CheckedAccounts != 1 || len(result.Accounts) != 1 || !result.Accounts[0].SecretChecked || result.Accounts[0].RuntimeChecked || result.Accounts[0].SecretState != protocol.AccountSecretStateMissing || result.Accounts[0].SecretReadable {
 		t.Fatalf("partial result = %+v", result)
 	}
 	if !containsString(result.NextSteps, "import Codex auth with: capd accounts codex import") {
@@ -1914,7 +1914,7 @@ func TestCodexSmokeCachedAccountRowReportsSecretBackendMetadata(t *testing.T) {
 	}
 
 	row := codexSmokeCachedAccountRow(accounts, acc, secret.BackendNative)
-	if !row.SecretBackendOK || row.SecretReadable || row.SecretState != "" {
+	if row.SecretChecked || row.RuntimeChecked || !row.SecretBackendOK || row.SecretReadable || row.SecretState != "" {
 		t.Fatalf("native cached row = %+v", row)
 	}
 
@@ -2059,7 +2059,7 @@ func TestCodexAccountsSmokeJSONIncludesAutoRouteEvidence(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 	for _, acc := range result.Accounts {
-		if !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK || !acc.SecretBackendOK || !acc.SecretReadable || acc.QuotaState != protocol.AccountQuotaStateFresh || !acc.QuotaFresh {
+		if !acc.SecretChecked || !acc.RuntimeChecked || !acc.ProjectionOK || !acc.RuntimeEnvOK || !acc.AuthJSONPrivate || !acc.ProjectionMarkerOK || !acc.SecretBackendOK || !acc.SecretReadable || acc.QuotaState != protocol.AccountQuotaStateFresh || !acc.QuotaFresh {
 			t.Fatalf("projection evidence missing: %+v", acc)
 		}
 	}
@@ -2200,7 +2200,7 @@ func TestCodexAccountsSmokeRequireMultipleReturnsPartialAccountEvidence(t *testi
 	if result.OK || result.CheckedAccounts != 1 || len(result.Accounts) != 1 || result.Accounts[0].ID != "codex-test" {
 		t.Fatalf("partial result = %+v", result)
 	}
-	if result.Accounts[0].SecretReadable || result.Accounts[0].ProjectionOK || result.Accounts[0].ProjectedCodexHome != "" {
+	if result.Accounts[0].SecretChecked || result.Accounts[0].RuntimeChecked || result.Accounts[0].SecretReadable || result.Accounts[0].ProjectionOK || result.Accounts[0].ProjectedCodexHome != "" {
 		t.Fatalf("partial result should not read secret or project runtime: %+v", result.Accounts[0])
 	}
 	if result.Accounts[0].QuotaState != protocol.AccountQuotaStateStale || result.Accounts[0].QuotaFresh || result.Accounts[0].PrimaryUsedPercent == nil || *result.Accounts[0].PrimaryUsedPercent != 11 {
@@ -2468,7 +2468,7 @@ func TestCodexAccountsSmokeJSONFailureKeepsPartialEvidence(t *testing.T) {
 	if len(got.RouteCandidates) != 1 || got.RouteCandidates[0].AccountID != "codex-test" || !got.RouteCandidates[0].Fresh {
 		t.Fatalf("preflight failure should keep route candidates: %+v", got.RouteCandidates)
 	}
-	if len(got.Accounts) != 1 || got.Accounts[0].ID != "codex-test" || !got.Accounts[0].QuotaFresh || got.Accounts[0].SecretReadable || got.Accounts[0].ProjectionOK || got.Accounts[0].ProjectedCodexHome != "" {
+	if len(got.Accounts) != 1 || got.Accounts[0].ID != "codex-test" || !got.Accounts[0].QuotaFresh || got.Accounts[0].SecretChecked || got.Accounts[0].RuntimeChecked || got.Accounts[0].SecretReadable || got.Accounts[0].ProjectionOK || got.Accounts[0].ProjectedCodexHome != "" {
 		t.Fatalf("preflight failure should keep cached account evidence without secret/runtime projection: %+v", got)
 	}
 	for _, secret := range []string{"access-secret", "refresh-secret", "secretRef", "secret_ref", "rawAuthJson"} {
