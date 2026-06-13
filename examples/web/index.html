@@ -39,6 +39,11 @@
   .check .name { color:#e6edf3; }
   .check .evidence { color:#8b949e; margin-top:2px; }
   .check .next { color:#d29922; margin-top:2px; }
+  #repairPlan { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:6px; margin:-2px 0 12px; }
+  .repair { border:1px solid #30363d; border-radius:6px; padding:8px; background:#010409; font-size:12px; }
+  .repair .title { color:#e6edf3; }
+  .repair .cmd { color:#58a6ff; margin-top:4px; overflow-wrap:anywhere; }
+  .repair .expect { color:#8b949e; margin-top:4px; }
   #main { display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:12px; align-items:stretch; }
   #sessions, #log { background:#010409; border:1px solid #30363d; border-radius:8px; padding:12px; height:520px; overflow-y:auto; }
   #log { white-space:pre-wrap; }
@@ -86,6 +91,7 @@
 <div id="readiness">诊断等待连接…</div>
 <div id="accountDiagnostics"></div>
 <div id="readinessChecks"></div>
+<div id="repairPlan"></div>
 <div id="main">
   <div id="sessions">
     <div id="sessionHead"><span>Sessions</span><button id="refreshSessions">刷新</button></div>
@@ -114,6 +120,7 @@ const routePreviewEl = document.getElementById("routePreview");
 const readinessEl = document.getElementById("readiness");
 const accountDiagnosticsEl = document.getElementById("accountDiagnostics");
 const readinessChecksEl = document.getElementById("readinessChecks");
+const repairPlanEl = document.getElementById("repairPlan");
 const statusEl = document.getElementById("status");
 let ws, nextId = 0, pending = {}, sessionId = null;
 const RPC_TIMEOUT_MS = 12000;
@@ -495,6 +502,7 @@ function renderProbeDataResult(data) {
     readinessError: data.ok ? "" : probeErrorSummary(data.errors, "accounts/check"),
     requiredSecretBackend: data.summary && data.summary.requiredSecretBackend || requiredSecretBackend()
   });
+  renderRepairPlan(data.repairPlan || []);
   const summary = data.summary || {};
   line("ev-sys", `· probe summary ready=${!!summary.ready} accounts=${summary.checkedAccounts || 0}/${summary.requiredAccounts || 0} fresh=${summary.freshQuotaAccounts || 0} routeCandidates=${summary.routeCandidates || 0} secretOK=${!!summary.secretBackendOk}`);
   for (const check of data.checks || []) {
@@ -509,6 +517,28 @@ function renderProbeDataResult(data) {
   }
   for (const err of data.errors || []) {
     line("ev-err", `✗ ${err.source || "probe"} code=${err.code || 0} ${err.message || ""}`);
+  }
+}
+
+function renderRepairPlan(steps) {
+  repairPlanEl.textContent = "";
+  for (const [index, step] of (steps || []).entries()) {
+    const box = document.createElement("div");
+    box.className = "repair";
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = `${index + 1}. ${step.title || step.id || "Repair step"}`;
+    const cmd = document.createElement("div");
+    cmd.className = "cmd";
+    cmd.textContent = step.command || "";
+    box.append(title, cmd);
+    if (step.expectedEvidence) {
+      const expect = document.createElement("div");
+      expect.className = "expect";
+      expect.textContent = `expect: ${step.expectedEvidence}`;
+      box.appendChild(expect);
+    }
+    repairPlanEl.appendChild(box);
   }
 }
 
@@ -596,6 +626,7 @@ function readinessCheckRows({ result, accounts, freshCount, autoRoute, route, ro
 
 function renderReadinessChecks(checks) {
   readinessChecksEl.textContent = "";
+  renderRepairPlan([]);
   for (const check of checks) {
     const box = document.createElement("div");
     box.className = "check " + (check.ok ? "pass" : "fail");

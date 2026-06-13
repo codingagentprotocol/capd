@@ -259,7 +259,7 @@ steps point first to `capd doctor --prompt-free`; `深度验证`, `就绪门禁`
 Probe `Readiness` button are explicit deeper checks that may read account
 SecretStore credentials. The console's `深度验证` button runs that same
 header-authenticated readiness probe and renders the returned checks, errors,
-auto-route, and route-candidate evidence in place.
+auto-route, route-candidate evidence, and repair-plan commands in place.
 The endpoint bounds server-side work too: ordinary probes get 12s and readiness
 probes get 2m. Its JSON includes a compact `summary` for account counts, quota
 freshness, auto-route freshness, route-decision status, and SecretStore backend
