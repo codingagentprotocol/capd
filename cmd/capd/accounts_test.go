@@ -838,6 +838,17 @@ func TestAccountsCheckErrorNextStepsExplainSecretAccessDenied(t *testing.T) {
 	if len(fromEvidence) != 1 || !strings.Contains(fromEvidence[0], "approve macOS Keychain access") {
 		t.Fatalf("evidence nextSteps = %+v", fromEvidence)
 	}
+
+	unreadable := accountsCheckErrorNextSteps("load account credentials: unreadable", protocol.AccountsCheckResult{
+		SecretBackend: secret.BackendNative,
+		Accounts:      []protocol.AccountCheckEvidence{{ID: "codex-test", SecretState: protocol.AccountSecretStateUnreadable}},
+	})
+	if !containsString(unreadable, "verify SecretStore directly with: capd secretstore check --json --roundtrip --secret-backend native --require-backend native --timeout 2m, then re-import affected Codex accounts through CAP with: capd accounts import --auth /path/to/auth.json") {
+		t.Fatalf("unreadable nextSteps = %+v", unreadable)
+	}
+	if got := accountsCheckSecretStoreCommand(""); got != "capd secretstore check --json --roundtrip --timeout 2m" {
+		t.Fatalf("generic secretstore command = %q", got)
+	}
 }
 
 func TestAccountsCheckErrorNextStepsPreserveRequiredSecretBackend(t *testing.T) {

@@ -319,6 +319,9 @@ func accountsCheckErrorNextSteps(message string, partial protocol.AccountsCheckR
 	if accountsCheckHasSecretState(partial, protocol.AccountSecretStateTimeout) {
 		steps = append(steps, "unlock or approve OS SecretStore access, then rerun: "+accountsCheckReadinessCommand(requiredBackend))
 	}
+	if accountsCheckHasSecretState(partial, protocol.AccountSecretStateUnreadable) {
+		steps = append(steps, "verify SecretStore directly with: "+accountsCheckSecretStoreCommand(accountsCheckSecretBackendHint(partial, requiredBackend))+", then re-import affected Codex accounts through CAP with: capd accounts import --auth /path/to/auth.json")
+	}
 	if requiredBackend != "" && !summary.SecretBackendOK {
 		steps = append(steps, "restart capd with: capd start --secret-backend "+requiredBackend)
 	}
@@ -336,6 +339,21 @@ func accountsCheckErrorNextSteps(message string, partial protocol.AccountsCheckR
 		steps = append(steps, "refresh and verify daemon-side readiness with: "+accountsCheckReadinessCommand(requiredBackend))
 	}
 	return compactStrings(steps)
+}
+
+func accountsCheckSecretBackendHint(partial protocol.AccountsCheckResult, requiredBackend string) string {
+	if requiredBackend != "" {
+		return requiredBackend
+	}
+	return partial.SecretBackend
+}
+
+func accountsCheckSecretStoreCommand(secretBackend string) string {
+	cmd := "capd secretstore check --json --roundtrip"
+	if secretBackend != "" {
+		cmd += " --secret-backend " + secretBackend + " --require-backend " + secretBackend
+	}
+	return cmd + " --timeout 2m"
 }
 
 func accountsCheckReadinessCommand(requireSecretBackend string) string {
