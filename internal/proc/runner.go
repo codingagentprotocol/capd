@@ -5,6 +5,7 @@ package proc
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -83,6 +84,21 @@ func (p *Proc) CloseStdin() error { return p.stdin.Close() }
 
 // Wait blocks until the subprocess exits and releases its resources.
 func (p *Proc) Wait() error { return p.cmd.Wait() }
+
+// RunCombined executes a short-lived command and returns stdout+stderr. It is
+// for bounded utility commands; long-running agent sessions should use Start.
+func RunCombined(ctx context.Context, spec Spec) (string, error) {
+	cmd := exec.CommandContext(ctx, spec.Bin, spec.Args...)
+	cmd.Dir = spec.Cwd
+	if len(spec.Env) > 0 {
+		cmd.Env = append(cmd.Environ(), spec.Env...)
+	}
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err := cmd.Run()
+	return out.String(), err
+}
 
 // ResolveBin returns the executable that should be used for a CLI. PATH wins;
 // fallback absolute paths cover app-bundled CLIs on platforms where service

@@ -14,11 +14,20 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
+	"github.com/codingagentprotocol/capd/internal/proc"
 	"github.com/codingagentprotocol/capd/internal/repairplan"
+	"github.com/codingagentprotocol/capd/internal/repairrunner"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
-var repairExecCommand = exec.CommandContext
+var repairExecCommand = func(ctx context.Context, spec proc.Spec) (string, error) {
+	cmd := exec.CommandContext(ctx, spec.Bin, spec.Args...)
+	if len(spec.Env) > 0 {
+		cmd.Env = append(os.Environ(), spec.Env...)
+	}
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
 
 func newRepairCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -124,57 +133,24 @@ type repairRunStepReport struct {
 }
 
 func runRepairPlan(ctx context.Context, steps []protocol.RepairStep, opts repairRunOptions) (repairRunReport, error) {
-	out := repairRunReport{
-		OK:     true,
-		DryRun: !opts.Execute,
-		Steps:  make([]repairRunStepReport, 0, len(steps)),
-		Summary: repairRunSummary{
-			Total: len(steps),
-		},
-	}
-	if !opts.Execute {
-		for _, step := range steps {
-			status, reason := repairStepDryRunStatus(step, opts)
-			step = repairStepWithExecution(step, opts)
-			out.Steps = append(out.Steps, repairRunStepReport{Step: step, Status: status, Reason: reason})
-			if status == "planned" {
-				out.Summary.Planned++
-			} else {
-				out.Summary.Skipped++
-			}
-		}
-		return out, nil
-	}
-	if !opts.Yes {
+	if opts.Execute && !opts.Yes {
 		if !confirmRepairRun(opts.Stdin, opts.Stdout, len(steps)) {
-			return out, fmt.Errorf("repair execution canceled")
+			return repairRunReport{OK: true, DryRun: !opts.Execute, Summary: repairRunSummary{Total: len(steps)}}, fmt.Errorf("repair execution canceled")
 		}
 	}
-	for _, step := range steps {
-		classification := repairStepClassification(step, opts)
-		step = repairStepWithExecution(step, opts)
-		row := repairRunStepReport{Step: step}
-		if !classification.Runnable {
-			row.Status = "skipped"
-			row.Reason = classification.Reason
-			out.Summary.Skipped++
-			out.Steps = append(out.Steps, row)
-			continue
-		}
-		output, err := executeRepairStep(ctx, step)
-		row.Output = strings.TrimSpace(output)
-		if err != nil {
-			row.Status = "failed"
-			row.Error = err.Error()
-			out.OK = false
-			out.Summary.Failed++
-		} else {
-			row.Status = "succeeded"
-			out.Summary.Succeeded++
-		}
-		out.Steps = append(out.Steps, row)
-	}
-	return out, nil
+	run := repairrunner.Run(ctx, steps, repairrunner.Options{Execute: opts.Execute, IncludeFinal: opts.IncludeFinal}, repairExecCommand)
+	return repairRunReport{
+		OK:     run.OK,
+		DryRun: run.DryRun,
+		Steps:  repairRunStepReports(run.Steps),
+		Summary: repairRunSummary{
+			Total:     run.Summary.Total,
+			Planned:   run.Summary.Planned,
+			Skipped:   run.Summary.Skipped,
+			Succeeded: run.Summary.Succeeded,
+			Failed:    run.Summary.Failed,
+		},
+	}, nil
 }
 
 func repairStepDryRunStatus(step protocol.RepairStep, opts repairRunOptions) (string, string) {
@@ -195,6 +171,20 @@ func repairStepWithExecution(step protocol.RepairStep, opts repairRunOptions) pr
 	return step
 }
 
+func repairRunStepReports(steps []protocol.RepairRunStepReport) []repairRunStepReport {
+	out := make([]repairRunStepReport, 0, len(steps))
+	for _, step := range steps {
+		out = append(out, repairRunStepReport{
+			Step:   step.Step,
+			Status: step.Status,
+			Reason: step.Reason,
+			Output: step.Output,
+			Error:  step.Error,
+		})
+	}
+	return out
+}
+
 func confirmRepairRun(stdin io.Reader, stdout io.Writer, count int) bool {
 	if stdin == nil {
 		stdin = os.Stdin
@@ -208,19 +198,6 @@ func confirmRepairRun(stdin io.Reader, stdout io.Writer, count int) bool {
 		return false
 	}
 	return strings.TrimSpace(scanner.Text()) == "execute"
-}
-
-func executeRepairStep(ctx context.Context, step protocol.RepairStep) (string, error) {
-	env, bin, args := repairplan.SplitCommand(step.Command)
-	if bin == "" {
-		return "", fmt.Errorf("empty command")
-	}
-	cmd := repairExecCommand(ctx, bin, args...)
-	if len(env) > 0 {
-		cmd.Env = append(os.Environ(), env...)
-	}
-	out, err := cmd.CombinedOutput()
-	return string(out), err
 }
 
 func printRepairRunReport(w io.Writer, report repairRunReport) {

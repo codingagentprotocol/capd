@@ -18,6 +18,7 @@ const (
 	MethodProfilesList    = "profiles/list"    // list safe account profile metadata and members
 	MethodProfilesUpdate  = "profiles/update"  // create/update/delete/select account profiles
 	MethodProfilesMembers = "profiles/members" // add/remove account profile members
+	MethodRepairRun       = "repair/run"       // dry-run or execute safe repair steps
 	MethodSessionCreate   = "session/create"   // start an agent session
 	MethodSessionList     = "session/list"     // enumerate sessions and their liveness
 	MethodSessionAttach   = "session/attach"   // re-attach to a live or persisted session
@@ -318,6 +319,35 @@ type RepairStep struct {
 type RepairStepExecution struct {
 	Runnable bool   `json:"runnable"`
 	Reason   string `json:"reason,omitempty"`
+}
+
+type RepairRunParams struct {
+	Steps        []RepairStep `json:"steps"`
+	Execute      bool         `json:"execute,omitempty"`
+	IncludeFinal bool         `json:"includeFinal,omitempty"`
+}
+
+type RepairRunResult struct {
+	OK      bool                  `json:"ok"`
+	DryRun  bool                  `json:"dryRun"`
+	Steps   []RepairRunStepReport `json:"steps"`
+	Summary RepairRunSummary      `json:"summary"`
+}
+
+type RepairRunSummary struct {
+	Total     int `json:"total"`
+	Planned   int `json:"planned,omitempty"`
+	Skipped   int `json:"skipped,omitempty"`
+	Succeeded int `json:"succeeded,omitempty"`
+	Failed    int `json:"failed,omitempty"`
+}
+
+type RepairRunStepReport struct {
+	Step   RepairStep `json:"step"`
+	Status string     `json:"status"`
+	Reason string     `json:"reason,omitempty"`
+	Output string     `json:"output,omitempty"`
+	Error  string     `json:"error,omitempty"`
 }
 
 func (r AccountsQuotaResult) MarshalJSON() ([]byte, error) {

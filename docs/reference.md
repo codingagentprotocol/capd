@@ -65,10 +65,14 @@ deeper `深度验证`, `就绪门禁`, and Probe `Readiness` paths are explicit 
 that may read account SecretStore credentials.
 When readiness returns a `repairPlan`, the full Console marks each step as
 `runnable` or `manual` using the same conservative rules as `capd repair run`;
-the compact Probe includes the same classification in its summary text. Manual
-steps include foreground daemon startup, shell environment changes, placeholder
-auth paths, commands outside the repair allowlist, and the final live preflight
-unless it is explicitly included.
+the compact Probe includes the same classification in its summary text. The
+full Console can dry-run or, after a browser confirmation, execute individual
+`runnable` steps through the daemon `repair/run` RPC; `console:read` and
+`probe:read` scopes cannot call it. Manual steps include foreground daemon
+startup, shell environment changes, placeholder auth paths, commands outside
+the repair allowlist, and the final live preflight unless it is explicitly
+included. Each daemon-side repair run writes a safe audit event without command
+details, token material, or local paths.
 The Console renders repair plans returned by both `深度验证` (`/probe/data`) and
 the direct `检查账号` / `就绪门禁` `accounts/check` path, so browser users see the
 same daemon-side remediation plan without switching tools.
@@ -164,7 +168,9 @@ safe to automate: no placeholder paths, no shell environment mutations, no
 foreground daemon startup, and no final live preflight unless `--include-final`
 is also supplied. The Web Console and Probe render the same runnable/manual
 classification from server-provided `execution` evidence, with a local fallback
-for older daemons, so browser diagnostics agree with CLI execution policy.
+for older daemons, so browser diagnostics agree with CLI execution policy. The
+Web Console calls the daemon `repair/run` RPC for per-step dry-runs and approved
+execution, while scoped read-only browser tokens are rejected.
 Without `--yes`, `--execute` asks the user to type `execute` before running
 anything.
 

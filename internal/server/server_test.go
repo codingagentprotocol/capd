@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,6 +20,8 @@ import (
 	"github.com/codingagentprotocol/capd/internal/account"
 	"github.com/codingagentprotocol/capd/internal/account/secret"
 	"github.com/codingagentprotocol/capd/internal/adapter"
+	"github.com/codingagentprotocol/capd/internal/audit"
+	"github.com/codingagentprotocol/capd/internal/proc"
 	"github.com/codingagentprotocol/capd/internal/security"
 	"github.com/codingagentprotocol/capd/internal/session"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
@@ -369,6 +372,80 @@ func TestScopedConsoleReadTokenRejectsTaskControl(t *testing.T) {
 	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: "s_test", Prompt: "x"}))
 	if resp.Error == nil || resp.Error.Code != protocol.CodeUnauthorized || !strings.Contains(resp.Error.Message, security.TokenScopeConsoleRead) {
 		t.Fatalf("task/send response = %+v", resp)
+	}
+	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodRepairRun, protocol.RepairRunParams{}))
+	if resp.Error == nil || resp.Error.Code != protocol.CodeUnauthorized || !strings.Contains(resp.Error.Message, security.TokenScopeConsoleRead) {
+		t.Fatalf("repair/run response = %+v", resp)
+	}
+}
+
+func TestScopedConsoleTokenCanDryRunRepairPlan(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	s, _ := newTestServer(t)
+	client := &wsClient{auth: authInfo{Scope: security.TokenScopeConsole}}
+	resp := s.dispatch(context.Background(), client, testRequest(protocol.MethodInitialize, protocol.InitializeParams{ProtocolVersion: protocol.Version}))
+	if resp.Error != nil {
+		t.Fatalf("initialize error = %+v", resp.Error)
+	}
+	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodRepairRun, protocol.RepairRunParams{
+		Steps: []protocol.RepairStep{
+			{ID: "manual", Command: "capd accounts import --auth /path/a/auth.json"},
+			{ID: "runnable", Command: "capd accounts check --json --readiness --timeout 2m"},
+		},
+	}))
+	if resp.Error != nil {
+		t.Fatalf("repair/run error = %+v", resp.Error)
+	}
+	var result protocol.RepairRunResult
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK || !result.DryRun || result.Summary.Total != 2 || result.Summary.Planned != 1 || result.Summary.Skipped != 1 {
+		t.Fatalf("repair/run = %+v", result)
+	}
+	events, err := audit.Recent("", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Type != "repair.run" || events[0].Outcome != "ok" || events[0].Data["total"] != float64(2) {
+		t.Fatalf("audit = %+v", events)
+	}
+	if strings.Contains(fmt.Sprint(events), "capd accounts check") || strings.Contains(fmt.Sprint(events), "path/a") {
+		t.Fatalf("audit leaked command detail: %+v", events)
+	}
+}
+
+func TestRepairRunExecuteUsesSafeRunner(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	orig := serverRepairExecCommand
+	calls := []string{}
+	serverRepairExecCommand = func(_ context.Context, spec proc.Spec) (string, error) {
+		calls = append(calls, strings.Join(append([]string{spec.Bin}, spec.Args...), " "))
+		return "ok", nil
+	}
+	t.Cleanup(func() { serverRepairExecCommand = orig })
+	s, _ := newTestServer(t)
+	client := &wsClient{auth: authInfo{Scope: security.TokenScopeConsole}}
+	resp := s.dispatch(context.Background(), client, testRequest(protocol.MethodInitialize, protocol.InitializeParams{ProtocolVersion: protocol.Version}))
+	if resp.Error != nil {
+		t.Fatalf("initialize error = %+v", resp.Error)
+	}
+	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodRepairRun, protocol.RepairRunParams{
+		Execute: true,
+		Steps: []protocol.RepairStep{
+			{ID: "manual", Command: "capd accounts import --auth /path/a/auth.json"},
+			{ID: "runnable", Command: "capd accounts check --json"},
+		},
+	}))
+	if resp.Error != nil {
+		t.Fatalf("repair/run error = %+v", resp.Error)
+	}
+	var result protocol.RepairRunResult
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK || result.DryRun || result.Summary.Succeeded != 1 || result.Summary.Skipped != 1 || len(calls) != 1 || calls[0] != "capd accounts check --json" {
+		t.Fatalf("repair/run = %+v calls=%v", result, calls)
 	}
 }
 
@@ -890,6 +967,11 @@ func TestConsoleStaticContract(t *testing.T) {
 		"renderAccountsCheckRepairPlan(e.data)",
 		"repairStepClassification",
 		"repairCommandBinary",
+		"runRepairSteps",
+		"renderRepairRunResult",
+		`call("repair/run", { steps, execute })`,
+		"Run",
+		"Dry-run",
 		"step.execution",
 		"server classified repair step",
 		"runnable with: capd repair run --execute --yes",

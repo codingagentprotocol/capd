@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/codingagentprotocol/capd/internal/audit"
+	"github.com/codingagentprotocol/capd/internal/proc"
 	"github.com/codingagentprotocol/capd/pkg/protocol"
 )
 
@@ -120,11 +121,12 @@ func TestRepairRunCommandPrintsJSONDryRun(t *testing.T) {
 func stubRepairExecCommand(t *testing.T) func() {
 	t.Helper()
 	orig := repairExecCommand
-	repairExecCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		all := append([]string{"-test.run=TestRepairExecHelper", "--", name}, args...)
+	repairExecCommand = func(ctx context.Context, spec proc.Spec) (string, error) {
+		all := append([]string{"-test.run=TestRepairExecHelper", "--", spec.Bin}, spec.Args...)
 		cmd := exec.CommandContext(ctx, os.Args[0], all...)
 		cmd.Env = append(os.Environ(), "CAPD_REPAIR_EXEC_HELPER=1")
-		return cmd
+		out, err := cmd.CombinedOutput()
+		return string(out), err
 	}
 	return func() {
 		repairExecCommand = orig

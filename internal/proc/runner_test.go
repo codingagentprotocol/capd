@@ -28,6 +28,16 @@ func TestStartLinesAndExit(t *testing.T) {
 	}
 }
 
+func TestRunCombinedCapturesStdoutAndStderr(t *testing.T) {
+	out, err := RunCombined(context.Background(), Spec{Bin: "/bin/sh", Args: []string{"-c", "echo out; echo err >&2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "out") || !strings.Contains(out, "err") {
+		t.Fatalf("combined output = %q", out)
+	}
+}
+
 func TestStartDrainsStderr(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

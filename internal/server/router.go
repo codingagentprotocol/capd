@@ -181,6 +181,13 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		}
 		return s.updateProfileMembers(params)
 
+	case protocol.MethodRepairRun:
+		var params protocol.RepairRunParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidParams, "%v", err)
+		}
+		return s.runRepair(ctx, params), nil
+
 	case protocol.MethodSessionCreate:
 		var params protocol.SessionCreateParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
@@ -496,6 +503,7 @@ func clientScopeAllows(scope, method string) bool {
 			protocol.MethodProfilesList,
 			protocol.MethodProfilesUpdate,
 			protocol.MethodProfilesMembers,
+			protocol.MethodRepairRun,
 			protocol.MethodSessionCreate,
 			protocol.MethodSessionList,
 			protocol.MethodSessionAttach,

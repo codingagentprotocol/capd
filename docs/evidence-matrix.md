@@ -75,7 +75,8 @@ proves all of the following on this machine:
   user intent while preserving the conservative default.
 - Persist a safe token-health timeline of quota and route decisions so the
   console can show drift and repeated failure patterns without storing tokens.
-- Let the Web Console run approved repair-plan steps directly with audit events.
+- Expand Web Console repair execution from single approved runnable steps to
+  ordered multi-step guided runs with richer progress UI.
 - Add a browser-rendered smoke test that opens `/console/`, drives the existing
   protocol-level fake session path through real DOM clicks, and verifies
   prompt-free diagnostics visually.

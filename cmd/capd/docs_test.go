@@ -95,6 +95,9 @@ func TestDocsCoverPromptFreeBrowserProbeRefresh(t *testing.T) {
 		"probe's `Readiness` button run the stronger account",
 		"`not checked in prompt-free refresh`",
 		"ordinary Console and Probe next steps prefer `capd doctor --prompt-free`",
+		"`repair/run` RPC",
+		"`console:read` and\n`probe:read` scopes cannot call it",
+		"writes a safe audit event without command\ndetails",
 	} {
 		if !strings.Contains(reference, want) {
 			t.Fatalf("reference docs missing prompt-free probe refresh contract %q", want)
@@ -409,6 +412,7 @@ func TestEvidenceMatrixCoversCodexAccountPlaneGoal(t *testing.T) {
 		"at least two Codex accounts are imported through the daemon-side path",
 		"protocol-level Console smoke that creates, sends, and cancels a fake session over WebSocket",
 		"the full Web Console can create a session using a `console` scoped token",
+		"ordered multi-step guided runs",
 		"contain no access tokens, refresh\n  tokens, raw auth JSON, SecretStore refs",
 	} {
 		if !strings.Contains(matrix, want) {

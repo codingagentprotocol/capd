@@ -623,7 +623,44 @@ function renderRepairPlan(steps) {
       expect.textContent = `expect: ${step.expectedEvidence}`;
       box.appendChild(expect);
     }
+    const dryRun = document.createElement("button");
+    dryRun.textContent = "Dry-run";
+    dryRun.onclick = () => runRepairSteps([step], false, dryRun);
+    box.appendChild(dryRun);
+    if (classification.runnable) {
+      const run = document.createElement("button");
+      run.textContent = "Run";
+      run.onclick = () => runRepairSteps([step], true, run);
+      box.appendChild(run);
+    }
     repairPlanEl.appendChild(box);
+  }
+}
+
+async function runRepairSteps(steps, execute, button) {
+  if (!Array.isArray(steps) || steps.length === 0) return;
+  if (execute && !confirm(`Run ${steps.length} repair step(s)?`)) return;
+  button.disabled = true;
+  try {
+    const result = await call("repair/run", { steps, execute });
+    renderRepairRunResult(result);
+  } catch (e) {
+    line("ev-err", `✗ repair/run failed: ${e.message || JSON.stringify(e)}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function renderRepairRunResult(result) {
+  const summary = result.summary || {};
+  line(result.ok ? "ev-done" : "ev-err", `${result.ok ? "✓" : "✗"} repair ${result.dryRun ? "dry-run" : "execute"} total=${summary.total || 0} planned=${summary.planned || 0} skipped=${summary.skipped || 0} succeeded=${summary.succeeded || 0} failed=${summary.failed || 0}`);
+  for (const row of result.steps || []) {
+    const step = row.step || {};
+    const bits = [step.id || step.title || "step", row.status || "unknown"];
+    if (row.reason) bits.push(row.reason);
+    if (row.error) bits.push(row.error);
+    if (row.output) bits.push(row.output);
+    line(row.status === "failed" ? "ev-err" : "ev-sys", `· repair ${bits.join(" · ")}`);
   }
 }
 
