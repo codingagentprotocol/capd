@@ -51,6 +51,7 @@ type scriptedAdapter struct {
 	sessions  []*scriptedSession
 	usageEnv  []string
 	usageHook func()
+	startErr  error
 }
 
 func (f *scriptedAdapter) ID() string {
@@ -78,6 +79,12 @@ func (f *scriptedAdapter) Capabilities() protocol.AgentCapabilities {
 	}
 }
 func (f *scriptedAdapter) StartSession(_ context.Context, opts adapter.SessionOpts) (adapter.Session, error) {
+	f.mu.Lock()
+	startErr := f.startErr
+	f.mu.Unlock()
+	if startErr != nil {
+		return nil, startErr
+	}
 	s := &scriptedSession{opts: opts, events: make(chan protocol.Event, 64)}
 	f.mu.Lock()
 	f.sessions = append(f.sessions, s)
@@ -778,6 +785,49 @@ func TestSessionCreateWithCodexAccountProjectsRuntime(t *testing.T) {
 	c.mustResult(c.call(protocol.MethodSessionList, struct{}{}), &list)
 	if len(list.Sessions) != 1 || list.Sessions[0].AccountID != "codex-test" {
 		t.Fatalf("sessions = %+v", list.Sessions)
+	}
+}
+
+func TestSessionCreateFailureRecordsAccountHealthPenalty(t *testing.T) {
+	ts, fake, accounts := newCodexAccountIntegration(t)
+	c := initialized(t, ts)
+
+	fake.mu.Lock()
+	fake.startErr = errors.New("adapter start failed")
+	fake.mu.Unlock()
+	resp := c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:   "codex",
+		AccountID: "codex-test",
+	})
+	if resp.Error == nil {
+		t.Fatalf("expected session/create failure")
+	}
+	health, err := accounts.LoadAccountHealth("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if health.RecentFailures != 1 || health.LastFailureAt == 0 {
+		t.Fatalf("health = %+v", health)
+	}
+	evidence := account.QuotaRouteEvidence(accounts, account.Account{ID: "codex-test", Provider: codexauth.Provider})
+	if evidence.HealthPenalty != account.DefaultQuotaRoutePolicy.RecentFailurePenalty || evidence.RecentFailures != 1 || !strings.Contains(evidence.Reason, "recent failures 1 penalty +10") {
+		t.Fatalf("evidence = %+v", evidence)
+	}
+
+	fake.mu.Lock()
+	fake.startErr = nil
+	fake.mu.Unlock()
+	var created protocol.SessionCreateResult
+	c.mustResult(c.call(protocol.MethodSessionCreate, protocol.SessionCreateParams{
+		AgentID:   "codex",
+		AccountID: "codex-test",
+	}), &created)
+	health, err = accounts.LoadAccountHealth("codex-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if health.RecentFailures != 0 || health.LastFailureAt != 0 {
+		t.Fatalf("health after success = %+v", health)
 	}
 }
 

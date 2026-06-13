@@ -49,6 +49,12 @@ type Profile struct {
 	UpdatedAt   int64
 }
 
+type AccountHealth struct {
+	AccountID      string
+	RecentFailures int
+	LastFailureAt  int64
+}
+
 const schema = `
 CREATE TABLE IF NOT EXISTS accounts (
 	id          TEXT PRIMARY KEY,
@@ -99,6 +105,12 @@ CREATE TABLE IF NOT EXISTS account_profile_members (
 CREATE TABLE IF NOT EXISTS account_profile_state (
 	provider TEXT PRIMARY KEY,
 	name     TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS account_health (
+	account_id        TEXT PRIMARY KEY,
+	recent_failures   INTEGER NOT NULL DEFAULT 0,
+	last_failure_at   INTEGER NOT NULL DEFAULT 0,
+	updated_at        INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );`
 
 func OpenStore(path string) (*Store, error) {
@@ -211,6 +223,9 @@ func (st *Store) DeleteAccount(id string) error {
 	if _, err := tx.Exec("DELETE FROM account_profile_members WHERE account_id = ?", id); err != nil {
 		return err
 	}
+	if _, err := tx.Exec("DELETE FROM account_health WHERE account_id = ?", id); err != nil {
+		return err
+	}
 	if _, err := tx.Exec("DELETE FROM accounts WHERE id = ?", id); err != nil {
 		return err
 	}
@@ -234,6 +249,48 @@ ON CONFLICT(provider) DO UPDATE SET current_account_id = excluded.current_accoun
 		return err
 	}
 	return st.afterWrite(nil)
+}
+
+func (st *Store) RecordAccountFailure(id string, at int64) error {
+	if id == "" {
+		return fmt.Errorf("account id is required")
+	}
+	if at <= 0 {
+		at = time.Now().Unix()
+	}
+	_, err := st.db.Exec(`
+INSERT INTO account_health (account_id, recent_failures, last_failure_at, updated_at)
+VALUES (?, 1, ?, strftime('%s','now'))
+ON CONFLICT(account_id) DO UPDATE SET
+	recent_failures = recent_failures + 1,
+	last_failure_at = excluded.last_failure_at,
+	updated_at = strftime('%s','now')`, id, at)
+	return st.afterWrite(err)
+}
+
+func (st *Store) ClearAccountFailures(id string) error {
+	if id == "" {
+		return fmt.Errorf("account id is required")
+	}
+	_, err := st.db.Exec(`
+INSERT INTO account_health (account_id, recent_failures, last_failure_at, updated_at)
+VALUES (?, 0, 0, strftime('%s','now'))
+ON CONFLICT(account_id) DO UPDATE SET
+	recent_failures = 0,
+	last_failure_at = 0,
+	updated_at = strftime('%s','now')`, id)
+	return st.afterWrite(err)
+}
+
+func (st *Store) LoadAccountHealth(id string) (AccountHealth, error) {
+	var health AccountHealth
+	err := st.db.QueryRow(`
+SELECT account_id, recent_failures, last_failure_at
+FROM account_health WHERE account_id = ?`, id).Scan(&health.AccountID, &health.RecentFailures, &health.LastFailureAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return AccountHealth{AccountID: id}, nil
+	}
+	return health, err
 }
 
 func (st *Store) UpsertProfile(profile Profile) error {

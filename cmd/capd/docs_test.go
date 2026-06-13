@@ -399,6 +399,7 @@ func TestEvidenceMatrixCoversCodexAccountPlaneGoal(t *testing.T) {
 		"capd accounts --secret-backend native codex quota all --timeout 2m",
 		"capd accounts check --json --readiness --require-secret-backend native --timeout 2m",
 		"capd agents route --account auto --require-fresh-quota --json",
+		"recent failure penalty",
 		"capd console --probe --require-secret-backend native",
 		"capd probe evidence --manifest /tmp/capd-live-evidence/manifest.json --fail",
 		"at least two Codex accounts are imported through the daemon-side path",

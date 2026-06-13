@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/codingagentprotocol/capd/internal/adapter"
 	"github.com/codingagentprotocol/capd/internal/discovery"
@@ -239,6 +240,7 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		if params.AccountID != "" {
 			env, perr := s.runtimeEnvForAccount(ctx, agentID, params.AccountID)
 			if perr != nil {
+				s.recordAccountRouteFailure(params.AccountID)
 				return nil, perr
 			}
 			opts.Env = env
@@ -246,9 +248,11 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		sess, err := s.opts.Sessions.Create(ctx, agentID, opts)
 		if err != nil {
 			s.metrics.recordAdapterStart(false)
+			s.recordAccountRouteFailure(params.AccountID)
 			return nil, asProtocolError(err)
 		}
 		s.metrics.recordAdapterStart(true)
+		s.clearAccountRouteFailures(params.AccountID)
 		if params.AccountID != "" && s.opts.Accounts != nil {
 			if err := s.opts.Accounts.BindSessionAccount(sess.ID, params.AccountID); err != nil {
 				return nil, protocol.NewError(protocol.CodeInternalError, "bind session account: %v", err)
@@ -382,8 +386,10 @@ func (s *Server) handle(ctx context.Context, client *wsClient, req *protocol.Req
 		}
 		msg := adapter.Message{Prompt: params.Prompt, Images: params.Attachments}
 		if err := sess.Send(ctx, msg); err != nil {
+			s.recordSessionAccountFailure(params.SessionID)
 			return nil, protocol.NewError(protocol.CodeInternalError, "%v", err)
 		}
+		s.clearSessionAccountFailures(params.SessionID)
 		return protocol.OKResult{OK: true}, nil
 
 	case protocol.MethodTaskSteer:
@@ -552,4 +558,45 @@ func asProtocolError(err error) *protocol.Error {
 		return perr
 	}
 	return protocol.NewError(protocol.CodeInternalError, "%v", err)
+}
+
+func (s *Server) recordAccountRouteFailure(accountID string) {
+	accountID = strings.TrimSpace(accountID)
+	if s == nil || s.opts.Accounts == nil || accountID == "" || accountID == protocol.AccountAuto || accountID == protocol.AccountAll {
+		return
+	}
+	if err := s.opts.Accounts.RecordAccountFailure(accountID, time.Now().Unix()); err != nil && s.log != nil {
+		s.log.Warn("record account route failure", "err", err)
+	}
+}
+
+func (s *Server) clearAccountRouteFailures(accountID string) {
+	accountID = strings.TrimSpace(accountID)
+	if s == nil || s.opts.Accounts == nil || accountID == "" || accountID == protocol.AccountAuto || accountID == protocol.AccountAll {
+		return
+	}
+	if err := s.opts.Accounts.ClearAccountFailures(accountID); err != nil && s.log != nil {
+		s.log.Warn("clear account route failures", "err", err)
+	}
+}
+
+func (s *Server) recordSessionAccountFailure(sessionID string) {
+	accountID := s.sessionAccountID(sessionID)
+	s.recordAccountRouteFailure(accountID)
+}
+
+func (s *Server) clearSessionAccountFailures(sessionID string) {
+	accountID := s.sessionAccountID(sessionID)
+	s.clearAccountRouteFailures(accountID)
+}
+
+func (s *Server) sessionAccountID(sessionID string) string {
+	if s == nil || s.opts.Accounts == nil || strings.TrimSpace(sessionID) == "" {
+		return ""
+	}
+	accountID, err := s.opts.Accounts.SessionAccount(strings.TrimSpace(sessionID))
+	if err != nil {
+		return ""
+	}
+	return accountID
 }

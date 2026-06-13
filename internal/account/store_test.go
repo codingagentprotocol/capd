@@ -500,13 +500,56 @@ func TestRoutePolicyCanTuneFreshnessAndTieBreak(t *testing.T) {
 	}
 }
 
+func TestRoutePolicyPenalizesRecentAccountFailures(t *testing.T) {
+	st := newStore(t)
+	for _, id := range []string{"healthy", "failed"} {
+		if err := st.UpsertAccount(Account{ID: id, Provider: "codex", AuthMode: "oauth"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "healthy", PrimaryUsedPercent: 18}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveQuota(QuotaSnapshot{AccountID: "failed", PrimaryUsedPercent: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordAccountFailure("failed", time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := SelectQuotaRouteAccount(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "healthy" {
+		t.Fatalf("selected = %+v", got)
+	}
+	evidence := QuotaRouteEvidence(st, Account{ID: "failed", Provider: "codex"})
+	if evidence.Score != 20 || evidence.RecentFailures != 1 || evidence.HealthPenalty != recentFailureScorePenalty || !strings.Contains(evidence.Reason, "recent failures 1 penalty +10") {
+		t.Fatalf("failed evidence = %+v", evidence)
+	}
+
+	if err := st.ClearAccountFailures("failed"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = SelectQuotaRouteAccount(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "failed" {
+		t.Fatalf("selected after clear = %+v", got)
+	}
+}
+
 func TestRoutePolicyEvidenceSummary(t *testing.T) {
 	summary := (RoutePolicy{
 		FreshTTL:               45 * time.Minute,
 		UnknownScore:           82,
 		CurrentAccountTieBreak: 0.25,
+		RecentFailureTTL:       2 * time.Hour,
+		RecentFailurePenalty:   7,
 	}).EvidenceSummary()
-	if summary.Name != "conservative-quota-pressure" || summary.FreshTTLSeconds != 2700 || summary.UnknownScore != 82 || summary.CurrentAccountTieBreak != 0.25 {
+	if summary.Name != "conservative-quota-pressure" || summary.FreshTTLSeconds != 2700 || summary.UnknownScore != 82 || summary.CurrentAccountTieBreak != 0.25 || summary.RecentFailurePenalty != 7 || summary.RecentFailureTTLSeconds != 7200 {
 		t.Fatalf("summary = %+v", summary)
 	}
 	if strings.Join(summary.QuotaWindows, ",") != "primary,secondary,code_review" {

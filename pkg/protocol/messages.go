@@ -131,12 +131,14 @@ type AgentRouteErrorData struct {
 }
 
 type AccountRoutePolicy struct {
-	Name                   string   `json:"name"`
-	Scoring                string   `json:"scoring"`
-	QuotaWindows           []string `json:"quotaWindows,omitempty"`
-	FreshTTLSeconds        int64    `json:"freshTtlSeconds"`
-	UnknownScore           float64  `json:"unknownScore"`
-	CurrentAccountTieBreak float64  `json:"currentAccountTieBreak"`
+	Name                    string   `json:"name"`
+	Scoring                 string   `json:"scoring"`
+	QuotaWindows            []string `json:"quotaWindows,omitempty"`
+	FreshTTLSeconds         int64    `json:"freshTtlSeconds"`
+	UnknownScore            float64  `json:"unknownScore"`
+	CurrentAccountTieBreak  float64  `json:"currentAccountTieBreak"`
+	RecentFailurePenalty    float64  `json:"recentFailurePenalty,omitempty"`
+	RecentFailureTTLSeconds int64    `json:"recentFailureTtlSeconds,omitempty"`
 }
 
 type AccountRouteEvidence struct {
@@ -151,6 +153,9 @@ type AccountRouteEvidence struct {
 	CodeReviewUsedPercent  *float64 `json:"codeReviewUsedPercent,omitempty"`
 	LimitingUsedPercent    *float64 `json:"limitingUsedPercent,omitempty"`
 	LimitingQuotaDimension string   `json:"limitingQuotaDimension,omitempty"`
+	RecentFailures         int      `json:"recentFailures,omitempty"`
+	LastFailureAt          int64    `json:"lastFailureAt,omitempty"`
+	HealthPenalty          float64  `json:"healthPenalty,omitempty"`
 	Reason                 string   `json:"reason,omitempty"`
 }
 

@@ -3,6 +3,7 @@ package account
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/codingagentprotocol/capd/internal/account/secret"
@@ -13,9 +14,11 @@ const (
 	// QuotaRouteCacheTTL bounds how long an auto-route decision trusts a
 	// cached quota value. Older rows are treated like missing quota so a stale
 	// low-usage account does not dominate routing indefinitely.
-	QuotaRouteCacheTTL = 30 * time.Minute
-	quotaUnknownScore  = 75.0
-	currentTieBreak    = 0.01
+	QuotaRouteCacheTTL        = 30 * time.Minute
+	RouteRecentFailureTTL     = 24 * time.Hour
+	quotaUnknownScore         = 75.0
+	currentTieBreak           = 0.01
+	recentFailureScorePenalty = 10.0
 )
 
 // RoutePolicy is the account-aware scheduler policy. It is intentionally small
@@ -25,6 +28,8 @@ type RoutePolicy struct {
 	FreshTTL               time.Duration
 	UnknownScore           float64
 	CurrentAccountTieBreak float64
+	RecentFailureTTL       time.Duration
+	RecentFailurePenalty   float64
 }
 
 // DefaultQuotaRoutePolicy is conservative: stale or missing quota receives a
@@ -34,6 +39,8 @@ var DefaultQuotaRoutePolicy = RoutePolicy{
 	FreshTTL:               QuotaRouteCacheTTL,
 	UnknownScore:           quotaUnknownScore,
 	CurrentAccountTieBreak: currentTieBreak,
+	RecentFailureTTL:       RouteRecentFailureTTL,
+	RecentFailurePenalty:   recentFailureScorePenalty,
 }
 
 func DefaultRoutePolicyEvidence() protocol.AccountRoutePolicy {
@@ -43,12 +50,14 @@ func DefaultRoutePolicyEvidence() protocol.AccountRoutePolicy {
 func (p RoutePolicy) EvidenceSummary() protocol.AccountRoutePolicy {
 	p = p.normalized()
 	return protocol.AccountRoutePolicy{
-		Name:                   "conservative-quota-pressure",
-		Scoring:                "lowest fresh limiting quota pressure; stale or missing quota uses unknownScore; current account receives a small tie-break",
-		QuotaWindows:           []string{"primary", "secondary", "code_review"},
-		FreshTTLSeconds:        int64(p.FreshTTL / time.Second),
-		UnknownScore:           p.UnknownScore,
-		CurrentAccountTieBreak: p.CurrentAccountTieBreak,
+		Name:                    "conservative-quota-pressure",
+		Scoring:                 "lowest fresh limiting quota pressure plus recent-failure health penalty; stale or missing quota uses unknownScore; current account receives a small tie-break",
+		QuotaWindows:            []string{"primary", "secondary", "code_review"},
+		FreshTTLSeconds:         int64(p.FreshTTL / time.Second),
+		UnknownScore:            p.UnknownScore,
+		CurrentAccountTieBreak:  p.CurrentAccountTieBreak,
+		RecentFailurePenalty:    p.RecentFailurePenalty,
+		RecentFailureTTLSeconds: int64(p.RecentFailureTTL / time.Second),
 	}
 }
 
@@ -167,6 +176,11 @@ func (p RoutePolicy) Evidence(st *Store, acc Account, current string, now time.T
 		QuotaState:    protocol.AccountQuotaStateMissing,
 		Reason:        p.Reason(st, acc, current, now),
 	}
+	if health, penalty := p.healthPenalty(st, acc, now); penalty > 0 {
+		evidence.RecentFailures = health.RecentFailures
+		evidence.LastFailureAt = health.LastFailureAt
+		evidence.HealthPenalty = penalty
+	}
 	if q, err := st.LoadQuota(acc.ID); err == nil {
 		evidence.CheckedAt = q.CheckedAt
 		evidence.PrimaryUsedPercent = usablePercentPtr(q.PrimaryUsedPercent)
@@ -199,10 +213,14 @@ func routeSecretBackend(acc Account) string {
 
 func (p RoutePolicy) Reason(st *Store, acc Account, current string, now time.Time) string {
 	p = p.normalized()
-	suffix := ""
+	suffixes := []string{}
 	if acc.ID == current {
-		suffix = "; current account tie-break"
+		suffixes = append(suffixes, "current account tie-break")
 	}
+	if health, penalty := p.healthPenalty(st, acc, now); penalty > 0 {
+		suffixes = append(suffixes, fmt.Sprintf("recent failures %d penalty +%.0f", health.RecentFailures, penalty))
+	}
+	suffix := routeReasonSuffix(suffixes)
 	if st != nil {
 		if q, err := st.LoadQuota(acc.ID); err == nil {
 			if p.QuotaSnapshotFresh(q, now) {
@@ -229,10 +247,19 @@ func quotaRouteScoreAt(st *Store, acc Account, current string, now time.Time, po
 	if q, err := st.LoadQuota(acc.ID); err == nil && policy.QuotaSnapshotFresh(q, now) {
 		score, _, _ = quotaRoutePressure(q)
 	}
+	_, healthPenalty := policy.healthPenalty(st, acc, now)
+	score += healthPenalty
 	if acc.ID == current {
 		score -= policy.CurrentAccountTieBreak
 	}
 	return score
+}
+
+func routeReasonSuffix(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	return "; " + strings.Join(parts, "; ")
 }
 
 func routeTieBeats(candidate, incumbent Account, current string) bool {
@@ -273,7 +300,28 @@ func (p RoutePolicy) normalized() RoutePolicy {
 	if p.CurrentAccountTieBreak <= 0 {
 		p.CurrentAccountTieBreak = currentTieBreak
 	}
+	if p.RecentFailureTTL <= 0 {
+		p.RecentFailureTTL = RouteRecentFailureTTL
+	}
+	if p.RecentFailurePenalty <= 0 {
+		p.RecentFailurePenalty = recentFailureScorePenalty
+	}
 	return p
+}
+
+func (p RoutePolicy) healthPenalty(st *Store, acc Account, now time.Time) (AccountHealth, float64) {
+	if st == nil {
+		return AccountHealth{AccountID: acc.ID}, 0
+	}
+	health, err := st.LoadAccountHealth(acc.ID)
+	if err != nil || health.RecentFailures <= 0 || health.LastFailureAt <= 0 {
+		return AccountHealth{AccountID: acc.ID}, 0
+	}
+	age := now.Unix() - health.LastFailureAt
+	if age < 0 || time.Duration(age)*time.Second > p.RecentFailureTTL {
+		return health, 0
+	}
+	return health, float64(health.RecentFailures) * p.RecentFailurePenalty
 }
 
 func usablePercentPtr(n float64) *float64 {
