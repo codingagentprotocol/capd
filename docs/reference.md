@@ -61,6 +61,12 @@ from the browser without exposing token material or local runtime paths. The
 ordinary Console and Probe next steps prefer `capd doctor --prompt-free`; the
 deeper `深度验证`, `就绪门禁`, and Probe `Readiness` paths are explicit actions
 that may read account SecretStore credentials.
+When readiness returns a `repairPlan`, the full Console marks each step as
+`runnable` or `manual` using the same conservative rules as `capd repair run`;
+the compact Probe includes the same classification in its summary text. Manual
+steps include foreground daemon startup, shell environment changes, placeholder
+auth paths, commands outside the repair allowlist, and the final live preflight
+unless it is explicitly included.
 When the native SecretStore gate is enabled, the console and probe distinguish
 backend mismatches from deeper OS SecretStore verification and point the latter to
 `capd doctor --json --fail --verify-secretstore --require-secret-backend native`.
@@ -147,8 +153,9 @@ as runnable or manual. The default is a dry-run, so it prints what would happen
 without executing commands. Add `--execute --yes` to run only commands that are
 safe to automate: no placeholder paths, no shell environment mutations, no
 foreground daemon startup, and no final live preflight unless `--include-final`
-is also supplied. Without `--yes`, `--execute` asks the user to type `execute`
-before running anything.
+is also supplied. The Web Console and Probe render the same runnable/manual
+classification so browser diagnostics agree with CLI execution policy. Without
+`--yes`, `--execute` asks the user to type `execute` before running anything.
 
 | Flag | Default | Meaning |
 |------|---------|---------|

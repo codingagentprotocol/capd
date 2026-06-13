@@ -274,7 +274,9 @@ command per line without requiring `jq`. Use
 approval-gated autopilot; add `--execute --yes` only when the log shows the
 remaining steps are runnable. The runner skips placeholder auth paths, daemon
 startup, shell `export` commands, and the final live preflight unless
-`--include-final` is explicitly set.
+`--include-final` is explicitly set. The Web Console and Probe classify the
+same `repairPlan` entries as runnable or manual so browser-side diagnostics can
+be compared directly with `capd repair run --json`.
 The top-level `summary` object is the compact
 CI/Web view of missing accounts, account credential readability, quota
 freshness, auto-route freshness, SecretStore backend status, and daemon CAP

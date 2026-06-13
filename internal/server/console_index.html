@@ -41,9 +41,12 @@
   .check .next { color:#d29922; margin-top:2px; }
   #repairPlan { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:6px; margin:-2px 0 12px; }
   .repair { border:1px solid #30363d; border-radius:6px; padding:8px; background:#010409; font-size:12px; }
+  .repair.runnable { border-color:#238636; }
+  .repair.manual { border-color:#8b5a12; }
   .repair .title { color:#e6edf3; }
   .repair .cmd { color:#58a6ff; margin-top:4px; overflow-wrap:anywhere; }
   .repair .expect { color:#8b949e; margin-top:4px; }
+  .repair .status { color:#8b949e; margin-top:4px; }
   #main { display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:12px; align-items:stretch; }
   #sessions, #log { background:#010409; border:1px solid #30363d; border-radius:8px; padding:12px; height:520px; overflow-y:auto; }
   #log { white-space:pre-wrap; }
@@ -523,15 +526,19 @@ function renderProbeDataResult(data) {
 function renderRepairPlan(steps) {
   repairPlanEl.textContent = "";
   for (const [index, step] of (steps || []).entries()) {
+    const classification = repairStepClassification(step);
     const box = document.createElement("div");
-    box.className = "repair";
+    box.className = "repair " + (classification.runnable ? "runnable" : "manual");
     const title = document.createElement("div");
     title.className = "title";
     title.textContent = `${index + 1}. ${step.title || step.id || "Repair step"}`;
     const cmd = document.createElement("div");
     cmd.className = "cmd";
     cmd.textContent = step.command || "";
-    box.append(title, cmd);
+    const status = document.createElement("div");
+    status.className = "status";
+    status.textContent = classification.runnable ? "runnable with: capd repair run --execute --yes" : `manual: ${classification.reason}`;
+    box.append(title, cmd, status);
     if (step.expectedEvidence) {
       const expect = document.createElement("div");
       expect.className = "expect";
@@ -540,6 +547,24 @@ function renderRepairPlan(steps) {
     }
     repairPlanEl.appendChild(box);
   }
+}
+
+function repairStepClassification(step) {
+  const command = String(step && step.command || "").trim();
+  if (!command) return { runnable:false, reason:"empty command" };
+  if (command.includes("/path/") || command.includes("<") || command.includes("...")) return { runnable:false, reason:"command contains placeholders" };
+  if (command.startsWith("capd start")) return { runnable:false, reason:"starts a foreground daemon" };
+  if (command.startsWith("export ")) return { runnable:false, reason:"changes shell environment" };
+  const bin = repairCommandBinary(command);
+  if (bin !== "capd" && bin !== "make") return { runnable:false, reason:"outside repair runner allowlist" };
+  if (step && step.id === "final-live-preflight") return { runnable:false, reason:"requires --include-final" };
+  return { runnable:true, reason:"safe repair runner allowlist" };
+}
+
+function repairCommandBinary(command) {
+  const fields = String(command || "").trim().split(/\s+/).filter(Boolean);
+  while (fields.length && fields[0].includes("=") && !fields[0].startsWith("-")) fields.shift();
+  return fields[0] || "";
 }
 
 function probeErrorSummary(errors, source) {

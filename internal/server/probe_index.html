@@ -219,10 +219,28 @@ function readinessSummaryText(summary) {
 function repairPlanSummary(steps) {
   const lines = [];
   for (const step of steps || []) {
-    lines.push(`repair ${step.id || "step"}: ${step.command || ""}`);
+    const classification = repairStepClassification(step);
+    lines.push(`repair ${step.id || "step"} (${classification.runnable ? "runnable" : "manual"}): ${step.command || ""}`);
+    if (!classification.runnable) lines.push(`manual reason: ${classification.reason}`);
     if (step.expectedEvidence) lines.push(`expect: ${step.expectedEvidence}`);
   }
   return lines;
+}
+function repairStepClassification(step) {
+  const command = String(step && step.command || "").trim();
+  if (!command) return { runnable:false, reason:"empty command" };
+  if (command.includes("/path/") || command.includes("<") || command.includes("...")) return { runnable:false, reason:"command contains placeholders" };
+  if (command.startsWith("capd start")) return { runnable:false, reason:"starts a foreground daemon" };
+  if (command.startsWith("export ")) return { runnable:false, reason:"changes shell environment" };
+  const bin = repairCommandBinary(command);
+  if (bin !== "capd" && bin !== "make") return { runnable:false, reason:"outside repair runner allowlist" };
+  if (step && step.id === "final-live-preflight") return { runnable:false, reason:"requires --include-final" };
+  return { runnable:true, reason:"safe repair runner allowlist" };
+}
+function repairCommandBinary(command) {
+  const fields = String(command || "").trim().split(/\s+/).filter(Boolean);
+  while (fields.length && fields[0].includes("=") && !fields[0].startsWith("-")) fields.shift();
+  return fields[0] || "";
 }
 function lightweightAccountsResult(listResult, healthInfo) {
   const accounts = (listResult && listResult.accounts || []).filter(a => !a.provider || a.provider === "codex").map(a => ({

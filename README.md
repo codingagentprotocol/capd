@@ -231,7 +231,9 @@ it is dry-run by default, and `--execute --yes` runs only non-placeholder,
 non-foreground repair commands. It leaves daemon startup, shell `export`
 commands, auth path placeholders, and the final live preflight for explicit
 manual action unless the command is made runnable and, for the final gate,
-`--include-final` is supplied.
+`--include-final` is supplied. The Web Console and compact Probe classify the
+same repair steps as `runnable` or `manual` with the same conservative reasons,
+so browser diagnostics match the CLI repair runner.
 For unattended release checks, `make
 live-codex-selftest` starts a temporary daemon when needed, waits for health,
 runs the same preflight, and cleans up only the daemon it started. The final
@@ -514,8 +516,9 @@ Self-evolution backlog for the Codex account plane:
 - Readiness autopilot: turn `doctor`, `probe/data`, and `accounts/check`
   findings into ranked repair plans with exact commands, expected evidence, and
   a final gate to rerun. Doctor, `/probe/data`, and the Web Console now share
-  the public `protocol.RepairStep` shape; the next evolution is an explicit
-  approval-gated repair runner that can execute those steps.
+  the public `protocol.RepairStep` shape, the CLI has an approval-gated repair
+  runner, and browser diagnostics classify each step as runnable or manual. The
+  next evolution is wiring the console to trigger approved repair runs directly.
 - Account-aware routing policy: add pluggable scoring weights for quota,
   freshness, account health, recent failures, and user intent while keeping the
   conservative default deterministic.
