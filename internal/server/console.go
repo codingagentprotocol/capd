@@ -398,6 +398,7 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 	autoRoute := result.AutoRoute
 	routeFresh := autoRoute != nil && autoRoute.Fresh
 	candidates := len(result.RouteCandidates)
+	routePolicy := result.RoutePolicy
 	routeBackend := probeRouteBackendHint(result, requireSecretBackend)
 	routeReadinessCommand := probeAccountsCheckReadinessCommand(routeBackend)
 	secretStates := accountSecretStatesEvidence(accounts)
@@ -419,6 +420,7 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 		{Name: "auto route fresh", OK: !readiness || routeFresh, Evidence: routeEvidenceTextPtr(autoRoute), NextStep: missingStep(!readiness || routeFresh, "refresh and verify daemon-side readiness with: "+routeReadinessCommand)},
 		{Name: "route decision", OK: result.RouteDecision != nil, Evidence: routeDecisionEvidence(result.RouteDecision), NextStep: missingStep(result.RouteDecision != nil, "preview routing with: capd agents route --account auto --require-fresh-quota --json")},
 		{Name: "route candidates", OK: candidates > 0, Evidence: countEvidence(candidates, 1), NextStep: missingStep(candidates > 0, "refresh diagnostics or run: capd agents route --account auto --json")},
+		{Name: "route policy", OK: routePolicy != nil, Evidence: routePolicyEvidenceText(routePolicy), NextStep: missingStep(routePolicy != nil, "refresh diagnostics or run: capd agents route --account auto --json")},
 	}
 	if requireSecretBackend != "" {
 		checks = append(checks, probeDataCheck{
@@ -705,6 +707,22 @@ func routeDecisionEvidence(route *protocol.AgentRouteResult) string {
 		return route.Agent.ID + " " + routeEvidenceTextPtr(route.AccountRoute)
 	}
 	return route.Agent.ID
+}
+
+func routePolicyEvidenceText(policy *protocol.AccountRoutePolicy) string {
+	if policy == nil {
+		return "missing"
+	}
+	parts := []string{policy.Name}
+	if policy.FreshTTLSeconds > 0 {
+		parts = append(parts, "ttl "+strconv.FormatInt(policy.FreshTTLSeconds, 10)+"s")
+	}
+	parts = append(parts, "unknown "+strconv.FormatFloat(policy.UnknownScore, 'f', -1, 64))
+	parts = append(parts, "tie "+strconv.FormatFloat(policy.CurrentAccountTieBreak, 'f', -1, 64))
+	if len(policy.QuotaWindows) > 0 {
+		parts = append(parts, "windows "+strings.Join(policy.QuotaWindows, ","))
+	}
+	return strings.Join(parts, " ")
 }
 
 func missingStep(ok bool, step string) string {

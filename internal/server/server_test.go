@@ -292,6 +292,12 @@ func TestProbeDataReturnsSafeAccountRouteEvidence(t *testing.T) {
 	if len(got.RouteCandidates) != 1 || got.RouteCandidates[0].AccountID != "codex-test" || got.RouteCandidates[0].SecretBackend != secret.BackendFile || got.RouteCandidates[0].Reason != "auto account codex-test primary 12%; current account tie-break" {
 		t.Fatalf("routeCandidates = %+v", got.RouteCandidates)
 	}
+	if got.RoutePolicy == nil || got.RoutePolicy.Name != "conservative-quota-pressure" || got.RoutePolicy.FreshTTLSeconds != 1800 || got.RoutePolicy.UnknownScore != 75 || got.RoutePolicy.CurrentAccountTieBreak != 0.01 || !containsString(got.RoutePolicy.QuotaWindows, "code_review") {
+		t.Fatalf("routePolicy = %+v", got.RoutePolicy)
+	}
+	if check := probeCheckByName(got.Checks, "route policy"); !check.OK || !strings.Contains(check.Evidence, "conservative-quota-pressure") || !strings.Contains(check.Evidence, "windows primary,secondary,code_review") {
+		t.Fatalf("route policy check = %+v", check)
+	}
 	if !got.Summary.Ready || got.Summary.Readiness || got.Summary.CheckedAccounts != 1 || got.Summary.RequiredAccounts != 2 || got.Summary.MissingAccounts != 1 || got.Summary.FreshQuotaAccounts != 1 || got.Summary.AutoRouteAccountID != "codex-test" || !got.Summary.AutoRouteFresh || !got.Summary.RouteDecisionOK || got.Summary.RouteCandidates != 1 || !got.Summary.SecretBackendOK {
 		t.Fatalf("summary = %+v", got.Summary)
 	}
@@ -629,6 +635,15 @@ func probeCheckByName(checks []probeDataCheck, name string) probeDataCheck {
 		}
 	}
 	return probeDataCheck{}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestConsoleStaticContract(t *testing.T) {
