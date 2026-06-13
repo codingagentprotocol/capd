@@ -87,8 +87,9 @@ type probeDataOptions struct {
 }
 
 type probeDataResponse struct {
-	OK      bool `json:"ok"`
-	Summary struct {
+	OK         bool `json:"ok"`
+	PromptFree bool `json:"promptFree"`
+	Summary    struct {
 		Ready                 bool   `json:"ready"`
 		Readiness             bool   `json:"readiness"`
 		CheckedAccounts       int    `json:"checkedAccounts"`

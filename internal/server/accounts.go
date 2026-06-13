@@ -422,6 +422,38 @@ func (s *Server) withCachedAccountsCheckEvidence(result protocol.AccountsCheckRe
 	return result
 }
 
+func (s *Server) cachedAccountsCheck(provider string) (protocol.AccountsCheckResult, *protocol.Error) {
+	if s.opts.Accounts == nil || s.opts.Secrets == nil {
+		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInvalidParams, "account support is not configured")
+	}
+	if provider == "" {
+		provider = codexauth.Provider
+	}
+	current, err := s.opts.Accounts.CurrentAccount(provider)
+	if err != nil {
+		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "load current account: %v", err)
+	}
+	accounts, err := s.opts.Accounts.ListAccounts(provider)
+	if err != nil {
+		return protocol.AccountsCheckResult{}, protocol.NewError(protocol.CodeInternalError, "list accounts: %v", err)
+	}
+	sort.Slice(accounts, func(i, j int) bool {
+		return accounts[i].ID < accounts[j].ID
+	})
+	result := protocol.AccountsCheckResult{
+		Provider:         provider,
+		CurrentAccountID: current,
+		SecretBackend:    s.opts.Secrets.Backend(),
+		CheckedAccounts:  len(accounts),
+		Accounts:         make([]protocol.AccountCheckEvidence, 0, len(accounts)),
+	}
+	if len(accounts) > 0 {
+		result = s.withCachedAccountsCheckEvidence(result, accounts, current, provider)
+	}
+	result.Summary = accountsCheckSummary(result, protocol.AccountsCheckParams{Provider: provider})
+	return result, nil
+}
+
 func accountsCheckErrorWithEvidence(perr *protocol.Error, result protocol.AccountsCheckResult, params protocol.AccountsCheckParams) *protocol.Error {
 	if perr == nil {
 		return nil

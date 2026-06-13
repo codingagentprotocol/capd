@@ -270,16 +270,16 @@ func TestProbeDataReturnsSafeAccountRouteEvidence(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if !got.OK {
+	if !got.OK || !got.PromptFree {
 		t.Fatalf("probe data not ok: %+v body=%s", got.Errors, rec.Body.String())
 	}
 	if got.AccountsCheck == nil || got.AccountsCheck.CheckedAccounts != 1 {
 		t.Fatalf("accountsCheck = %+v", got.AccountsCheck)
 	}
-	if check := probeCheckByName(got.Checks, "account credentials"); !check.OK || !strings.Contains(check.Evidence, "readable 1/1") || !strings.Contains(check.Evidence, "backend 1/1") {
+	if check := probeCheckByName(got.Checks, "account credentials"); !check.OK || !strings.Contains(check.Evidence, "not checked in prompt-free probe") {
 		t.Fatalf("credential check = %+v", check)
 	}
-	if check := probeCheckByName(got.Checks, "account runtime"); !check.OK || !strings.Contains(check.Evidence, "runtime 1/1") || !strings.Contains(check.Evidence, "auth 1/1") || !strings.Contains(check.Evidence, "marker 1/1") {
+	if check := probeCheckByName(got.Checks, "account runtime"); !check.OK || !strings.Contains(check.Evidence, "not checked in prompt-free probe") {
 		t.Fatalf("runtime check = %+v", check)
 	}
 	if got.RouteDecision == nil || got.RouteDecision.AccountID != "codex-test" {
@@ -540,11 +540,11 @@ func TestProbeDataReportsCredentialAndRuntimeFailures(t *testing.T) {
 	if err := accounts.UpsertAccount(acc); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/probe/data", nil)
+	req := httptest.NewRequest(http.MethodGet, "/probe/data?readiness=1&requireSecretBackend=file", nil)
 	req.Header.Set("Authorization", "Bearer it-token")
 	rec := httptest.NewRecorder()
 	s.handleProbeData(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusFailedDependency {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	var got probeDataResult
@@ -554,7 +554,10 @@ func TestProbeDataReportsCredentialAndRuntimeFailures(t *testing.T) {
 	if got.OK {
 		t.Fatalf("probe data unexpectedly ok: %+v", got)
 	}
-	if got.AccountsCheck == nil || len(got.AccountsCheck.Accounts) != 1 || got.AccountsCheck.Accounts[0].SecretState != protocol.AccountSecretStateBackendMismatch {
+	if got.PromptFree {
+		t.Fatalf("readiness probe should not be prompt-free: %+v", got)
+	}
+	if got.AccountsCheck == nil || len(got.AccountsCheck.Accounts) != 1 || got.AccountsCheck.Accounts[0].SecretBackendOK {
 		t.Fatalf("accountsCheck = %+v", got.AccountsCheck)
 	}
 	if check := probeCheckByName(got.Checks, "account credentials"); check.OK || !strings.Contains(check.Evidence, "readable 0/1") || !strings.Contains(check.Evidence, "backend 0/1") || !strings.Contains(check.NextStep, "SecretStore") {

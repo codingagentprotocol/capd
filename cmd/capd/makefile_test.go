@@ -180,6 +180,7 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 		`"$bin" health --json --require-secret-backend "$backend" || true`,
 		`"$bin" accounts --secret-backend "$backend" codex list --json || true`,
 		`"$bin" agents route --account auto --require-fresh-quota --json || true`,
+		`"$bin" probe data --json --timeout 2m || true`,
 		`"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`,
 		`case "$diagnose_secretstore" in`,
 		`"$bin" doctor --json --fail --verify-secretstore --require-secret-backend "$backend" --timeout 2m || true`,
@@ -209,8 +210,9 @@ func TestLiveCodexSelftestScriptHandlesTemporaryDaemonSafely(t *testing.T) {
 	}
 	defaultFailureBlock := script[failureStart:gate]
 	if !(strings.Index(defaultFailureBlock, `"$bin" accounts --secret-backend "$backend" codex list --json || true`) < strings.Index(defaultFailureBlock, `"$bin" agents route --account auto --require-fresh-quota --json || true`) &&
-		strings.Index(defaultFailureBlock, `"$bin" agents route --account auto --require-fresh-quota --json || true`) < strings.Index(defaultFailureBlock, `"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`)) {
-		t.Fatal("live selftest default failure diagnostics must show fresh route evidence between account list and smoke")
+		strings.Index(defaultFailureBlock, `"$bin" agents route --account auto --require-fresh-quota --json || true`) < strings.Index(defaultFailureBlock, `"$bin" probe data --json --timeout 2m || true`) &&
+		strings.Index(defaultFailureBlock, `"$bin" probe data --json --timeout 2m || true`) < strings.Index(defaultFailureBlock, `"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true`)) {
+		t.Fatal("live selftest default failure diagnostics must show route evidence and prompt-free Web probe data before smoke")
 	}
 	for _, forbidden := range []string{`"$bin" doctor `, `"$bin" accounts check --json --readiness`, `"$bin" probe data --json --readiness`} {
 		if strings.Contains(defaultFailureBlock, forbidden) {

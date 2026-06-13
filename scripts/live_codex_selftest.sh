@@ -75,6 +75,7 @@ if ! make live-codex-preflight LIVE_SECRET_BACKEND="$backend" CAPD_BIN="$bin"; t
 	"$bin" health --json --require-secret-backend "$backend" || true
 	"$bin" accounts --secret-backend "$backend" codex list --json || true
 	"$bin" agents route --account auto --require-fresh-quota --json || true
+	"$bin" probe data --json --timeout 2m || true
 	"$bin" accounts --secret-backend "$backend" codex smoke --json --require-multiple --require-secret-backend "$backend" --timeout 2m || true
 	case "$diagnose_secretstore" in
 		1|true|TRUE|yes|YES)

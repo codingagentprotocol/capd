@@ -38,6 +38,7 @@ func (s *Server) handleProbe(w http.ResponseWriter, _ *http.Request) {
 
 type probeDataResult struct {
 	OK              bool                            `json:"ok"`
+	PromptFree      bool                            `json:"promptFree,omitempty"`
 	Summary         probeDataSummary                `json:"summary"`
 	Health          map[string]any                  `json:"health"`
 	AccountsCheck   *protocol.AccountsCheckResult   `json:"accountsCheck,omitempty"`
@@ -139,24 +140,34 @@ func (s *Server) probeData(ctx context.Context, readiness bool, requireSecretBac
 		},
 	}
 	params := protocol.AccountsCheckParams{Provider: codexAgentID}
-	if readiness {
+	if !readiness {
+		result.PromptFree = true
+		accountsCheck, perr := s.cachedAccountsCheck(codexAgentID)
+		if perr != nil {
+			result.Errors = append(result.Errors, probeError("accounts/list", perr))
+		} else if accountsCheck.Provider != "" {
+			result.AccountsCheck = &accountsCheck
+			result.AutoRoute = accountsCheck.AutoRoute
+			result.RouteCandidates = accountsCheck.RouteCandidates
+		}
+	} else {
 		params.RefreshQuota = true
 		params.RequireMultiple = true
 		params.RequireFreshQuota = true
 		params.RequireAllFreshQuota = true
 		params.RequireSecretBackend = requireSecretBackend
-	}
-	accountsCheck, perr := s.checkAccounts(ctx, params)
-	if perr != nil {
-		result.Errors = append(result.Errors, probeError("accounts/check", perr))
-		if partial, ok := perr.Data.(protocol.AccountsCheckResult); ok {
-			accountsCheck = partial
+		accountsCheck, perr := s.checkAccounts(ctx, params)
+		if perr != nil {
+			result.Errors = append(result.Errors, probeError("accounts/check", perr))
+			if partial, ok := perr.Data.(protocol.AccountsCheckResult); ok {
+				accountsCheck = partial
+			}
 		}
-	}
-	if accountsCheck.Provider != "" {
-		result.AccountsCheck = &accountsCheck
-		result.AutoRoute = accountsCheck.AutoRoute
-		result.RouteCandidates = accountsCheck.RouteCandidates
+		if accountsCheck.Provider != "" {
+			result.AccountsCheck = &accountsCheck
+			result.AutoRoute = accountsCheck.AutoRoute
+			result.RouteCandidates = accountsCheck.RouteCandidates
+		}
 	}
 	route, perr := s.routeAgent(ctx, protocol.AgentRouteParams{
 		AccountID:         protocol.AccountAuto,
@@ -303,9 +314,9 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 	runtimeReady, runtimeEvidence := accountRuntimeEvidence(checked, accounts)
 	checks := []probeDataCheck{
 		{Name: "daemon health", OK: true, Evidence: "health ok"},
-		{Name: "accounts/check data", OK: result.AccountsCheck != nil, Evidence: checkedEvidence(checked, secretBackend, secretStates), NextStep: missingStep(result.AccountsCheck != nil, "start capd with account support enabled")},
-		{Name: "account credentials", OK: credentialReady, Evidence: credentialEvidence, NextStep: missingStep(credentialReady, probeCredentialNextStep(accounts, credentialBackend))},
-		{Name: "account runtime", OK: runtimeReady, Evidence: runtimeEvidence, NextStep: missingStep(runtimeReady, "project account runtimes with accounts/project or rerun accounts/check")},
+		{Name: probeAccountDataCheckName(result.PromptFree), OK: result.AccountsCheck != nil, Evidence: checkedEvidence(checked, secretBackend, secretStates), NextStep: missingStep(result.AccountsCheck != nil, "start capd with account support enabled")},
+		{Name: "account credentials", OK: result.PromptFree || credentialReady, Evidence: promptFreeEvidence(result.PromptFree, credentialEvidence, "not checked in prompt-free probe"), NextStep: missingStep(result.PromptFree || credentialReady, probeCredentialNextStep(accounts, credentialBackend))},
+		{Name: "account runtime", OK: result.PromptFree || runtimeReady, Evidence: promptFreeEvidence(result.PromptFree, runtimeEvidence, "not checked in prompt-free probe"), NextStep: missingStep(result.PromptFree || runtimeReady, "project account runtimes with accounts/project or rerun accounts/check")},
 		{Name: "multi-account readiness", OK: !readiness || checked >= 2, Evidence: countEvidence(checked, 2), NextStep: missingStep(!readiness || checked >= 2, "import at least two accounts with: capd accounts import --auth /path/a --auth /path/b")},
 		{Name: "quota freshness", OK: !readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), Evidence: quotaFreshEvidence(quotaFresh, len(accounts)), NextStep: missingStep(!readiness || (len(accounts) > 0 && quotaFresh == len(accounts)), "refresh and verify daemon-side readiness with: "+routeReadinessCommand)},
 		{Name: "auto route data", OK: autoRoute != nil, Evidence: routeEvidenceTextPtr(autoRoute), NextStep: missingStep(autoRoute != nil, "import accounts, then preview with: capd agents route --account auto --json")},
@@ -322,6 +333,20 @@ func probeDataChecks(result probeDataResult, readiness bool, requireSecretBacken
 		})
 	}
 	return checks
+}
+
+func probeAccountDataCheckName(promptFree bool) string {
+	if promptFree {
+		return "account metadata"
+	}
+	return "accounts/check data"
+}
+
+func promptFreeEvidence(promptFree bool, evidence, promptFreeText string) string {
+	if promptFree {
+		return promptFreeText
+	}
+	return evidence
 }
 
 func probeCredentialNextStep(accounts []protocol.AccountCheckEvidence, backend string) string {
