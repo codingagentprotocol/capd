@@ -372,3 +372,55 @@ func TestTestingDocsCoverPreflightPromptAvoidance(t *testing.T) {
 		}
 	}
 }
+
+func TestEvidenceMatrixCoversCodexAccountPlaneGoal(t *testing.T) {
+	data, err := os.ReadFile("../../docs/evidence-matrix.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	matrix := string(data)
+
+	for _, want := range []string{
+		"Codex Account Plane Evidence Matrix",
+		"Codex account import and metadata",
+		"Quota query and cache",
+		"Account-aware routing",
+		"SecretStore native backend",
+		"Prompt-free Web diagnostics",
+		"Full Web Console task control",
+		"Evidence package and support bundle",
+		"Runtime stability and reconnect",
+		"Security by contract",
+		"make verify",
+		"make verify-codex-readiness-sim",
+		"make verify-secretstore",
+		"capd accounts --secret-backend native codex quota all --timeout 2m",
+		"capd accounts check --json --readiness --require-secret-backend native --timeout 2m",
+		"capd agents route --account auto --require-fresh-quota --json",
+		"capd console --probe --require-secret-backend native",
+		"capd probe evidence --manifest /tmp/capd-live-evidence/manifest.json --fail",
+		"at least two Codex accounts are imported through the daemon-side path",
+		"the full Web Console can create a session using a `console` scoped token",
+		"contain no access tokens, refresh\n  tokens, raw auth JSON, SecretStore refs",
+	} {
+		if !strings.Contains(matrix, want) {
+			t.Fatalf("evidence matrix missing goal audit contract %q", want)
+		}
+	}
+}
+
+func TestReadmeLinksEvidenceMatrix(t *testing.T) {
+	data, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := string(data)
+	for _, want := range []string{
+		"[docs/evidence-matrix.md](docs/evidence-matrix.md)",
+		"current goal-to-evidence audit",
+	} {
+		if !strings.Contains(readme, want) {
+			t.Fatalf("README missing evidence matrix link %q", want)
+		}
+	}
+}
