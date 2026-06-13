@@ -298,7 +298,7 @@ func TestScopedProbeTokenCannotCallSessionCreate(t *testing.T) {
 	}
 }
 
-func TestScopedConsoleTokenAllowsAccountWorkflowButNotTaskControl(t *testing.T) {
+func TestScopedConsoleTokenAllowsFullConsoleWorkflow(t *testing.T) {
 	s, _ := newTestServer(t)
 	client := &wsClient{auth: authInfo{Scope: security.TokenScopeConsole}}
 	resp := s.dispatch(context.Background(), client, testRequest(protocol.MethodInitialize, protocol.InitializeParams{ProtocolVersion: protocol.Version}))
@@ -309,8 +309,33 @@ func TestScopedConsoleTokenAllowsAccountWorkflowButNotTaskControl(t *testing.T) 
 	if resp.Error == nil || resp.Error.Code == protocol.CodeUnauthorized {
 		t.Fatalf("accounts/import should pass scope gate and fail later if invalid: %+v", resp)
 	}
+	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake"}))
+	if resp.Error == nil || resp.Error.Code == protocol.CodeUnauthorized {
+		t.Fatalf("session/create should pass console scope gate and fail later if invalid: %+v", resp)
+	}
 	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: "s_test", Prompt: "x"}))
-	if resp.Error == nil || resp.Error.Code != protocol.CodeUnauthorized || !strings.Contains(resp.Error.Message, security.TokenScopeConsole) {
+	if resp.Error == nil || resp.Error.Code == protocol.CodeUnauthorized {
+		t.Fatalf("task/send should pass console scope gate and fail later if invalid: %+v", resp)
+	}
+}
+
+func TestScopedConsoleReadTokenRejectsTaskControl(t *testing.T) {
+	s, _ := newTestServer(t)
+	client := &wsClient{auth: authInfo{Scope: security.TokenScopeConsoleRead}}
+	resp := s.dispatch(context.Background(), client, testRequest(protocol.MethodInitialize, protocol.InitializeParams{ProtocolVersion: protocol.Version}))
+	if resp.Error != nil {
+		t.Fatalf("initialize error = %+v", resp.Error)
+	}
+	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodAccountsList, protocol.AccountsListParams{Provider: "codex"}))
+	if resp.Error != nil && resp.Error.Code == protocol.CodeUnauthorized {
+		t.Fatalf("accounts/list should pass console:read scope gate and fail later if invalid: %+v", resp)
+	}
+	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodSessionCreate, protocol.SessionCreateParams{AgentID: "fake"}))
+	if resp.Error == nil || resp.Error.Code != protocol.CodeUnauthorized || !strings.Contains(resp.Error.Message, security.TokenScopeConsoleRead) {
+		t.Fatalf("session/create response = %+v", resp)
+	}
+	resp = s.dispatch(context.Background(), client, testRequest(protocol.MethodTaskSend, protocol.TaskSendParams{SessionID: "s_test", Prompt: "x"}))
+	if resp.Error == nil || resp.Error.Code != protocol.CodeUnauthorized || !strings.Contains(resp.Error.Message, security.TokenScopeConsoleRead) {
 		t.Fatalf("task/send response = %+v", resp)
 	}
 }

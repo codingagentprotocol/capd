@@ -451,7 +451,7 @@ func clientScopeAllows(scope, method string) bool {
 		default:
 			return false
 		}
-	case security.TokenScopeConsole, security.TokenScopeConsoleRead:
+	case security.TokenScopeConsoleRead:
 		switch method {
 		case protocol.MethodInitialize,
 			protocol.MethodAgentsList,
@@ -470,6 +470,39 @@ func clientScopeAllows(scope, method string) bool {
 			protocol.MethodSessionList,
 			protocol.MethodSessionAttach,
 			protocol.MethodSessionHistory:
+			return true
+		default:
+			return false
+		}
+	case security.TokenScopeConsole:
+		switch method {
+		case protocol.MethodInitialize,
+			protocol.MethodAgentsList,
+			protocol.MethodAgentsRoute,
+			protocol.MethodAgentsUsage,
+			protocol.MethodAccountsList,
+			protocol.MethodAccountsImport,
+			protocol.MethodAccountsCurrent,
+			protocol.MethodAccountsProject,
+			protocol.MethodAccountsCheck,
+			protocol.MethodAccountsQuota,
+			protocol.MethodAccountsRemove,
+			protocol.MethodProfilesList,
+			protocol.MethodProfilesUpdate,
+			protocol.MethodProfilesMembers,
+			protocol.MethodSessionCreate,
+			protocol.MethodSessionList,
+			protocol.MethodSessionAttach,
+			protocol.MethodSessionHistory,
+			protocol.MethodSessionFork,
+			protocol.MethodSessionRollback,
+			protocol.MethodSessionClose,
+			protocol.MethodTaskReview,
+			protocol.MethodTaskReviewMulti,
+			protocol.MethodTaskSend,
+			protocol.MethodTaskSteer,
+			protocol.MethodApprovalReply,
+			protocol.MethodTaskCancel:
 			return true
 		default:
 			return false
