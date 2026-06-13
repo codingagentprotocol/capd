@@ -117,6 +117,7 @@ capd start --secret-backend native
 capd console --probe --require-secret-backend native
 capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail
 capd probe evidence --manifest /tmp/capd-live-evidence/manifest.json --fail
+capd support bundle --out /tmp/capd-support --require-secret-backend native
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe/data
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" "http://127.0.0.1:7777/probe/data?readiness=1&requireSecretBackend=native"
 capd health --json --require-secret-backend native
@@ -151,6 +152,12 @@ quota evidence, route decision evidence, backend, daemon mode, or a passed
 selftest status is missing.
 Add `--html /tmp/capd-live-evidence/report.html` to write a standalone QA
 report from the same safe summary without embedding raw artifact JSON.
+For support handoff or CI artifacts, `capd support bundle --out
+/tmp/capd-support --require-secret-backend native` collects the same kind of
+redacted evidence into one directory. It writes prompt-free doctor output,
+route evidence, health, optional `/probe/data`, a portable `manifest.json`, and
+generated `report.html`; daemon failures are recorded as safe JSON artifacts so
+the bundle can still explain what failed.
 
 After importing multiple accounts and starting the daemon in another terminal,
 the same live preflight is available without sending a prompt:

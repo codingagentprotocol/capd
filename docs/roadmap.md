@@ -197,12 +197,11 @@ it is considered supported.
 
 ## Suggested Next Build Order
 
-1. Add route-evidence compatibility tests around real `agents route` JSON.
-2. Add a `capd support bundle` command that packages safe evidence, health,
-   audit metadata, and HTML reports.
+1. Done: add route-evidence compatibility tests around real `agents route` JSON.
+2. Done: add a `capd support bundle` command that packages safe evidence,
+   health, route, prompt-free doctor, optional probe data, and HTML reports.
 3. Add scoped daemon tokens for console/probe URLs.
 4. Add profile-aware routing metadata and CLI commands.
 5. Add session backpressure stress tests before changing event fan-out internals.
 6. Add adapter conformance fixtures for Codex first, then clone them for other
    adapters.
-

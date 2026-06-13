@@ -177,6 +177,7 @@ capd console --probe --require-secret-backend native # simple web data probe; op
 capd probe data --json --readiness --require-secret-backend native --timeout 2m --fail # same probe diagnostics for automation
 curl -H "Authorization: Bearer $(cat ~/.capd/token)" http://127.0.0.1:7777/probe/data # safe JSON diagnostics
 capd probe evidence --manifest /tmp/capd-live-evidence/manifest.json --fail # validate saved live selftest evidence artifacts
+capd support bundle --out /tmp/capd-support --require-secret-backend native # collect safe support/evidence JSON plus report.html
 capd health --json --require-secret-backend native # confirm daemon /healthz plus version/protocol/secret backend
 capd accounts import --auth /tmp/a/auth.json --auth /tmp/b/auth.json # daemon-side CAP import
 CAPD_CODEX_AUTH_PATHS="/tmp/a/auth.json:/tmp/b/auth.json" capd accounts import # daemon-side CAP batch import on macOS/Linux
