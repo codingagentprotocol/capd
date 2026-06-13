@@ -253,10 +253,12 @@ running in the daemon), find it with `capd sessions`, re-join with
 The JSON-RPC `agents/route.taskClass` and `session/create.taskClass` fields are
 optional and backward compatible. Empty task class keeps the conservative
 default; `capd run` infers task intent from the prompt and image flags before
-creating a session. Long-running and review tasks penalize stale or missing
-quota evidence, and interactive tasks increase recent-failure penalty. Route
-JSON includes the chosen `taskClass` plus `routePolicy.taskClass` and
-`accountRoute.taskClass` evidence.
+creating a session. The Web Console exposes the same task intent control and,
+when left on automatic, previews routing with the current prompt so the daemon
+can infer task class before `session/create`. Long-running and review tasks
+penalize stale or missing quota evidence, and interactive tasks increase
+recent-failure penalty. Route JSON includes the chosen `taskClass` plus
+`routePolicy.taskClass` and `accountRoute.taskClass` evidence.
 
 ### `capd accounts` — local account control plane
 

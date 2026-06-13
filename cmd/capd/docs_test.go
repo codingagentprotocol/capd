@@ -294,6 +294,8 @@ func TestReferenceDocsCoverTaskAwareRouting(t *testing.T) {
 		"`agents/route.taskClass`",
 		"`session/create.taskClass`",
 		"`capd run` infers task intent",
+		"The Web Console exposes the same task intent control",
+		"previews routing with the current prompt",
 		"`routePolicy.taskClass`",
 		"`accountRoute.taskClass`",
 	} {
