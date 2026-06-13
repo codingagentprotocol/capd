@@ -202,6 +202,11 @@ func routeEvidenceText(route protocol.AccountRouteEvidence) string {
 	if route.PrimaryUsedPercent != nil {
 		parts = append(parts, "primary "+formatPercent(*route.PrimaryUsedPercent))
 	}
+	if route.LimitingUsedPercent != nil && route.LimitingQuotaDimension != "" && route.LimitingQuotaDimension != "primary" {
+		label := "limiting"
+		label += " " + route.LimitingQuotaDimension
+		parts = append(parts, label+" "+formatPercent(*route.LimitingUsedPercent))
+	}
 	parts = append(parts, fmt.Sprintf("score %.2f", route.Score))
 	if route.CheckedAt > 0 {
 		parts = append(parts, "checked "+time.Unix(route.CheckedAt, 0).Format(time.RFC3339))

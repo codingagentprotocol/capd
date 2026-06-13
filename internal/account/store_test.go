@@ -332,6 +332,51 @@ func TestSelectQuotaRouteAccountIgnoresStaleQuota(t *testing.T) {
 	}
 }
 
+func TestSelectQuotaRouteAccountUsesLimitingQuotaWindow(t *testing.T) {
+	st := newStore(t)
+	for _, acc := range []Account{
+		{ID: "primary-low-secondary-high", Provider: "codex", AuthMode: "oauth"},
+		{ID: "balanced", Provider: "codex", AuthMode: "oauth"},
+	} {
+		if err := st.UpsertAccount(acc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SaveQuota(QuotaSnapshot{
+		AccountID:            "primary-low-secondary-high",
+		PrimaryUsedPercent:   4,
+		SecondaryUsedPercent: 92,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveQuota(QuotaSnapshot{
+		AccountID:             "balanced",
+		PrimaryUsedPercent:    30,
+		SecondaryUsedPercent:  5,
+		CodeReviewUsedPercent: 7,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := SelectQuotaRouteAccount(st, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "balanced" {
+		t.Fatalf("selected = %+v", got)
+	}
+	pressure := QuotaRouteEvidence(st, Account{ID: "primary-low-secondary-high", Provider: "codex"})
+	if pressure.Score != 92 || pressure.LimitingUsedPercent == nil || *pressure.LimitingUsedPercent != 92 || pressure.LimitingQuotaDimension != "secondary" {
+		t.Fatalf("pressure evidence = %+v", pressure)
+	}
+	if pressure.SecondaryUsedPercent == nil || *pressure.SecondaryUsedPercent != 92 {
+		t.Fatalf("secondary evidence = %+v", pressure)
+	}
+	if pressure.Reason != "auto account primary-low-secondary-high limiting secondary 92% (primary 4%, secondary 92%, code_review 0%)" {
+		t.Fatalf("reason = %q", pressure.Reason)
+	}
+}
+
 func TestSelectQuotaRouteAccountTreatsInvalidQuotaAsUnknown(t *testing.T) {
 	st := newStore(t)
 	for _, acc := range []Account{
@@ -511,6 +556,9 @@ func TestQuotaRouteEvidenceAndReason(t *testing.T) {
 	fresh := QuotaRouteEvidence(st, Account{ID: "fresh", Provider: "codex", SecretRef: "file:fresh"})
 	if fresh.AccountID != "fresh" || fresh.SecretBackend != "file" || fresh.QuotaState != protocol.AccountQuotaStateFresh || !fresh.Fresh || fresh.PrimaryUsedPercent == nil || *fresh.PrimaryUsedPercent != 12 || fresh.Score != 12 || fresh.Reason != "auto account fresh primary 12%" {
 		t.Fatalf("fresh evidence = %+v", fresh)
+	}
+	if fresh.LimitingUsedPercent == nil || *fresh.LimitingUsedPercent != 12 || fresh.LimitingQuotaDimension != "primary" {
+		t.Fatalf("fresh limiting evidence = %+v", fresh)
 	}
 	if got := QuotaRouteReason(st, Account{ID: "fresh", Provider: "codex"}); got != "auto account fresh primary 12%" {
 		t.Fatalf("fresh reason = %q", got)

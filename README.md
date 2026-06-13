@@ -467,12 +467,13 @@ flowchart TB
   closed instead of silently falling back.
 - New Codex sessions can opt into an imported account with `--account` or
   protocol `session/create.accountId`; `accountId:"auto"` uses conservative
-  quota scoring. Fresh cached primary quota uses the actual usage percent, while
-  rows older than 30 minutes or missing quota are treated like unknown usage so
-  stale low-usage snapshots do not dominate routing. The daemon projects that
-  account into a dedicated `CODEX_HOME`. `agents/route` and `accounts/check`
-  return `routeCandidates` sorted by the same score rule with a safe `reason`
-  and safe `secretBackend` enum for each parseable candidate, and
+  quota scoring. Fresh cached quota is scored by the highest pressure across
+  primary, secondary, and code-review windows, while rows older than 30 minutes
+  or missing quota are treated like unknown usage so stale low-usage snapshots
+  do not dominate routing. The daemon projects that account into a dedicated
+  `CODEX_HOME`. `agents/route` and `accounts/check` return `routeCandidates`
+  sorted by the same score rule with safe `reason`, limiting quota-window
+  evidence, and safe `secretBackend` enum for each parseable candidate, and
   `session/create` returns the resolved `accountId` so
   clients can audit auto-route choices without another lookup. The Codex app-server profile pool
   keeps it isolated from other accounts.

@@ -107,7 +107,8 @@ useful before native-backend live runs. Text output returns a non-zero exit code
 when readiness issues are found. `--json` prints safe machine-readable evidence
 and next steps without token material or local secret paths; add `--fail` when
 JSON output should also return non-zero on readiness issues. Auto-route evidence
-includes the selected account id, quota state, freshness, primary quota usage,
+includes the selected account id, quota state, freshness, primary/secondary/code-review
+quota usage when known, the limiting quota window used for conservative scoring,
 routing score, checked time, and the same human-readable reason used by routing previews. The
 `codex.accounts` JSON array lists safe per-account credential and quota evidence
 (id, email, current marker, plan, `secretBackendOk`, `secretReadable`,
@@ -347,14 +348,15 @@ No params. → `{"agents": [{"id", "name", "bin", "version", "available", "capab
 Ask capd to pick an installed agent. Params mirror route signals:
 `{"prompt", "attachments", "accountId", "model", "effort", "capabilities", "prefer", "requireFreshQuota"}`.
 
-→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"accountId": "codex-acct", "secretBackend": "native", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "score": 12, "checkedAt": 1781170000, "reason": "auto account codex-acct primary 12%"}, "routeCandidates": [{"accountId": "codex-acct", "secretBackend": "native", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "score": 12, "checkedAt": 1781170000, "reason": "auto account codex-acct primary 12%"}], "reason": "matched capabilities: effort, review"}`
+→ `{"agent": {...}, "accountId": "codex-acct", "accountRoute": {"accountId": "codex-acct", "secretBackend": "native", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "secondaryUsedPercent": 4, "codeReviewUsedPercent": 0, "limitingUsedPercent": 12, "limitingQuotaDimension": "primary", "score": 12, "checkedAt": 1781170000, "reason": "auto account codex-acct primary 12%"}, "routeCandidates": [{"accountId": "codex-acct", "secretBackend": "native", "quotaState": "fresh", "fresh": true, "primaryUsedPercent": 12, "limitingUsedPercent": 12, "limitingQuotaDimension": "primary", "score": 12, "checkedAt": 1781170000, "reason": "auto account codex-acct primary 12%"}], "reason": "matched capabilities: effort, review"}`
 
 When `accountId` is present, routing is account-aware and currently selects
 Codex only, because imported account runtimes are Codex-specific. Use
 `accountId:"auto"` to choose an imported Codex account by conservative quota
-scoring: fresh cached primary quota uses the actual usage percent, while missing
-quota or rows older than 30 minutes receive a conservative unknown score until
-`accounts/quota` or `agents/usage` refreshes them. Set `requireFreshQuota:true`
+scoring: fresh cached quota uses the highest pressure across primary, secondary,
+and code-review windows, while missing quota or rows older than 30 minutes
+receive a conservative unknown score until `accounts/quota` or `agents/usage`
+refreshes them. Set `requireFreshQuota:true`
 with `accountId:"auto"` to fail instead of routing on missing or stale quota;
 that fresh-quota error includes safe `data.accountRoute`,
 `data.routeCandidates`, and `data.secretBackend` evidence so clients can show
@@ -366,7 +368,7 @@ optional primary usage percent, and optional checked timestamp without exposing
 token material. It also includes a safe `secretBackend` enum (`file` or
 `native`) when the account SecretStore ref is parseable, plus a safe
 human-readable `reason`, such as a
-fresh primary quota percentage, missing/stale cached quota, or current-account
+fresh limiting quota percentage, missing/stale cached quota, or current-account
 tie-break. `routeCandidates` contains the same safe evidence for every
 imported candidate account, sorted by the same conservative score used for
 selection; when routing succeeds, `accountRoute` should match the first

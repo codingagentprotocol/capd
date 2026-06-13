@@ -943,6 +943,9 @@ function routeEvidenceSummary(route) {
   if (typeof route.fresh === "boolean") parts.push(route.fresh ? "fresh" : "not-fresh");
   if (route.secretBackend) parts.push(`secret ${route.secretBackend}`);
   if (hasNumber(route.primaryUsedPercent)) parts.push(`primary ${route.primaryUsedPercent}%`);
+  if (hasNumber(route.secondaryUsedPercent)) parts.push(`secondary ${route.secondaryUsedPercent}%`);
+  if (hasNumber(route.codeReviewUsedPercent)) parts.push(`review ${route.codeReviewUsedPercent}%`);
+  if (hasNumber(route.limitingUsedPercent) && route.limitingQuotaDimension && route.limitingQuotaDimension !== "primary") parts.push(`limiting ${route.limitingQuotaDimension} ${route.limitingUsedPercent}%`);
   if (hasNumber(route.score)) parts.push(`score ${route.score}`);
   if (route.checkedAt) parts.push(`checked ${new Date(route.checkedAt * 1000).toLocaleString()}`);
   if (route.reason) parts.push(route.reason);

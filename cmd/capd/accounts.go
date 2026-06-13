@@ -1268,14 +1268,18 @@ func secretRefBackendLabel(ref secret.Ref) string {
 }
 
 type codexSmokeAutoRoute struct {
-	AccountID     string   `json:"accountId"`
-	SecretBackend string   `json:"secretBackend,omitempty"`
-	Reason        string   `json:"reason"`
-	Score         float64  `json:"score"`
-	QuotaState    string   `json:"quotaState"`
-	Fresh         bool     `json:"fresh"`
-	CheckedAt     int64    `json:"checkedAt,omitempty"`
-	Primary       *float64 `json:"primaryUsedPercent,omitempty"`
+	AccountID              string   `json:"accountId"`
+	SecretBackend          string   `json:"secretBackend,omitempty"`
+	Reason                 string   `json:"reason"`
+	Score                  float64  `json:"score"`
+	QuotaState             string   `json:"quotaState"`
+	Fresh                  bool     `json:"fresh"`
+	CheckedAt              int64    `json:"checkedAt,omitempty"`
+	Primary                *float64 `json:"primaryUsedPercent,omitempty"`
+	Secondary              *float64 `json:"secondaryUsedPercent,omitempty"`
+	CodeReview             *float64 `json:"codeReviewUsedPercent,omitempty"`
+	Limiting               *float64 `json:"limitingUsedPercent,omitempty"`
+	LimitingQuotaDimension string   `json:"limitingQuotaDimension,omitempty"`
 }
 
 type codexSmokeAccount struct {
@@ -1737,14 +1741,18 @@ func codexSmokeAutoRouteEvidence(accounts *account.Store) (*codexSmokeAutoRoute,
 	}
 	evidence := account.QuotaRouteEvidence(accounts, acc)
 	route := &codexSmokeAutoRoute{
-		AccountID:     evidence.AccountID,
-		SecretBackend: evidence.SecretBackend,
-		Reason:        evidence.Reason,
-		Score:         evidence.Score,
-		QuotaState:    evidence.QuotaState,
-		Fresh:         evidence.Fresh,
-		CheckedAt:     evidence.CheckedAt,
-		Primary:       evidence.PrimaryUsedPercent,
+		AccountID:              evidence.AccountID,
+		SecretBackend:          evidence.SecretBackend,
+		Reason:                 evidence.Reason,
+		Score:                  evidence.Score,
+		QuotaState:             evidence.QuotaState,
+		Fresh:                  evidence.Fresh,
+		CheckedAt:              evidence.CheckedAt,
+		Primary:                evidence.PrimaryUsedPercent,
+		Secondary:              evidence.SecondaryUsedPercent,
+		CodeReview:             evidence.CodeReviewUsedPercent,
+		Limiting:               evidence.LimitingUsedPercent,
+		LimitingQuotaDimension: evidence.LimitingQuotaDimension,
 	}
 	return route, nil
 }

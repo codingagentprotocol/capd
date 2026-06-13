@@ -676,6 +676,11 @@ func routeEvidenceTextPtr(route *protocol.AccountRouteEvidence) string {
 	if route.PrimaryUsedPercent != nil {
 		parts = append(parts, "primary "+strconv.FormatFloat(*route.PrimaryUsedPercent, 'f', -1, 64)+"%")
 	}
+	if route.LimitingUsedPercent != nil && route.LimitingQuotaDimension != "" && route.LimitingQuotaDimension != "primary" {
+		label := "limiting"
+		label += " " + route.LimitingQuotaDimension
+		parts = append(parts, label+" "+strconv.FormatFloat(*route.LimitingUsedPercent, 'f', -1, 64)+"%")
+	}
 	parts = append(parts, "score "+strconv.FormatFloat(route.Score, 'f', -1, 64))
 	if route.Reason != "" {
 		parts = append(parts, route.Reason)

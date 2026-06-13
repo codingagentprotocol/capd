@@ -125,14 +125,18 @@ type AgentRouteErrorData struct {
 }
 
 type AccountRouteEvidence struct {
-	AccountID          string   `json:"accountId,omitempty"`
-	SecretBackend      string   `json:"secretBackend,omitempty"`
-	Score              float64  `json:"score"`
-	QuotaState         string   `json:"quotaState"`
-	Fresh              bool     `json:"fresh"`
-	CheckedAt          int64    `json:"checkedAt,omitempty"`
-	PrimaryUsedPercent *float64 `json:"primaryUsedPercent,omitempty"`
-	Reason             string   `json:"reason,omitempty"`
+	AccountID              string   `json:"accountId,omitempty"`
+	SecretBackend          string   `json:"secretBackend,omitempty"`
+	Score                  float64  `json:"score"`
+	QuotaState             string   `json:"quotaState"`
+	Fresh                  bool     `json:"fresh"`
+	CheckedAt              int64    `json:"checkedAt,omitempty"`
+	PrimaryUsedPercent     *float64 `json:"primaryUsedPercent,omitempty"`
+	SecondaryUsedPercent   *float64 `json:"secondaryUsedPercent,omitempty"`
+	CodeReviewUsedPercent  *float64 `json:"codeReviewUsedPercent,omitempty"`
+	LimitingUsedPercent    *float64 `json:"limitingUsedPercent,omitempty"`
+	LimitingQuotaDimension string   `json:"limitingQuotaDimension,omitempty"`
+	Reason                 string   `json:"reason,omitempty"`
 }
 
 type AgentsUsageParams struct {

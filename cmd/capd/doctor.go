@@ -184,6 +184,10 @@ type doctorCodexReport struct {
 	AutoRouteReason          string                          `json:"autoRouteReason,omitempty"`
 	AutoRouteCheckedAt       int64                           `json:"autoRouteCheckedAt,omitempty"`
 	AutoRoutePrimary         *float64                        `json:"autoRoutePrimaryUsedPercent,omitempty"`
+	AutoRouteSecondary       *float64                        `json:"autoRouteSecondaryUsedPercent,omitempty"`
+	AutoRouteCodeReview      *float64                        `json:"autoRouteCodeReviewUsedPercent,omitempty"`
+	AutoRouteLimiting        *float64                        `json:"autoRouteLimitingUsedPercent,omitempty"`
+	AutoRouteLimitingWindow  string                          `json:"autoRouteLimitingQuotaDimension,omitempty"`
 	RouteCandidates          []protocol.AccountRouteEvidence `json:"routeCandidates,omitempty"`
 }
 
@@ -410,6 +414,10 @@ func buildDoctorReport(ctx context.Context, opts doctorOptions) (doctorReport, e
 			report.Codex.AutoRouteScore = evidence.Score
 			report.Codex.AutoRouteCheckedAt = evidence.CheckedAt
 			report.Codex.AutoRoutePrimary = evidence.PrimaryUsedPercent
+			report.Codex.AutoRouteSecondary = evidence.SecondaryUsedPercent
+			report.Codex.AutoRouteCodeReview = evidence.CodeReviewUsedPercent
+			report.Codex.AutoRouteLimiting = evidence.LimitingUsedPercent
+			report.Codex.AutoRouteLimitingWindow = evidence.LimitingQuotaDimension
 			report.Codex.AutoRouteReason = account.QuotaRouteReason(accounts, route)
 			if !report.Codex.AutoRouteFresh {
 				autoRouteFreshIssue = true
@@ -877,8 +885,13 @@ func printDoctorReport(cmd *cobra.Command, report doctorReport) {
 		if report.Codex.AutoRoutePrimary != nil {
 			primary = " primary=" + formatPercent(*report.Codex.AutoRoutePrimary)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s quota=%s fresh=%t score=%.2f%s %s\n",
-			report.Codex.AutoRouteAccountID, report.Codex.AutoRouteQuotaState, report.Codex.AutoRouteFresh, report.Codex.AutoRouteScore, primary, report.Codex.AutoRouteReason)
+		limiting := ""
+		if report.Codex.AutoRouteLimiting != nil && report.Codex.AutoRouteLimitingWindow != "" && report.Codex.AutoRouteLimitingWindow != "primary" {
+			label := "limiting-" + report.Codex.AutoRouteLimitingWindow
+			limiting = " " + label + "=" + formatPercent(*report.Codex.AutoRouteLimiting)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "auto route: %s quota=%s fresh=%t score=%.2f%s%s %s\n",
+			report.Codex.AutoRouteAccountID, report.Codex.AutoRouteQuotaState, report.Codex.AutoRouteFresh, report.Codex.AutoRouteScore, primary, limiting, report.Codex.AutoRouteReason)
 	}
 	if len(report.Codex.RouteCandidates) > 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "route candidates:")

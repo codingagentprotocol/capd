@@ -61,33 +61,17 @@ func QuotaRouteScore(st *Store, acc Account, current string) float64 {
 // It is the shared source for CLI and JSON-RPC routing responses so score,
 // quota freshness, and state labels cannot drift between surfaces.
 func QuotaRouteEvidence(st *Store, acc Account) protocol.AccountRouteEvidence {
-	evidence := protocol.AccountRouteEvidence{
-		AccountID:     acc.ID,
-		SecretBackend: routeSecretBackend(acc),
-		Score:         quotaUnknownScore,
-		QuotaState:    protocol.AccountQuotaStateMissing,
-		Reason:        "missing cached quota",
-	}
 	if st == nil {
-		return evidence
+		return protocol.AccountRouteEvidence{
+			AccountID:     acc.ID,
+			SecretBackend: routeSecretBackend(acc),
+			Score:         quotaUnknownScore,
+			QuotaState:    protocol.AccountQuotaStateMissing,
+			Reason:        "missing cached quota",
+		}
 	}
 	current, _ := st.CurrentAccount(acc.Provider)
-	now := time.Now()
-	evidence.Score = quotaRouteScoreAt(st, acc, current, now)
-	evidence.Reason = quotaRouteReasonAt(st, acc, current, now)
-	if q, err := st.LoadQuota(acc.ID); err == nil {
-		evidence.CheckedAt = q.CheckedAt
-		if quotaPercentUsable(q.PrimaryUsedPercent) {
-			evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
-		}
-		if QuotaSnapshotFresh(q, now) {
-			evidence.QuotaState = protocol.AccountQuotaStateFresh
-			evidence.Fresh = true
-		} else {
-			evidence.QuotaState = protocol.AccountQuotaStateStale
-		}
-	}
-	return evidence
+	return quotaRouteEvidenceAt(st, acc, current, time.Now())
 }
 
 // QuotaRouteCandidates returns every provider account with the same
@@ -141,8 +125,12 @@ func quotaRouteEvidenceAt(st *Store, acc Account, current string, now time.Time)
 	}
 	if q, err := st.LoadQuota(acc.ID); err == nil {
 		evidence.CheckedAt = q.CheckedAt
-		if quotaPercentUsable(q.PrimaryUsedPercent) {
-			evidence.PrimaryUsedPercent = &q.PrimaryUsedPercent
+		evidence.PrimaryUsedPercent = usablePercentPtr(q.PrimaryUsedPercent)
+		evidence.SecondaryUsedPercent = usablePercentPtr(q.SecondaryUsedPercent)
+		evidence.CodeReviewUsedPercent = usablePercentPtr(q.CodeReviewUsedPercent)
+		if limiting, dimension, ok := quotaRoutePressure(q); ok {
+			evidence.LimitingUsedPercent = &limiting
+			evidence.LimitingQuotaDimension = dimension
 		}
 		if QuotaSnapshotFresh(q, now) {
 			evidence.QuotaState = protocol.AccountQuotaStateFresh
@@ -173,7 +161,12 @@ func quotaRouteReasonAt(st *Store, acc Account, current string, now time.Time) s
 	if st != nil {
 		if q, err := st.LoadQuota(acc.ID); err == nil {
 			if QuotaSnapshotFresh(q, now) {
-				return fmt.Sprintf("auto account %s primary %.0f%%%s", acc.ID, q.PrimaryUsedPercent, suffix)
+				pressure, dimension, _ := quotaRoutePressure(q)
+				if dimension == "primary" {
+					return fmt.Sprintf("auto account %s primary %.0f%%%s", acc.ID, pressure, suffix)
+				}
+				return fmt.Sprintf("auto account %s limiting %s %.0f%% (primary %.0f%%, secondary %.0f%%, code_review %.0f%%)%s",
+					acc.ID, dimension, pressure, q.PrimaryUsedPercent, q.SecondaryUsedPercent, q.CodeReviewUsedPercent, suffix)
 			}
 			return fmt.Sprintf("auto account %s without fresh cached quota%s", acc.ID, suffix)
 		}
@@ -184,7 +177,7 @@ func quotaRouteReasonAt(st *Store, acc Account, current string, now time.Time) s
 func quotaRouteScoreAt(st *Store, acc Account, current string, now time.Time) float64 {
 	score := quotaUnknownScore
 	if q, err := st.LoadQuota(acc.ID); err == nil && QuotaSnapshotFresh(q, now) {
-		score = q.PrimaryUsedPercent
+		score, _, _ = quotaRoutePressure(q)
 	}
 	if acc.ID == current {
 		score -= 0.01
@@ -206,9 +199,37 @@ func QuotaSnapshotFresh(q QuotaSnapshot, now time.Time) bool {
 	if q.CheckedAt <= 0 {
 		return false
 	}
-	if !quotaPercentUsable(q.PrimaryUsedPercent) {
+	if !quotaPercentUsable(q.PrimaryUsedPercent) ||
+		!quotaPercentUsable(q.SecondaryUsedPercent) ||
+		!quotaPercentUsable(q.CodeReviewUsedPercent) {
 		return false
 	}
 	age := now.Unix() - q.CheckedAt
 	return age >= 0 && time.Duration(age)*time.Second <= QuotaRouteCacheTTL
+}
+
+func usablePercentPtr(n float64) *float64 {
+	if !quotaPercentUsable(n) {
+		return nil
+	}
+	return &n
+}
+
+func quotaRoutePressure(q QuotaSnapshot) (float64, string, bool) {
+	if !quotaPercentUsable(q.PrimaryUsedPercent) ||
+		!quotaPercentUsable(q.SecondaryUsedPercent) ||
+		!quotaPercentUsable(q.CodeReviewUsedPercent) {
+		return 0, "", false
+	}
+	pressure := q.PrimaryUsedPercent
+	dimension := "primary"
+	if q.SecondaryUsedPercent > pressure {
+		pressure = q.SecondaryUsedPercent
+		dimension = "secondary"
+	}
+	if q.CodeReviewUsedPercent > pressure {
+		pressure = q.CodeReviewUsedPercent
+		dimension = "code_review"
+	}
+	return pressure, dimension, true
 }

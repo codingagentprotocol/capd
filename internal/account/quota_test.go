@@ -136,6 +136,10 @@ func TestQuotaSnapshotFreshRejectsInvalidPrimaryPercent(t *testing.T) {
 			t.Fatalf("percent %v unexpectedly fresh", percent)
 		}
 	}
+	q := QuotaSnapshot{AccountID: "codex-a", PrimaryUsedPercent: 10, SecondaryUsedPercent: math.NaN(), CheckedAt: now.Unix()}
+	if QuotaSnapshotFresh(q, now) {
+		t.Fatalf("invalid secondary percent unexpectedly fresh")
+	}
 	for _, percent := range []float64{0, 100} {
 		q := QuotaSnapshot{AccountID: "codex-a", PrimaryUsedPercent: percent, CheckedAt: now.Unix()}
 		if !QuotaSnapshotFresh(q, now) {
